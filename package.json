@@ -1,6 +1,6 @@
 {
 	"name": "llm-plugin",
-	"version": "0.19.7",
+	"version": "0.19.8",
 	"description": "This plugin allows users to access LLMs downloaded from the GPT4ALL chat client for use inside Obsidian notes as well as LLMs from OpenAI and Gemini",
 	"main": "main.js",
 	"scripts": {

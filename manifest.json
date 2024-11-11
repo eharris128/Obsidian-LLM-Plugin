@@ -1,7 +1,7 @@
 {
 	"id": "llm-plugin",
 	"name": "LLM Plugin",
-	"version": "0.19.7",
+	"version": "0.19.8",
 	"minAppVersion": "0.15.0",
 	"description": "This plugin gives users the ability to access locally downloaded LLMs using Nomics GPT4All chat client and models as well as access to OpenAI models and Googles Gemini model. Weve given users the ability to interact with these LLMs through a variety of options: A chat modal, a sidebar widget, and a floating action button.",
 	"author": "Ryan Mahoney",

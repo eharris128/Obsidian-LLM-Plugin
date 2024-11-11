@@ -112,7 +112,7 @@ GPT4All makes creating a context out of all your vaults notes and bringing the i
 
 - Tag your code:
 ```
-git tag 0.19.16
+git tag -a 0.19.16 -m "0.19.16"
 ```
 
 - Push your tag:
@@ -120,13 +120,8 @@ git tag 0.19.16
 git push origin 0.19.6
 ```
 
-- Generate the build assets on your local machine
-
-![Main.js, manifest.json, and styles.css](image-1.png)
-
-- Invoke `npm run build`
-- Create a release from the [tags](https://github.com/r-mahoney/Obsidian-LLM-Plugin/tags) view in GitHub
-  - Upload `main.js`, `manifest.json`, and `styles.css` to your release
+- Edit the release from the [releases](https://github.com/r-mahoney/Obsidian-LLM-Plugin/releases) view in GitHub.
+  - Click the pencil icon to edit the release and publish it.
 
 ### Test Your Release
 - Back on your local machine...

@@ -1,3 +1,4 @@
+import { Platform } from "obsidian";
 import LLMPlugin from "main";
 import {
 	App,
@@ -13,7 +14,7 @@ import { models, modelNames } from "utils/models";
 import { claudeSonnetJuneModel, openAIModel, geminiModel, GPT4All } from "utils/constants";
 import logo from "assets/LLMguy.svg";
 import { FAB } from "Plugin/FAB/FAB";
-const fs = require("fs");
+const fs = !Platform.isMobile ? require("fs") : null;
 
 // TODO - abstract to its own component file.
 class DefaultModelModal extends Modal {
@@ -184,6 +185,10 @@ export default class SettingsView extends PluginSettingTab {
 				let keys = Object.keys(models);
 				for (let model of keys) {
 					if (models[model].type === GPT4All) {
+						if (Platform.isMobile) {
+							continue
+						}
+
 						fs.exists(
 							`${DEFAULT_DIRECTORY}/${models[model].model}`,
 							(exists: boolean) => {

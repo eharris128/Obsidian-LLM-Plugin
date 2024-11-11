@@ -1,6 +1,6 @@
 import { ImageSize, ViewType } from "Types/types";
 import LLMPlugin from "main";
-import { DropdownComponent, Setting } from "obsidian";
+import { DropdownComponent, Setting, Platform } from "obsidian";
 import { Assistant } from "openai/resources/beta/assistants";
 import { modelNames, models } from "utils/models";
 import {
@@ -11,7 +11,8 @@ import {
 } from "utils/utils";
 import { assistant as ASSISTANT, chat, GPT4All, messages, openAI } from "utils/constants"
 import { Header } from "./Header";
-const fs = require("fs");
+
+const fs = !Platform.isMobile ? require("fs") : null;
 
 export class SettingsContainer {
 	viewType: ViewType;
@@ -45,6 +46,9 @@ export class SettingsContainer {
 				let keys = Object.keys(models);
 				for (let model of keys) {
 					if (models[model].type === GPT4All) {
+						if (Platform.isMobile) {
+							continue
+						}
 						fs.exists(
 							`${DEFAULT_DIRECTORY}/${models[model].model}`,
 							(exists: boolean) => {

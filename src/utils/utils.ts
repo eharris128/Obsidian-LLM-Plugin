@@ -1,8 +1,6 @@
-import { existsSync } from "fs";
-import fs from "fs";
 import path from "path";
 import LLMPlugin, { LLMPluginSettings } from "main";
-import { Editor } from "obsidian";
+import { Editor, Platform } from "obsidian";
 import OpenAI, { toFile } from "openai";
 import Anthropic from '@anthropic-ai/sdk';
 import { openAI, claude, chat, claudeSonnetJuneModel, gemini, geminiModel } from "utils/constants";
@@ -22,7 +20,10 @@ import {
 import { Assistant } from "openai/resources/beta/assistants";
 import { GoogleGenerativeAI, Content, GenerateContentRequest } from "@google/generative-ai";
 
-const homeDir = require("os").homedir();
+const fs = !Platform.isMobile ? require("fs") : null;
+
+const homeDir = !Platform.isMobile ? require("os").homedir() : null;
+
 export const DEFAULT_DIRECTORY = path.resolve(
 	homeDir,
 	navigator.platform.indexOf("Win") > -1
@@ -32,11 +33,6 @@ export const DEFAULT_DIRECTORY = path.resolve(
 
 export function isWindows() {
 	return navigator.platform.indexOf("Win") > -1
-}
-
-export function modelLookup(modelName: string) {
-	const model = path.join(DEFAULT_DIRECTORY, modelName);
-	return existsSync(model);
 }
 
 export function upperCaseFirst(input: string): string {

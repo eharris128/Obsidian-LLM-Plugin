@@ -16,7 +16,6 @@ import { openAIModels, models } from "utils/models";
 import {
 	createAssistant,
 	createVectorAndUpdate,
-	DEFAULT_DIRECTORY,
 	deleteAssistant,
 	deleteVector,
 	isWindows,
@@ -25,7 +24,6 @@ import {
 } from "utils/utils";
 import { assistant as ASSISTANT, GPT4All } from "utils/constants";
 import { SingletonNotice } from "./SingletonNotice";
-const fs = require("fs");
 
 export class AssistantsContainer {
 	viewType: ViewType;

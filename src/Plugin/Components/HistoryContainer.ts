@@ -228,7 +228,7 @@ export class HistoryContainer {
 				);
 				chat.resetChat();
 				chat.resetMessages();
-				Header.setHeader(this.modelName, "Local LLM Plugin");
+				Header.setHeader(this.modelName, "Local LLM plugin");
 				this.plugin.settings[settingType].historyIndex =
 					DEFAULT_SETTINGS[settingType].historyIndex;
 				this.plugin.saveSettings();

@@ -675,7 +675,7 @@ export class ChatContainer {
 	removeMessage(header: Header, modelName: string) {
 		this.removeLastMessageAndHistoryMessage();
 		if (this.historyMessages.children.length < 1) {
-			header.setHeader(modelName, "LLM Plugin");
+			header.setHeader(modelName, "LLM plugin");
 		}
 	}
 

@@ -3,28 +3,21 @@ import { ChatContainer } from "Plugin/Components/ChatContainer";
 import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
 import { SettingsContainer } from "Plugin/Components/SettingsContainer";
-import LLMPlugin, { DEFAULT_SETTINGS } from "main";
+import LLMPlugin from "main";
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { classNames } from "utils/classNames";
 
 export const TAB_VIEW_TYPE = "tab-view";
-export const LEAF_VIEW_TYPE = "leaf-view";
 
 export class WidgetView extends ItemView {
 	plugin: LLMPlugin;
-	viewType: string
-	constructor(leaf: WorkspaceLeaf, plugin: LLMPlugin, viewType: string) {
+	constructor(leaf: WorkspaceLeaf, plugin: LLMPlugin) {
 		super(leaf);
 		this.plugin = plugin;
-		this.viewType = viewType
 	}
 
 	getViewType(): string {
-		return (this.viewType === "tab" ? TAB_VIEW_TYPE : LEAF_VIEW_TYPE);
-		//return an empty tring because workspace.getLeavesOfType function in widget commands uses this to determine what
-		//view is open an causes issues if you want to be able to have commands that open a tab view and a sidebar view separately
-		//The only issue now is that users can open an infinite number of widgets which is probably not ideal behavior
-		//can either solve this issue with over engineering, leave it, or create a whole new class that exactly the same as this class for the tabs
+		return TAB_VIEW_TYPE;
 	}
 
 	getDisplayText(): string {
@@ -54,8 +47,7 @@ export class WidgetView extends ItemView {
 		settingsContainerDiv.setAttr("style", "display: none");
 		settingsContainerDiv.addClass("llm-widget-settings-container", "llm-flex");
 		assistantContainerDiv.setAttr("style", "display: none");
-		assistantContainerDiv.addClass("llm-widget-assistant-container", "llm-flex");
-		this.viewType === "tab" ? assistantContainerDiv.addClass("llm-widget-tab-assistants") : assistantContainerDiv.addClass("llm-widget-sidebar-assistants")
+		assistantContainerDiv.addClass("llm-widget-assistant-container", "llm-flex", "llm-widget-tab-assistants");
 		chatHistoryContainer.setAttr("style", "display: none");
 		chatHistoryContainer.addClass("llm-widget-chat-history-container", "llm-flex");
 		lineBreak.className = classNames["widget"]["title-border"];

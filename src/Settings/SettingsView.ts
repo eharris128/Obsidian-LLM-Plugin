@@ -43,7 +43,7 @@ export default class SettingsView extends PluginSettingTab {
 			name: "OpenAI API key",
 			desc: "OpenAI models require an API key for authentication.",
 			key: 'openAIAPIKey',
-			generateUrl: "https://beta.openai.com/account/api-keys"
+			generateUrl: "https://platform.openai.com/api-keys"
 		}
 	};
 

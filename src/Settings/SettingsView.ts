@@ -68,10 +68,7 @@ export default class SettingsView extends PluginSettingTab {
 				});
 			});
 
-		// API Key Management Section
 		const apiKeySection = containerEl.createDiv();
-
-		// API Key Selection Dropdown
 		new Setting(apiKeySection)
 			.setName("Manage API keys")
 			.setDesc("Select which API key you want to view or modify")

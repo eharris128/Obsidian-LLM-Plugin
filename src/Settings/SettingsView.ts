@@ -185,7 +185,7 @@ export default class SettingsView extends PluginSettingTab {
 		});
 
 		const creditsHeader = credits.createEl("p", {
-			text: "LLM Plugin",
+			text: "LLM plugin",
 			attr: {
 				id: "llm-hero-credits"
 			}

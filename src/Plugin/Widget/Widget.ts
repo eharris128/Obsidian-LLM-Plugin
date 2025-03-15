@@ -3,7 +3,7 @@ import { ChatContainer } from "Plugin/Components/ChatContainer";
 import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
 import { SettingsContainer } from "Plugin/Components/SettingsContainer";
-import LLMPlugin, { DEFAULT_SETTINGS } from "main";
+import LLMPlugin from "main";
 import { ItemView, WorkspaceLeaf } from "obsidian";
 import { classNames } from "utils/classNames";
 

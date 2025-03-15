@@ -11,7 +11,6 @@ import { models, modelNames } from "utils/models";
 import { claudeSonnetJuneModel, openAIModel, geminiModel, GPT4All } from "utils/constants";
 import logo from "assets/LLMguy.svg";
 import { FAB } from "Plugin/FAB/FAB";
-import DefaultModelModal from "Plugin/Components/DefaultModelModal";
 
 export default class SettingsView extends PluginSettingTab {
 	plugin: LLMPlugin;
@@ -51,14 +50,6 @@ export default class SettingsView extends PluginSettingTab {
 						this.plugin.settings.claudeAPIKey = change;
 					}
 				});
-				// Handle blur event (when the user finishes editing)
-				text.inputEl.addEventListener('blur', () => {
-					if (valueChanged) {
-						new DefaultModelModal(this.app, claudeSonnetJuneModel, this.plugin).open(); // Show the modal
-						this.plugin.saveSettings();
-						valueChanged = false; // Reset the flag after saving
-					}
-				});
 			})
 			.addButton((button: ButtonComponent) => {
 				button.setButtonText("Generate token");
@@ -78,14 +69,6 @@ export default class SettingsView extends PluginSettingTab {
 					if (change.trim().length) {
 						valueChanged = true;
 						this.plugin.settings.geminiAPIKey = change;
-					}
-				});
-				// Handle blur event (when the user finishes editing)
-				text.inputEl.addEventListener('blur', () => {
-					if (valueChanged) {
-						new DefaultModelModal(this.app, geminiModel, this.plugin).open(); // Show the modal
-						this.plugin.saveSettings();
-						valueChanged = false; // Reset the flag after saving
 					}
 				});
 			})
@@ -108,14 +91,6 @@ export default class SettingsView extends PluginSettingTab {
 						valueChanged = true;
 						this.plugin.settings.openAIAPIKey = change;
 						this.plugin.saveSettings();
-					}
-				});
-				// Handle blur event (when the user finishes editing)
-				text.inputEl.addEventListener('blur', () => {
-					if (valueChanged) {
-						new DefaultModelModal(this.app, openAIModel, this.plugin).open(); // Show the modal
-						this.plugin.saveSettings();
-						valueChanged = false; // Reset the flag after saving
 					}
 				});
 			})

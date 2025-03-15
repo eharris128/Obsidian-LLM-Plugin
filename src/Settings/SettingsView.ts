@@ -5,25 +5,56 @@ import {
 	DropdownComponent,
 	PluginSettingTab,
 	Setting,
+	TextComponent,
 } from "obsidian";
 import { changeDefaultModel, getGpt4AllPath } from "utils/utils";
 import { models, modelNames } from "utils/models";
-import { claudeSonnetJuneModel, openAIModel, geminiModel, GPT4All } from "utils/constants";
+import { GPT4All } from "utils/constants";
 import logo from "assets/LLMguy.svg";
 import { FAB } from "Plugin/FAB/FAB";
+
+type APIKeyType = 'claude' | 'gemini' | 'openai';
+
+interface APIKeyConfig {
+	name: string;
+	desc: string;
+	key: keyof LLMPlugin['settings'];
+	generateUrl: string;
+}
 
 export default class SettingsView extends PluginSettingTab {
 	plugin: LLMPlugin;
 	fab: FAB;
+	private currentApiInput: TextComponent | null = null;
+	private apiKeyConfigs: Record<APIKeyType, APIKeyConfig> = {
+		claude: {
+			name: "Claude API key",
+			desc: "Claude models require an API key for authentication.",
+			key: 'claudeAPIKey',
+			generateUrl: "https://console.anthropic.com/settings/keys"
+		},
+		gemini: {
+			name: "Gemini API key",
+			desc: "Gemini models require an API key for authentication.",
+			key: 'geminiAPIKey',
+			generateUrl: "https://aistudio.google.com/app/apikey"
+		},
+		openai: {
+			name: "OpenAI API key",
+			desc: "OpenAI models require an API key for authentication.",
+			key: 'openAIAPIKey',
+			generateUrl: "https://beta.openai.com/account/api-keys"
+		}
+	};
 
 	constructor(app: App, plugin: LLMPlugin, fab: FAB) {
 		super(app, plugin);
 		this.plugin = plugin;
 		this.fab = fab;
 	}
+
 	display(): void {
 		const { containerEl } = this;
-
 		containerEl.empty();
 
 		// Adds reset history button
@@ -37,67 +68,20 @@ export default class SettingsView extends PluginSettingTab {
 				});
 			});
 
-		// Add Claude API key input
-		new Setting(containerEl)
-			.setName("Claude API key")
-			.setDesc("Claude models require an API key for authentication.")
-			.addText((text) => {
-				let valueChanged = false;
-				text.setValue(`${this.plugin.settings.claudeAPIKey}`);
-				text.onChange((change) => {
-					if (change.trim().length) {
-						valueChanged = true;
-						this.plugin.settings.claudeAPIKey = change;
-					}
-				});
-			})
-			.addButton((button: ButtonComponent) => {
-				button.setButtonText("Generate token");
-				button.onClick(() => {
-					window.open("https://console.anthropic.com/settings/keys");
-				});
-			});
+		// API Key Management Section
+		const apiKeySection = containerEl.createDiv();
 
-		// Adds Gemini API Key input
-		new Setting(containerEl)
-			.setName("Gemini API key")
-			.setDesc("Gemini models require an API key for authentication.")
-			.addText((text) => {
-				let valueChanged = false;
-				text.setValue(`${this.plugin.settings.geminiAPIKey}`);
-				text.onChange((change) => {
-					if (change.trim().length) {
-						valueChanged = true;
-						this.plugin.settings.geminiAPIKey = change;
-					}
+		// API Key Selection Dropdown
+		new Setting(apiKeySection)
+			.setName("Manage API keys")
+			.setDesc("Select which API key you want to view or modify")
+			.addDropdown((dropdown) => {
+				dropdown.addOption('', 'Select API to configure');
+				Object.keys(this.apiKeyConfigs).forEach((key) => {
+					dropdown.addOption(key, this.apiKeyConfigs[key as APIKeyType].name);
 				});
-			})
-			.addButton((button: ButtonComponent) => {
-				button.setButtonText("Generate token");
-				button.onClick(() => {
-					window.open("https://aistudio.google.com/app/apikey");
-				});
-			});
-
-		// Adds OpenAI API Key input
-		new Setting(containerEl)
-			.setName("OpenAI API key")
-			.setDesc("OpenAI models require an API key for authentication.")
-			.addText((text) => {
-				let valueChanged = false;
-				text.setValue(`${this.plugin.settings.openAIAPIKey}`);
-				text.onChange((change) => {
-					if (change.trim().length) {
-						valueChanged = true;
-						this.plugin.settings.openAIAPIKey = change;
-						this.plugin.saveSettings();
-					}
-				});
-			})
-			.addButton((button: ButtonComponent) => {
-				button.setButtonText("Generate token");
-				button.onClick((evt: MouseEvent) => {
-					window.open("https://beta.openai.com/account/api-keys");
+				dropdown.onChange((value) => {
+					this.showApiKeyInput(value as APIKeyType, apiKeySection);
 				});
 			});
 
@@ -132,7 +116,7 @@ export default class SettingsView extends PluginSettingTab {
 				dropdown.selectEl.addEventListener('blur', () => {
 					if (valueChanged) {
 						this.plugin.saveSettings();
-						valueChanged = false; // Reset the flag after saving
+						valueChanged = false;
 					}
 				});
 				dropdown.setValue(this.plugin.settings.modalSettings.model);
@@ -169,42 +153,63 @@ export default class SettingsView extends PluginSettingTab {
 		const llmGuy = containerEl.createDiv();
 		llmGuy.addClass("llm-icon-wrapper");
 
-		// Parse SVG string to DOM element
 		const parser = new DOMParser();
 		const svgDoc = parser.parseFromString(logo, "image/svg+xml");
 		const svgElement = svgDoc.documentElement;
 
-		// Append the SVG element
 		llmGuy.appendChild(svgElement);
 
 		const credits = llmGuy.createEl("div", {
-			attr: {
-				id: "llm-settings-credits"
-			},
-
+			attr: { id: "llm-settings-credits" }
 		});
 
 		const creditsHeader = credits.createEl("p", {
 			text: "LLM plugin",
-			attr: {
-				id: "llm-hero-credits"
-			}
+			attr: { id: "llm-hero-credits" }
 		});
 		credits.appendChild(creditsHeader);
 		const creditsNames = credits.createEl("p", {
 			text: "By Johnny✨, Ryan Mahoney, and Evan Harris",
-			attr: {
-				class: "llm-hero-names llm-text-muted"
-			}
+			attr: { class: "llm-hero-names llm-text-muted" }
 		});
 		credits.appendChild(creditsNames);
 		const creditsVersion = credits.createEl("span", {
 			text: `v${this.plugin.manifest.version}`,
-			attr: {
-				class: "llm-text-muted version"
-			}
+			attr: { class: "llm-text-muted version" }
 		});
 		credits.appendChild(creditsVersion);
 	}
 
+	private showApiKeyInput(type: APIKeyType, containerEl: HTMLElement) {
+		const existingSettings = containerEl.querySelector('.api-key-input');
+		if (existingSettings) {
+			existingSettings.remove();
+		}
+
+		if (!type) return;
+
+		const config = this.apiKeyConfigs[type];
+		const settingContainer = containerEl.createDiv();
+		settingContainer.addClass('api-key-input');
+
+		new Setting(settingContainer)
+			.setName(config.name)
+			.setDesc(config.desc)
+			.addText((text) => {
+				this.currentApiInput = text;
+				text.setValue(this.plugin.settings[config.key] as string);
+				text.onChange((value) => {
+					if (value.trim().length) {
+						(this.plugin.settings[config.key] as string) = value;
+						this.plugin.saveSettings();
+					}
+				});
+			})
+			.addButton((button: ButtonComponent) => {
+				button.setButtonText("Generate token");
+				button.onClick(() => {
+					window.open(config.generateUrl);
+				});
+			});
+	}
 }

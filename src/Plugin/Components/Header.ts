@@ -4,7 +4,7 @@ import { ChatContainer } from "./ChatContainer";
 import { HistoryContainer } from "./HistoryContainer";
 import { ViewType } from "Types/types";
 import { getViewInfo, setHistoryIndex } from "utils/utils";
-import { hideContainer, showContainer } from "utils/dom";
+import { showContainer } from "utils/dom";
 import { SettingsContainer } from "./SettingsContainer";
 import { AssistantsContainer } from "./AssistantsContainer";
 
@@ -97,12 +97,12 @@ export class Header {
 			this.clickHandler(this.chatHistoryButton, [this.settingsButton, this.assistantsButton]);
 			if (!chatHistoryContainerDiv.isShown()) {
 				showContainer(chatHistoryContainerDiv);
-				hideContainer(settingsContainerDiv);
-				hideContainer(chatContainerDiv);
-				hideContainer(assistantContainerDiv);
+				settingsContainerDiv.hide();
+				chatContainerDiv.hide();
+				assistantContainerDiv.hide();
 			} else {
 				showContainer(chatContainerDiv);
-				hideContainer(chatHistoryContainerDiv);
+				chatHistoryContainerDiv.hide();
 			}
 		});
 
@@ -113,12 +113,12 @@ export class Header {
 			this.clickHandler(this.assistantsButton, [this.settingsButton, this.chatHistoryButton]);
 			if (!assistantContainerDiv.isShown()) {
 				showContainer(assistantContainerDiv);
-				hideContainer(settingsContainerDiv);
-				hideContainer(chatContainerDiv);
-				hideContainer(chatHistoryContainerDiv)
+				settingsContainerDiv.hide();
+				chatContainerDiv.hide();
+				chatHistoryContainerDiv.hide();
 			} else {
 				showContainer(chatContainerDiv);
-				hideContainer(assistantContainerDiv);
+				assistantContainerDiv.hide();
 			}
 		});
 
@@ -140,12 +140,12 @@ export class Header {
 			this.clickHandler(this.settingsButton, [this.chatHistoryButton, this.assistantsButton]);
 			if (!settingsContainerDiv.isShown()) {
 				showContainer(settingsContainerDiv);
-				hideContainer(chatContainerDiv);
-				hideContainer(chatHistoryContainerDiv);
-				hideContainer(assistantContainerDiv);
+				chatContainerDiv.hide();
+				chatHistoryContainerDiv.hide();
+				assistantContainerDiv.hide();
 			} else {
 				showContainer(chatContainerDiv);
-				hideContainer(settingsContainerDiv);
+				settingsContainerDiv.hide();
 			}
 		});
 
@@ -159,9 +159,9 @@ export class Header {
 			]);
 			this.setHeader(modelName, "New chat");
 			showContainer(chatContainerDiv);
-			hideContainer(settingsContainerDiv);
-			hideContainer(chatHistoryContainerDiv);
-			hideContainer(assistantContainerDiv);
+			settingsContainerDiv.hide();
+			chatHistoryContainerDiv.hide();
+			assistantContainerDiv.hide();
 			chatContainer.resetChat();
 			chatContainer.resetMessages();
 			setHistoryIndex(this.plugin, this.viewType);

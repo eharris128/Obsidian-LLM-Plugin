@@ -6,8 +6,6 @@ import { SettingsContainer } from "Plugin/Components/SettingsContainer";
 import LLMPlugin from "main";
 import { ButtonComponent } from "obsidian";
 import { classNames } from "utils/classNames";
-import { hideContainer } from "utils/dom";
-
 
 const ROOT_WORKSPACE_CLASS = ".mod-vertical.mod-root";
 
@@ -95,7 +93,7 @@ export class FAB {
 				if (!viewArea.isShown()) {
 					this.showViewArea(viewArea);
 				} else {
-					hideContainer(viewArea);
+					viewArea.hide();
 				}
 			});
 

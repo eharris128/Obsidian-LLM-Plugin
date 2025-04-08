@@ -4,7 +4,7 @@ import { ButtonComponent, Notice } from "obsidian";
 import { ChatContainer } from "./ChatContainer";
 import { Header } from "./Header";
 import { models } from "utils/models";
-import { hideContainer, showContainer } from "utils/dom";
+import { showContainer } from "utils/dom";
 import { assistant } from "utils/constants";
 import { getSettingType } from "utils/utils";
 import logo from "assets/LLMgal.svg";
@@ -57,7 +57,7 @@ export class HistoryContainer {
 		createChatButton.setClass('mod-cta')
 
 		createChatButton.onClick(() => {
-			hideContainer(parentElement);
+			parentElement.hide();	
 			const activeHistoryButton = document.querySelector('.chat-history.is-active')
 			activeHistoryButton?.classList.remove('is-active');
 
@@ -91,7 +91,7 @@ export class HistoryContainer {
 
 		const eventListener = () => {
 			chat.resetChat();
-			hideContainer(parentElement);
+			parentElement.hide();
 			showContainer(containerToShow);
 			chat.setMessages(true);
 			const messages = chat.getMessages();

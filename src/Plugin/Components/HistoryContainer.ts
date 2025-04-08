@@ -4,7 +4,6 @@ import { ButtonComponent, Notice } from "obsidian";
 import { ChatContainer } from "./ChatContainer";
 import { Header } from "./Header";
 import { models } from "utils/models";
-import { showContainer } from "utils/dom";
 import { assistant } from "utils/constants";
 import { getSettingType } from "utils/utils";
 import logo from "assets/LLMgal.svg";
@@ -64,7 +63,7 @@ export class HistoryContainer {
 			const prefix = this.getChatContainerClassPrefix()
 			const chatContainer = document.querySelector(`[class*="${prefix}-chat-container"]`) as HTMLElement
 
-			showContainer(chatContainer);
+			chatContainer.show();
 			parentElement.classList.remove('llm-justify-content-center');
 		})
 	
@@ -92,7 +91,7 @@ export class HistoryContainer {
 		const eventListener = () => {
 			chat.resetChat();
 			parentElement.hide();
-			showContainer(containerToShow);
+			containerToShow.show();
 			chat.setMessages(true);
 			const messages = chat.getMessages();
 			chat.generateIMLikeMessgaes(messages);

@@ -15,10 +15,6 @@ export class FAB {
 		this.plugin = plugin;
 	}
 
-	showViewArea(container: HTMLElement) {
-		container.setAttr("style", "display: block");
-	}
-
 	generateFAB() {
 		const fabContainer = createDiv();
 		fabContainer.setAttribute("class", `floating-action-button`);
@@ -91,7 +87,7 @@ export class FAB {
 			.setClass("buttonItem")
 			.onClick(() => {
 				if (!viewArea.isShown()) {
-					this.showViewArea(viewArea);
+					viewArea.setAttr("style", "display: block");
 				} else {
 					viewArea.hide();
 				}

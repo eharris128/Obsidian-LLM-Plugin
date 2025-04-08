@@ -4,7 +4,6 @@ import { ChatContainer } from "./ChatContainer";
 import { HistoryContainer } from "./HistoryContainer";
 import { ViewType } from "Types/types";
 import { getViewInfo, setHistoryIndex } from "utils/utils";
-import { showContainer } from "utils/dom";
 import { SettingsContainer } from "./SettingsContainer";
 import { AssistantsContainer } from "./AssistantsContainer";
 
@@ -96,12 +95,12 @@ export class Header {
 			);
 			this.clickHandler(this.chatHistoryButton, [this.settingsButton, this.assistantsButton]);
 			if (!chatHistoryContainerDiv.isShown()) {
-				showContainer(chatHistoryContainerDiv);
+				chatHistoryContainerDiv.show();
 				settingsContainerDiv.hide();
 				chatContainerDiv.hide();
 				assistantContainerDiv.hide();
 			} else {
-				showContainer(chatContainerDiv);
+				chatContainerDiv.show();
 				chatHistoryContainerDiv.hide();
 			}
 		});
@@ -112,12 +111,12 @@ export class Header {
 		this.assistantsButton.onClick(() => {
 			this.clickHandler(this.assistantsButton, [this.settingsButton, this.chatHistoryButton]);
 			if (!assistantContainerDiv.isShown()) {
-				showContainer(assistantContainerDiv);
+				assistantContainerDiv.show();
 				settingsContainerDiv.hide();
 				chatContainerDiv.hide();
 				chatHistoryContainerDiv.hide();
 			} else {
-				showContainer(chatContainerDiv);
+				chatContainerDiv.show();
 				assistantContainerDiv.hide();
 			}
 		});
@@ -139,12 +138,12 @@ export class Header {
 			);
 			this.clickHandler(this.settingsButton, [this.chatHistoryButton, this.assistantsButton]);
 			if (!settingsContainerDiv.isShown()) {
-				showContainer(settingsContainerDiv);
+				settingsContainerDiv.show();
 				chatContainerDiv.hide();
 				chatHistoryContainerDiv.hide();
 				assistantContainerDiv.hide();
 			} else {
-				showContainer(chatContainerDiv);
+				chatContainerDiv.show();
 				settingsContainerDiv.hide();
 			}
 		});
@@ -158,7 +157,7 @@ export class Header {
 				this.assistantsButton
 			]);
 			this.setHeader(modelName, "New chat");
-			showContainer(chatContainerDiv);
+			chatContainerDiv.show();
 			settingsContainerDiv.hide();
 			chatHistoryContainerDiv.hide();
 			assistantContainerDiv.hide();

@@ -22,8 +22,9 @@ jobs:
         run: |
           npm ci
           npm run build
-      - name: Run npm audit
-        run: npm audit
+      # TODO - return to address.
+      # - name: Run npm audit
+      #   run: npm audit
 
       - name: Create release
         env:

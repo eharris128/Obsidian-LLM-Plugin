@@ -24,6 +24,8 @@ export function getGpt4AllPath(plugin: LLMPlugin) {
 	const homedir = plugin.os.homedir();
 	if (platform === "win32") {
 		return `${homedir}\\AppData\\Local\\nomic.ai\\GPT4All`;
+	} else if (platform === "linux") {
+		return `${homedir}/gpt4all`;
 	} else {
 		// Mac 
 		return `${homedir}/Library/Application Support/nomic.ai/GPT4All`;

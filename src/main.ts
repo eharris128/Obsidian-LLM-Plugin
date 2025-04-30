@@ -13,7 +13,6 @@ import { History } from "History/HistoryHandler";
 import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
 import {
-	LEAF_VIEW_TYPE,
 	TAB_VIEW_TYPE,
 	WidgetView,
 } from "Plugin/Widget/Widget";
@@ -126,11 +125,7 @@ export default class LLMPlugin extends Plugin {
 
 		this.registerView(
 			TAB_VIEW_TYPE,
-			(tab) => new WidgetView(tab, this, "tab")
-		);
-		this.registerView(
-			LEAF_VIEW_TYPE,
-			(leaf) => new WidgetView(leaf, this, "leaf")
+			(tab) => new WidgetView(tab, this)
 		);
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
@@ -155,14 +150,6 @@ export default class LLMPlugin extends Plugin {
 			name: "Open modal",
 			callback: () => {
 				new ChatModal2(this).open();
-			},
-		});
-
-		this.addCommand({
-			id: "open-LLM-widget-leaf",
-			name: "Open chat in sidebar",
-			callback: () => {
-				this.activateLeaf();
 			},
 		});
 
@@ -196,24 +183,6 @@ export default class LLMPlugin extends Plugin {
 				new ChatModal2(this).open();
 			}
 		);
-	}
-
-	async activateLeaf() {
-		const { workspace } = this.app;
-
-		let leaf: WorkspaceLeaf | null = null;
-		const leaves = workspace.getLeavesOfType(LEAF_VIEW_TYPE);
-
-		if (leaves.length > 0) {
-			// A leaf with our view already exists, use that
-			leaf = leaves[0];
-		} else {
-			// Our view could not be found in the workspace, create a new leaf
-			// in the right sidebar for it
-			leaf = workspace.getRightLeaf(false);
-			await leaf.setViewState({ type: LEAF_VIEW_TYPE, active: true });
-		}
-		workspace.revealLeaf(leaf);
 	}
 
 	async activateTab() {

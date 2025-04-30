@@ -15,17 +15,6 @@ export class FAB {
 		this.plugin = plugin;
 	}
 
-	hideContainer(container: HTMLElement) {
-		container.setAttr("style", "display: none");
-	}
-	showContainer(container: HTMLElement) {
-		container.setAttr("style", "display: flex");
-	}
-
-	showViewArea(container: HTMLElement) {
-		container.setAttr("style", "display: block");
-	}
-
 	generateFAB() {
 		const fabContainer = createDiv();
 		fabContainer.setAttribute("class", `floating-action-button`);
@@ -67,8 +56,6 @@ export class FAB {
 			historyContainer,
 			settingsContainer,
 			assistantsContainer,
-			this.showContainer,
-			this.hideContainer
 		);
 		let history = this.plugin.settings.promptHistory;
 
@@ -86,8 +73,6 @@ export class FAB {
 		historyContainer.generateHistoryContainer(
 			chatHistoryContainer,
 			history,
-			this.hideContainer,
-			this.showContainer,
 			chatContainerDiv,
 			chatContainer,
 			header
@@ -103,9 +88,9 @@ export class FAB {
 			.setClass("buttonItem")
 			.onClick(() => {
 				if (!viewArea.isShown()) {
-					this.showViewArea(viewArea);
+					viewArea.setAttr("style", "display: block");
 				} else {
-					this.hideContainer(viewArea);
+					viewArea.hide();
 				}
 			});
 

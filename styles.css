@@ -493,6 +493,8 @@ FAB MESSAGE ICON CSS
 .empty-history-cta {
 	text-align: center;
 	max-width: 25ch;
+	display: flex;
+	flex-direction: column;
 }
 
 .llm-empty-history-button {

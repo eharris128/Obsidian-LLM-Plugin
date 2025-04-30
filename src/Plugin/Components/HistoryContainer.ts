@@ -4,7 +4,6 @@ import { ButtonComponent, Notice } from "obsidian";
 import { ChatContainer } from "./ChatContainer";
 import { Header } from "./Header";
 import { models } from "utils/models";
-import { hideContainer, showContainer } from "utils/dom";
 import { assistant } from "utils/constants";
 import { getSettingType } from "utils/utils";
 import logo from "assets/LLMgal.svg";
@@ -57,14 +56,14 @@ export class HistoryContainer {
 		createChatButton.setClass('mod-cta')
 
 		createChatButton.onClick(() => {
-			hideContainer(parentElement);
+			parentElement.hide();	
 			const activeHistoryButton = document.querySelector('.chat-history.is-active')
 			activeHistoryButton?.classList.remove('is-active');
 
 			const prefix = this.getChatContainerClassPrefix()
 			const chatContainer = document.querySelector(`[class*="${prefix}-chat-container"]`) as HTMLElement
 
-			showContainer(chatContainer);
+			chatContainer.show();
 			parentElement.classList.remove('llm-justify-content-center');
 		})
 	
@@ -73,8 +72,6 @@ export class HistoryContainer {
 	generateHistoryContainer(
 		parentElement: HTMLElement,
 		history: HistoryItem[],
-		hideContainer: (container: HTMLElement) => void,
-		showContainer: (container: HTMLElement) => void,
 		containerToShow: HTMLElement,
 		chat: ChatContainer,
 		Header: Header
@@ -93,8 +90,8 @@ export class HistoryContainer {
 
 		const eventListener = () => {
 			chat.resetChat();
-			hideContainer(parentElement);
-			showContainer(containerToShow);
+			parentElement.hide();
+			containerToShow.show();
 			chat.setMessages(true);
 			const messages = chat.getMessages();
 			chat.generateIMLikeMessages(messages);
@@ -224,15 +221,13 @@ export class HistoryContainer {
 				this.generateHistoryContainer(
 					parentElement,
 					this.plugin.settings.promptHistory,
-					hideContainer,
-					showContainer,
 					containerToShow,
 					chat,
 					Header
 				);
 				chat.resetChat();
 				chat.resetMessages();
-				Header.setHeader(this.modelName, "Local LLM Plugin");
+				Header.setHeader(this.modelName, "Local LLM plugin");
 				this.plugin.settings[settingType].historyIndex =
 					DEFAULT_SETTINGS[settingType].historyIndex;
 				this.plugin.saveSettings();

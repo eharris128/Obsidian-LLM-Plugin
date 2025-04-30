@@ -232,7 +232,8 @@ export class SettingsContainer {
 	generateChatSettings(parentContainer: HTMLElement, modelType: string) {
 		const settingType = getSettingType(this.viewType);
 		const viewSettings = this.plugin.settings[settingType];
-		const tempSetting = new Setting(parentContainer)
+
+		new Setting(parentContainer)
 			.setName("Temperature")
 			.setDesc(
 				modelType !== GPT4All
@@ -248,7 +249,7 @@ export class SettingsContainer {
 				});
 			});
 
-		const tokenSetting = new Setting(parentContainer)
+		new Setting(parentContainer)
 			.setName("Tokens")
 			.setDesc("The number of tokens used in the completion.")
 			.addText((text) => {
@@ -279,7 +280,7 @@ export class SettingsContainer {
 				});
 
 			const logProbs = new Setting(parentContainer)
-				.setName("logprobs")
+				.setName("Log probs")
 				.setDesc(
 					"Defaults to false. Whether to return log probabilities of the output tokens or not. If true, returns the log probabilities of each output token returned in the content of message."
 				)
@@ -291,7 +292,7 @@ export class SettingsContainer {
 				});
 
 			const topLogProbs = new Setting(parentContainer)
-				.setName("top_logprobs")
+				.setName("Top log probs")
 				.setDesc(
 					"An integer between 0 and 5 specifying the number of most likely tokens to return at each token position, each with an associated log probability. logprobs must be set to true if this parameter is used."
 				)

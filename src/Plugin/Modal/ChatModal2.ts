@@ -11,12 +11,6 @@ export class ChatModal2 extends Modal {
 	constructor(private plugin: LLMPlugin) {
 		super(plugin.app);
 	}
-	hideContainer(container: HTMLElement) {
-		container.setAttr("style", "display: none");
-	}
-	showContainer(container: HTMLElement) {
-		container.setAttr("style", "display: flex");
-	}
 
 	onOpen() {
 		this.modalEl
@@ -55,11 +49,9 @@ export class ChatModal2 extends Modal {
 			historyContainer,
 			settingsContainer,
 			assistantsContainer,
-			this.showContainer,
-			this.hideContainer
 		);
 		let history = this.plugin.settings.promptHistory;
-console.log('hi')
+
 		settingsContainerDiv.setAttr("style", "display: none");
 		settingsContainerDiv.addClass("llm-modal-settings-container", "llm-flex");
 		assistantsContainerDiv.setAttr("style", "display: none");
@@ -73,8 +65,6 @@ console.log('hi')
 		historyContainer.generateHistoryContainer(
 			chatHistoryContainer,
 			history,
-			this.hideContainer,
-			this.showContainer,
 			chatContainerDiv,
 			chatContainer,
 			header

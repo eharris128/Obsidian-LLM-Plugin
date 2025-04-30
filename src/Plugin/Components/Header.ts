@@ -67,8 +67,6 @@ export class Header {
 		historyContainer: HistoryContainer,
 		settingsContainer: SettingsContainer,
 		assistantsContainer: AssistantsContainer,
-		showContainer: (container: HTMLElement) => void,
-		hideContainer: (container: HTMLElement) => void
 	) {
 		const { modelName } = getViewInfo(this.plugin, this.viewType);
 		const titleDiv = createDiv();
@@ -91,21 +89,19 @@ export class Header {
 			historyContainer.generateHistoryContainer(
 				chatHistoryContainerDiv,
 				this.plugin.settings.promptHistory,
-				hideContainer,
-				showContainer,
 				chatContainerDiv,
 				chatContainer,
 				this
 			);
 			this.clickHandler(this.chatHistoryButton, [this.settingsButton, this.assistantsButton]);
 			if (!chatHistoryContainerDiv.isShown()) {
-				showContainer(chatHistoryContainerDiv);
-				hideContainer(settingsContainerDiv);
-				hideContainer(chatContainerDiv);
-				hideContainer(assistantContainerDiv);
+				chatHistoryContainerDiv.show();
+				settingsContainerDiv.hide();
+				chatContainerDiv.hide();
+				assistantContainerDiv.hide();
 			} else {
-				showContainer(chatContainerDiv);
-				hideContainer(chatHistoryContainerDiv);
+				chatContainerDiv.show();
+				chatHistoryContainerDiv.hide();
 			}
 		});
 
@@ -115,13 +111,13 @@ export class Header {
 		this.assistantsButton.onClick(() => {
 			this.clickHandler(this.assistantsButton, [this.settingsButton, this.chatHistoryButton]);
 			if (!assistantContainerDiv.isShown()) {
-				showContainer(assistantContainerDiv);
-				hideContainer(settingsContainerDiv);
-				hideContainer(chatContainerDiv);
-				hideContainer(chatHistoryContainerDiv)
+				assistantContainerDiv.show();
+				settingsContainerDiv.hide();
+				chatContainerDiv.hide();
+				chatHistoryContainerDiv.hide();
 			} else {
-				showContainer(chatContainerDiv);
-				hideContainer(assistantContainerDiv);
+				chatContainerDiv.show();
+				assistantContainerDiv.hide();
 			}
 		});
 
@@ -142,13 +138,13 @@ export class Header {
 			);
 			this.clickHandler(this.settingsButton, [this.chatHistoryButton, this.assistantsButton]);
 			if (!settingsContainerDiv.isShown()) {
-				showContainer(settingsContainerDiv);
-				hideContainer(chatContainerDiv);
-				hideContainer(chatHistoryContainerDiv);
-				hideContainer(assistantContainerDiv);
+				settingsContainerDiv.show();
+				chatContainerDiv.hide();
+				chatHistoryContainerDiv.hide();
+				assistantContainerDiv.hide();
 			} else {
-				showContainer(chatContainerDiv);
-				hideContainer(settingsContainerDiv);
+				chatContainerDiv.show();
+				settingsContainerDiv.hide();
 			}
 		});
 
@@ -161,10 +157,10 @@ export class Header {
 				this.assistantsButton
 			]);
 			this.setHeader(modelName, "New chat");
-			showContainer(chatContainerDiv);
-			hideContainer(settingsContainerDiv);
-			hideContainer(chatHistoryContainerDiv);
-			hideContainer(assistantContainerDiv);
+			chatContainerDiv.show();
+			settingsContainerDiv.hide();
+			chatHistoryContainerDiv.hide();
+			assistantContainerDiv.hide();
 			chatContainer.resetChat();
 			chatContainer.resetMessages();
 			setHistoryIndex(this.plugin, this.viewType);

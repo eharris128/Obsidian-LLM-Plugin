@@ -77,7 +77,6 @@ const defaultSettings = {
 		},
 	},
 };
-//adding comments to test commits
 
 export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	currentIndex: -1,

@@ -416,7 +416,7 @@ export class ChatContainer {
 						content += `![created with prompt ${this.prompt}](${url})`;
 					});
 					this.messageStore.addMessage({
-						role: "assistant",
+						role: assistant,
 						content,
 					});
 					this.appendImage(response);

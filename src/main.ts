@@ -118,7 +118,6 @@ export default class LLMPlugin extends Plugin {
 		this.messageStore = new MessageStore();
 		this.settings.currentIndex = -1;
 		this.messageStore.setMessages([]);
-		console.log(this.messageStore.getMessages());
 		this.saveSettings();
 
 		this.registerView(

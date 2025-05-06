@@ -267,8 +267,9 @@ export class ChatContainer {
 			});
 			const message_context = {
 				...(params as ChatParams),
-				messages: messagesForParams,
+				messages: this.getMessages(),
 			} as ChatHistoryItem;
+			console.log(message_context);
 			this.historyPush(message_context);
 			return true;
 		}

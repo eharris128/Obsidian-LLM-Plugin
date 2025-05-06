@@ -218,7 +218,7 @@ export class ChatContainer {
 					});
 					const message_context = {
 						...params,
-						messages: messagesForParams,
+						messages: this.getMessages(),
 						assistant_id: assistantId,
 						modelName,
 					} as AssistantHistoryItem;
@@ -307,7 +307,7 @@ export class ChatContainer {
 			});
 			const message_context = {
 				...(params as ChatParams),
-				messages: messagesForParams,
+				messages: this.getMessages(),
 			} as ChatHistoryItem;
 			this.historyPush(message_context);
 			return true;

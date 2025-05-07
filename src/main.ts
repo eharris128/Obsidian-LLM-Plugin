@@ -92,7 +92,8 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	claudeAPIKey: "",
 	geminiAPIKey: "",
 	GPT4AllStreaming: false,
-	showFAB: true,
+	//this setting determines whether or not fab is shown by default
+	showFAB: false,
 	defaultModel: "",
 };
 

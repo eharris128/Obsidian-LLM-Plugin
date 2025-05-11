@@ -20,8 +20,15 @@ import {
 	ViewType,
 } from "Types/types";
 import { classNames } from "utils/classNames";
-import { assistant, chat, gemini, geminiModel, GPT4All, messages } from "utils/constants";
-import assistantLogo from "Plugin/Components/AssistantLogo"
+import {
+	assistant,
+	chat,
+	gemini,
+	geminiModel,
+	GPT4All,
+	messages,
+} from "utils/constants";
+import assistantLogo from "Plugin/Components/AssistantLogo";
 import {
 	assistantsMessage,
 	getSettingType,
@@ -30,9 +37,10 @@ import {
 	claudeMessage,
 	geminiMessage,
 	openAIMessage,
-	setHistoryIndex
+	setHistoryIndex,
 } from "utils/utils";
 import { Header } from "./Header";
+import logo from "assets/LLMgal.svg";
 
 export class ChatContainer {
 	historyMessages: HTMLElement;
@@ -43,10 +51,7 @@ export class ChatContainer {
 	streamingDiv: HTMLElement;
 	viewType: ViewType;
 	previewText: string;
-	constructor(
-		private plugin: LLMPlugin,
-		viewType: ViewType
-	) {
+	constructor(private plugin: LLMPlugin, viewType: ViewType) {
 		this.viewType = viewType;
 	}
 
@@ -148,9 +153,12 @@ export class ChatContainer {
 			assistantId,
 			modelName,
 		} = getViewInfo(this.plugin, this.viewType);
-		let shouldHaveAPIKey = modelType !== GPT4All
+		let shouldHaveAPIKey = modelType !== GPT4All;
 		if (shouldHaveAPIKey) {
-			const API_KEY = this.plugin.settings.openAIAPIKey || this.plugin.settings.claudeAPIKey || this.plugin.settings.geminiAPIKey;
+			const API_KEY =
+				this.plugin.settings.openAIAPIKey ||
+				this.plugin.settings.claudeAPIKey ||
+				this.plugin.settings.geminiAPIKey;
 			if (!API_KEY) {
 				throw new Error("No API key");
 			}
@@ -202,8 +210,8 @@ export class ChatContainer {
 			const stream = await geminiMessage(
 				params as ChatParams,
 				this.plugin.settings.geminiAPIKey
-			)
-			this.setDiv(true)
+			);
+			this.setDiv(true);
 
 			try {
 				for await (const chunk of stream.stream) {
@@ -212,7 +220,7 @@ export class ChatContainer {
 					this.historyMessages.scroll(0, 9999);
 				}
 			} catch (err) {
-				console.error(err)
+				console.error(err);
 				return false;
 			}
 
@@ -245,15 +253,15 @@ export class ChatContainer {
 		if (modelEndpoint === messages) {
 			const stream = await claudeMessage(
 				params as ChatParams,
-				this.plugin.settings.claudeAPIKey,
+				this.plugin.settings.claudeAPIKey
 			);
 			this.setDiv(true);
 
-			stream.on('text', (text) => {
+			stream.on("text", (text) => {
 				this.previewText += text || "";
 				this.streamingDiv.textContent = this.previewText;
 				this.historyMessages.scroll(0, 9999);
-			})
+			});
 
 			this.streamingDiv.empty();
 			MarkdownRenderer.render(
@@ -287,9 +295,9 @@ export class ChatContainer {
 			this.setDiv(false);
 			messageGPT4AllServer(params as ChatParams, endpointURL).then(
 				(response: Message) => {
-					this.streamingDiv.textContent = response.content
+					this.streamingDiv.textContent = response.content;
 					this.messages.push(response);
-					this.previewText = response.content
+					this.previewText = response.content;
 					this.historyPush(params as ChatHistoryItem);
 				}
 			);
@@ -340,13 +348,16 @@ export class ChatContainer {
 
 		// The refresh button should only be displayed on the most recent
 		// assistant message.
-		const refreshButton =
-			this.historyMessages.querySelector(".llm-refresh-output");
+		const refreshButton = this.historyMessages.querySelector(
+			".llm-refresh-output"
+		);
 		refreshButton?.remove();
 
 		const { model, modelName, modelType, endpointURL, modelEndpoint } =
 			getViewInfo(this.plugin, this.viewType);
-		if (this.historyMessages.children.length < 1) {
+		if (this.getMessages().length < 1) {
+			this.historyMessages.empty();
+			this.historyMessages.removeClass("center-llmgal");
 			header.setHeader(modelName, this.prompt);
 		}
 		this.messages.push({ role: "user", content: this.prompt });
@@ -383,7 +394,9 @@ export class ChatContainer {
 			}
 			header.enableButtons();
 			sendButton.setDisabled(false);
-			const buttonsContainer = this.loadingDivContainer.querySelector(".llm-assistant-buttons")
+			const buttonsContainer = this.loadingDivContainer.querySelector(
+				".llm-assistant-buttons"
+			);
 			buttonsContainer?.removeClass("llm-hide");
 		} catch (error) {
 			header.enableButtons();
@@ -407,7 +420,11 @@ export class ChatContainer {
 			return;
 		}
 
-		if (modelEndpoint === chat || modelEndpoint === gemini || modelEndpoint === messages) {
+		if (
+			modelEndpoint === chat ||
+			modelEndpoint === gemini ||
+			modelEndpoint === messages
+		) {
 			this.plugin.history.push({
 				...(params as ChatHistoryItem),
 				modelName,
@@ -435,10 +452,28 @@ export class ChatContainer {
 	auto_height(elem: TextAreaComponent, parentElement: Element) {
 		elem.inputEl.setAttribute("style", "height: 50px");
 		const height = elem.inputEl.scrollHeight - 5;
-		if (!(height > parseInt(window.getComputedStyle(elem.inputEl).height))) return;
+		if (!(height > parseInt(window.getComputedStyle(elem.inputEl).height)))
+			return;
 		elem.inputEl.setAttribute("style", `height: ${height}px`);
 		elem.inputEl.setAttribute("style", `overflow: hidden`);
 		parentElement.scrollTo(0, 9999);
+	}
+
+	displayNoChatView(parentElement: Element) {
+		parentElement.addClass("llm-justify-content-center");
+		parentElement.addClass("center-llmgal");
+
+		const llmGal = parentElement.createDiv();
+		llmGal.addClass("llm-icon-wrapper");
+		llmGal.addClass("llm-icon-new-chat");
+
+		// Parse SVG string to DOM element
+		const parser = new DOMParser();
+		const svgDoc = parser.parseFromString(logo, "image/svg+xml");
+		const svgElement = svgDoc.documentElement;
+
+		// Append the SVG element
+		llmGal.appendChild(svgElement);
 	}
 
 	async generateChatContainer(parentElement: Element, header: Header) {
@@ -451,10 +486,12 @@ export class ChatContainer {
 		this.historyMessages = parentElement.createDiv();
 		this.historyMessages.className =
 			classNames[this.viewType]["messages-div"];
+		if (this.messages.length === 0) {
+			this.displayNoChatView(this.historyMessages);
+		}
 		const promptContainer = parentElement.createDiv();
 		const promptField = new TextAreaComponent(promptContainer);
 		const sendButton = new ButtonComponent(promptContainer);
-
 		if (this.viewType === "floating-action-button") {
 			promptContainer.addClass("llm-flex");
 		}
@@ -530,13 +567,10 @@ export class ChatContainer {
 		this.loadingDivContainer = parent.createDiv();
 		this.streamingDiv = this.loadingDivContainer.createDiv();
 
-		const buttonsContainer = this.loadingDivContainer.createEl(
-			"div",
-			{ cls: "llm-assistant-buttons llm-hide" }
-		)
-		const copyToClipboardButton = new ButtonComponent(
-			buttonsContainer
-		);
+		const buttonsContainer = this.loadingDivContainer.createEl("div", {
+			cls: "llm-assistant-buttons llm-hide",
+		});
+		const copyToClipboardButton = new ButtonComponent(buttonsContainer);
 		copyToClipboardButton.setIcon("files");
 
 		const refreshButton = new ButtonComponent(buttonsContainer);
@@ -548,12 +582,12 @@ export class ChatContainer {
 		// GPT4All & Image enter the non-streaming block
 		// Claude, Gemini enter the streaming block
 		if (streaming) {
-			this.streamingDiv.empty()
+			this.streamingDiv.empty();
 		} else {
-			const dots = this.streamingDiv.createEl("span")
+			const dots = this.streamingDiv.createEl("span");
 			for (let i = 0; i < 3; i++) {
-				const dot = dots.createEl("span", { cls: "streaming-dot" })
-				dot.textContent = "."
+				const dot = dots.createEl("span", { cls: "streaming-dot" });
+				dot.textContent = ".";
 			}
 		}
 
@@ -577,13 +611,17 @@ export class ChatContainer {
 
 	appendImage(imageURLs: string[]) {
 		imageURLs.map((url) => {
-			const img = this.streamingDiv.createEl('img');
+			const img = this.streamingDiv.createEl("img");
 			img.src = url;
 			img.alt = `image generated with ${this.prompt}`;
 		});
 	}
 
-	private createMessage(content: string, index: number, finalMessage: Boolean) {
+	private createMessage(
+		content: string,
+		index: number,
+		finalMessage: Boolean
+	) {
 		const imLikeMessageContainer = this.historyMessages.createDiv();
 		const imLikeMessage = imLikeMessageContainer.createDiv();
 		const copyToClipboardButton = new ButtonComponent(
@@ -605,7 +643,10 @@ export class ChatContainer {
 		copyButton.forEach((item) => {
 			item.setAttribute("style", "display: none");
 		});
-		imLikeMessageContainer.addClass("im-like-message-container", "llm-flex");
+		imLikeMessageContainer.addClass(
+			"im-like-message-container",
+			"llm-flex"
+		);
 		copyToClipboardButton.buttonEl.addClass("add-text", "llm-hide");
 
 		imLikeMessage.addClass(
@@ -640,11 +681,11 @@ export class ChatContainer {
 
 			imLikeMessageContainer.addEventListener("mouseenter", () => {
 				refreshButton.buttonEl.removeClass("llm-hide");
-			})
+			});
 
 			imLikeMessageContainer.addEventListener("mouseleave", () => {
 				refreshButton.buttonEl.addClass("llm-hide");
-			})
+			});
 			refreshButton.onClick(async () => {
 				new Notice("Regenerating response...");
 				this.regenerateOutput();
@@ -653,9 +694,9 @@ export class ChatContainer {
 	}
 
 	generateIMLikeMessgaes(messages: Message[]) {
-		let finalMessage = false
+		let finalMessage = false;
 		messages.map(({ content }, index) => {
-			if (index === messages.length - 1) finalMessage = true
+			if (index === messages.length - 1) finalMessage = true;
 			this.createMessage(content, index, finalMessage);
 		});
 		this.historyMessages.scroll(0, 9999);
@@ -681,5 +722,10 @@ export class ChatContainer {
 
 	resetChat() {
 		this.historyMessages.empty();
+		this.historyMessages.removeClass("center-llmgal");
+	}
+	newChat() {
+		this.historyMessages.empty();
+		this.displayNoChatView(this.historyMessages);
 	}
 }

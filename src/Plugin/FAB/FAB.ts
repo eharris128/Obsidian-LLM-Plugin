@@ -25,7 +25,8 @@ export class FAB {
 		const header = new Header(this.plugin, "floating-action-button");
 		const chatContainer = new ChatContainer(
 			this.plugin,
-			"floating-action-button"
+			"floating-action-button",
+			this.plugin.messageStore
 		);
 		const historyContainer = new HistoryContainer(
 			this.plugin,

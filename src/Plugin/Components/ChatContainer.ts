@@ -20,8 +20,15 @@ import {
 	ViewType,
 } from "Types/types";
 import { classNames } from "utils/classNames";
-import { assistant, chat, gemini, geminiModel, GPT4All, messages } from "utils/constants";
-import assistantLogo from "Plugin/Components/AssistantLogo"
+import {
+	assistant,
+	chat,
+	gemini,
+	geminiModel,
+	GPT4All,
+	messages,
+} from "utils/constants";
+import assistantLogo from "Plugin/Components/AssistantLogo";
 import {
 	assistantsMessage,
 	getSettingType,
@@ -30,9 +37,10 @@ import {
 	claudeMessage,
 	geminiMessage,
 	openAIMessage,
-	setHistoryIndex
+	setHistoryIndex,
 } from "utils/utils";
 import { Header } from "./Header";
+import { MessageStore } from "./MessageStore";
 
 export class ChatContainer {
 	historyMessages: HTMLElement;
@@ -43,22 +51,40 @@ export class ChatContainer {
 	streamingDiv: HTMLElement;
 	viewType: ViewType;
 	previewText: string;
+	messageStore: MessageStore;
 	constructor(
 		private plugin: LLMPlugin,
-		viewType: ViewType
+		viewType: ViewType,
+		messageStore: MessageStore
 	) {
 		this.viewType = viewType;
+		this.messageStore = messageStore;
+		this.messageStore.subscribe(this.updateMessages.bind(this));
+	}
+
+	private updateMessages(messages: Message[]) {
+		const { historyIndex } = getViewInfo(this.plugin, this.viewType);
+		if (historyIndex === this.plugin.settings.currentIndex) {
+			this.resetChat();
+			this.generateIMLikeMessages(messages);
+		}
+		return;
+	}
+
+	getMessages() {
+		return this.messageStore.getMessages();
 	}
 
 	getParams(endpoint: string, model: string, modelType: string) {
 		const settingType = getSettingType(this.viewType);
+		const messagesForParams = this.getMessages();
 
 		if (modelType === gemini) {
 			const params: ChatParams = {
 				// QUESTION -> Do we really want to send prompt when we are sending messages?
 				prompt: this.prompt,
 				// QUESTION -> how many messages do we really want to send?
-				messages: this.messages,
+				messages: messagesForParams,
 				model,
 				temperature:
 					this.plugin.settings[settingType].chatSettings.temperature,
@@ -71,7 +97,7 @@ export class ChatContainer {
 		if (modelType === assistant) {
 			const params: AssistantParams = {
 				prompt: this.prompt,
-				messages: this.messages,
+				messages: messagesForParams,
 				model,
 			};
 			return params;
@@ -79,7 +105,7 @@ export class ChatContainer {
 		if (endpoint === "images") {
 			const params: ImageParams = {
 				prompt: this.prompt,
-				messages: this.messages,
+				messages: messagesForParams,
 				model,
 				...this.plugin.settings[settingType].imageSettings,
 			};
@@ -90,7 +116,7 @@ export class ChatContainer {
 			if (modelType === GPT4All) {
 				const params: ChatParams = {
 					prompt: this.prompt,
-					messages: this.messages,
+					messages: messagesForParams,
 					model,
 					temperature:
 						this.plugin.settings[settingType].chatSettings
@@ -105,7 +131,7 @@ export class ChatContainer {
 
 			const params: ChatParams = {
 				prompt: this.prompt,
-				messages: this.messages,
+				messages: messagesForParams,
 				model,
 				temperature:
 					this.plugin.settings[settingType].chatSettings.temperature,
@@ -122,7 +148,7 @@ export class ChatContainer {
 				// The Claude API accepts the most recent user message
 				// as well as an optional most recent assistant message.
 				// This initial approach only sends the most recent user message.
-				messages: this.messages.slice(-1),
+				messages: messagesForParams.slice(-1),
 				model,
 				temperature:
 					this.plugin.settings[settingType].chatSettings.temperature,
@@ -148,9 +174,14 @@ export class ChatContainer {
 			assistantId,
 			modelName,
 		} = getViewInfo(this.plugin, this.viewType);
-		let shouldHaveAPIKey = modelType !== GPT4All
+		let shouldHaveAPIKey = modelType !== GPT4All;
+		const messagesForParams = this.getMessages();
+		// TODO - fix this logic to actually do an API key check against the current view model.
 		if (shouldHaveAPIKey) {
-			const API_KEY = this.plugin.settings.openAIAPIKey || this.plugin.settings.claudeAPIKey || this.plugin.settings.geminiAPIKey;
+			const API_KEY =
+				this.plugin.settings.openAIAPIKey ||
+				this.plugin.settings.claudeAPIKey ||
+				this.plugin.settings.geminiAPIKey;
 			if (!API_KEY) {
 				throw new Error("No API key");
 			}
@@ -160,7 +191,7 @@ export class ChatContainer {
 		if (modelEndpoint === assistant) {
 			const stream = await assistantsMessage(
 				this.plugin.settings.openAIAPIKey,
-				this.messages,
+				messagesForParams,
 				assistantId
 			);
 			stream.on("textCreated", () => this.setDiv(true));
@@ -181,13 +212,13 @@ export class ChatContainer {
 						this.plugin
 					);
 					this.historyMessages.scroll(0, 9999);
-					this.messages.push({
+					this.messageStore.addMessage({
 						role: assistant,
 						content: this.previewText,
 					});
 					const message_context = {
 						...params,
-						messages: this.messages,
+						messages: this.getMessages(),
 						assistant_id: assistantId,
 						modelName,
 					} as AssistantHistoryItem;
@@ -202,8 +233,8 @@ export class ChatContainer {
 			const stream = await geminiMessage(
 				params as ChatParams,
 				this.plugin.settings.geminiAPIKey
-			)
-			this.setDiv(true)
+			);
+			this.setDiv(true);
 
 			try {
 				for await (const chunk of stream.stream) {
@@ -212,7 +243,7 @@ export class ChatContainer {
 					this.historyMessages.scroll(0, 9999);
 				}
 			} catch (err) {
-				console.error(err)
+				console.error(err);
 				return false;
 			}
 
@@ -230,14 +261,15 @@ export class ChatContainer {
 			copyButton.forEach((item) => {
 				item.setAttribute("style", "display: none");
 			});
-			this.messages.push({
+			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
 			});
 			const message_context = {
 				...(params as ChatParams),
-				messages: this.messages,
+				messages: this.getMessages(),
 			} as ChatHistoryItem;
+			console.log(message_context);
 			this.historyPush(message_context);
 			return true;
 		}
@@ -245,15 +277,15 @@ export class ChatContainer {
 		if (modelEndpoint === messages) {
 			const stream = await claudeMessage(
 				params as ChatParams,
-				this.plugin.settings.claudeAPIKey,
+				this.plugin.settings.claudeAPIKey
 			);
 			this.setDiv(true);
 
-			stream.on('text', (text) => {
+			stream.on("text", (text) => {
 				this.previewText += text || "";
 				this.streamingDiv.textContent = this.previewText;
 				this.historyMessages.scroll(0, 9999);
-			})
+			});
 
 			this.streamingDiv.empty();
 			MarkdownRenderer.render(
@@ -269,13 +301,13 @@ export class ChatContainer {
 			copyButton.forEach((item) => {
 				item.setAttribute("style", "display: none");
 			});
-			this.messages.push({
+			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
 			});
 			const message_context = {
 				...(params as ChatParams),
-				messages: this.messages,
+				messages: this.getMessages(),
 			} as ChatHistoryItem;
 			this.historyPush(message_context);
 			return true;
@@ -287,9 +319,9 @@ export class ChatContainer {
 			this.setDiv(false);
 			messageGPT4AllServer(params as ChatParams, endpointURL).then(
 				(response: Message) => {
-					this.streamingDiv.textContent = response.content
-					this.messages.push(response);
-					this.previewText = response.content
+					this.streamingDiv.textContent = response.content;
+					this.messageStore.addMessage(response);
+					this.previewText = response.content;
 					this.historyPush(params as ChatHistoryItem);
 				}
 			);
@@ -320,13 +352,13 @@ export class ChatContainer {
 			copyButton.forEach((item) => {
 				item.setAttribute("style", "display: none");
 			});
-			this.messages.push({
+			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
 			});
 			const message_context = {
 				...(params as ChatParams),
-				messages: this.messages,
+				messages: this.messageStore.getMessages(),
 			} as ChatHistoryItem;
 			this.historyPush(message_context);
 			return true;
@@ -337,22 +369,36 @@ export class ChatContainer {
 	async handleGenerateClick(header: Header, sendButton: ButtonComponent) {
 		header.disableButtons();
 		sendButton.setDisabled(true);
+		const {
+			model,
+			modelName,
+			modelType,
+			endpointURL,
+			modelEndpoint,
+			historyIndex,
+		} = getViewInfo(this.plugin, this.viewType);
+		if (historyIndex > -1) {
+			const messages =
+				this.plugin.settings.promptHistory[historyIndex].messages;
+			this.messageStore.setMessages(messages);
+		}
+
+		this.plugin.settings.currentIndex = historyIndex;
+		this.plugin.saveSettings();
 
 		// The refresh button should only be displayed on the most recent
 		// assistant message.
-		const refreshButton =
-			this.historyMessages.querySelector(".llm-refresh-output");
+		const refreshButton = this.historyMessages.querySelector(
+			".llm-refresh-output"
+		);
 		refreshButton?.remove();
 
-		const { model, modelName, modelType, endpointURL, modelEndpoint } =
-			getViewInfo(this.plugin, this.viewType);
 		if (this.historyMessages.children.length < 1) {
 			header.setHeader(modelName, this.prompt);
 		}
-		this.messages.push({ role: "user", content: this.prompt });
+		this.messageStore.addMessage({ role: "user", content: this.prompt });
 		const params = this.getParams(modelEndpoint, model, modelType);
 		try {
-			this.appendNewMessage({ role: "user", content: this.prompt });
 			this.previewText = "";
 			if (modelEndpoint !== "images") {
 				await this.handleGenerate();
@@ -370,20 +416,22 @@ export class ChatContainer {
 					response.map((url) => {
 						content += `![created with prompt ${this.prompt}](${url})`;
 					});
-					this.messages.push({
+					this.messageStore.addMessage({
 						role: assistant,
 						content,
 					});
 					this.appendImage(response);
 					this.historyPush({
 						...params,
-						messages: this.messages,
+						messages: this.getMessages(),
 					} as ImageHistoryItem);
 				});
 			}
 			header.enableButtons();
 			sendButton.setDisabled(false);
-			const buttonsContainer = this.loadingDivContainer.querySelector(".llm-assistant-buttons")
+			const buttonsContainer = this.loadingDivContainer.querySelector(
+				".llm-assistant-buttons"
+			);
 			buttonsContainer?.removeClass("llm-hide");
 		} catch (error) {
 			header.enableButtons();
@@ -391,7 +439,7 @@ export class ChatContainer {
 			this.plugin.settings.GPT4AllStreaming = false;
 			this.prompt = "";
 			errorMessages(error, params);
-			if (this.messages.length > 0) {
+			if (this.getMessages().length > 0) {
 				setTimeout(() => {
 					this.removeMessage(header, modelName);
 				}, 1000);
@@ -403,11 +451,18 @@ export class ChatContainer {
 		const { modelName, historyIndex, modelEndpoint, assistantId } =
 			getViewInfo(this.plugin, this.viewType);
 		if (historyIndex > -1) {
-			this.plugin.history.overwriteHistory(this.messages, historyIndex);
+			this.plugin.history.overwriteHistory(
+				this.getMessages(),
+				historyIndex
+			);
 			return;
 		}
 
-		if (modelEndpoint === chat || modelEndpoint === gemini || modelEndpoint === messages) {
+		if (
+			modelEndpoint === chat ||
+			modelEndpoint === gemini ||
+			modelEndpoint === messages
+		) {
 			this.plugin.history.push({
 				...(params as ChatHistoryItem),
 				modelName,
@@ -435,7 +490,8 @@ export class ChatContainer {
 	auto_height(elem: TextAreaComponent, parentElement: Element) {
 		elem.inputEl.setAttribute("style", "height: 50px");
 		const height = elem.inputEl.scrollHeight - 5;
-		if (!(height > parseInt(window.getComputedStyle(elem.inputEl).height))) return;
+		if (!(height > parseInt(window.getComputedStyle(elem.inputEl).height)))
+			return;
 		elem.inputEl.setAttribute("style", `height: ${height}px`);
 		elem.inputEl.setAttribute("style", `overflow: hidden`);
 		parentElement.scrollTo(0, 9999);
@@ -447,7 +503,7 @@ export class ChatContainer {
 		// If we are working with a local model, then we only need to be able to perform a health check against
 		// that model.
 
-		this.messages = [];
+		this.messageStore.setMessages([]);
 		this.historyMessages = parentElement.createDiv();
 		this.historyMessages.className =
 			classNames[this.viewType]["messages-div"];
@@ -495,30 +551,21 @@ export class ChatContainer {
 	}
 
 	setMessages(replaceChatHistory: boolean = false) {
-		const settings: Record<string, string> = {
-			modal: "modalSettings",
-			widget: "widgetSettings",
-			"floating-action-button": "fabSettings",
-		};
-		const settingType = settings[this.viewType] as
-			| "modalSettings"
-			| "widgetSettings"
-			| "fabSettings";
-		const index = this.plugin.settings[settingType].historyIndex;
+		const { historyIndex } = getViewInfo(this.plugin, this.viewType);
 		if (replaceChatHistory) {
 			let history = this.plugin.settings.promptHistory;
-			this.messages = history[index].messages;
-		} else {
-			this.messages.push({ role: "user", content: this.prompt });
+			this.messageStore.setMessages(history[historyIndex].messages);
+		}
+		if (!replaceChatHistory) {
+			this.messageStore.addMessage({
+				role: "user",
+				content: this.prompt,
+			});
 		}
 	}
 
-	getMessages() {
-		return this.messages;
-	}
-
 	resetMessages() {
-		this.messages = [];
+		this.messageStore.setMessages([]);
 	}
 
 	setDiv(streaming: boolean) {
@@ -530,13 +577,10 @@ export class ChatContainer {
 		this.loadingDivContainer = parent.createDiv();
 		this.streamingDiv = this.loadingDivContainer.createDiv();
 
-		const buttonsContainer = this.loadingDivContainer.createEl(
-			"div",
-			{ cls: "llm-assistant-buttons llm-hide" }
-		)
-		const copyToClipboardButton = new ButtonComponent(
-			buttonsContainer
-		);
+		const buttonsContainer = this.loadingDivContainer.createEl("div", {
+			cls: "llm-assistant-buttons llm-hide",
+		});
+		const copyToClipboardButton = new ButtonComponent(buttonsContainer);
 		copyToClipboardButton.setIcon("files");
 
 		const refreshButton = new ButtonComponent(buttonsContainer);
@@ -548,12 +592,12 @@ export class ChatContainer {
 		// GPT4All & Image enter the non-streaming block
 		// Claude, Gemini enter the streaming block
 		if (streaming) {
-			this.streamingDiv.empty()
+			this.streamingDiv.empty();
 		} else {
-			const dots = this.streamingDiv.createEl("span")
+			const dots = this.streamingDiv.createEl("span");
 			for (let i = 0; i < 3; i++) {
-				const dot = dots.createEl("span", { cls: "streaming-dot" })
-				dot.textContent = "."
+				const dot = dots.createEl("span", { cls: "streaming-dot" });
+				dot.textContent = ".";
 			}
 		}
 
@@ -577,13 +621,18 @@ export class ChatContainer {
 
 	appendImage(imageURLs: string[]) {
 		imageURLs.map((url) => {
-			const img = this.streamingDiv.createEl('img');
+			const img = this.streamingDiv.createEl("img");
 			img.src = url;
 			img.alt = `image generated with ${this.prompt}`;
 		});
 	}
 
-	private createMessage(content: string, index: number, finalMessage: Boolean) {
+	private createMessage(
+		content: string,
+		index: number,
+		finalMessage: Boolean,
+		assistant: Boolean = false
+	) {
 		const imLikeMessageContainer = this.historyMessages.createDiv();
 		const imLikeMessage = imLikeMessageContainer.createDiv();
 		const copyToClipboardButton = new ButtonComponent(
@@ -592,6 +641,14 @@ export class ChatContainer {
 
 		copyToClipboardButton.setIcon("files");
 
+		if (assistant) {
+			const parent = imLikeMessage.createDiv();
+			imLikeMessage.addClass("llm-flex");
+			const assistant = parent.createEl("div", {
+				cls: "llm-assistant-logo",
+			});
+			assistant.appendChild(assistantLogo());
+		}
 		MarkdownRenderer.render(
 			this.plugin.app,
 			content,
@@ -605,7 +662,10 @@ export class ChatContainer {
 		copyButton.forEach((item) => {
 			item.setAttribute("style", "display: none");
 		});
-		imLikeMessageContainer.addClass("im-like-message-container", "llm-flex");
+		imLikeMessageContainer.addClass(
+			"im-like-message-container",
+			"llm-flex"
+		);
 		copyToClipboardButton.buttonEl.addClass("add-text", "llm-hide");
 
 		imLikeMessage.addClass(
@@ -640,11 +700,11 @@ export class ChatContainer {
 
 			imLikeMessageContainer.addEventListener("mouseenter", () => {
 				refreshButton.buttonEl.removeClass("llm-hide");
-			})
+			});
 
 			imLikeMessageContainer.addEventListener("mouseleave", () => {
 				refreshButton.buttonEl.addClass("llm-hide");
-			})
+			});
 			refreshButton.onClick(async () => {
 				new Notice("Regenerating response...");
 				this.regenerateOutput();
@@ -652,10 +712,14 @@ export class ChatContainer {
 		}
 	}
 
-	generateIMLikeMessgaes(messages: Message[]) {
-		let finalMessage = false
-		messages.map(({ content }, index) => {
-			if (index === messages.length - 1) finalMessage = true
+	generateIMLikeMessages(messages: Message[]) {
+		let finalMessage = false;
+		messages.map(({ role, content }, index) => {
+			if (index === messages.length - 1) finalMessage = true;
+			if (role === "assistant") {
+				this.createMessage(content, index, finalMessage, true);
+				return;
+			}
 			this.createMessage(content, index, finalMessage);
 		});
 		this.historyMessages.scroll(0, 9999);
@@ -668,7 +732,9 @@ export class ChatContainer {
 		this.createMessage(content, length, false);
 	}
 	removeLastMessageAndHistoryMessage() {
-		this.messages.pop();
+		const messages = this.messageStore.getMessages();
+		messages.pop();
+		this.messageStore.setMessages(messages);
 		this.historyMessages.lastElementChild?.remove();
 	}
 

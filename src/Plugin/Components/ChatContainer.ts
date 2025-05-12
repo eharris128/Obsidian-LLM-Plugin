@@ -630,7 +630,8 @@ export class ChatContainer {
 	private createMessage(
 		content: string,
 		index: number,
-		finalMessage: Boolean
+		finalMessage: Boolean,
+		assistant: Boolean = false
 	) {
 		const imLikeMessageContainer = this.historyMessages.createDiv();
 		const imLikeMessage = imLikeMessageContainer.createDiv();
@@ -640,6 +641,14 @@ export class ChatContainer {
 
 		copyToClipboardButton.setIcon("files");
 
+		if (assistant) {
+			const parent = imLikeMessage.createDiv();
+			imLikeMessage.addClass("llm-flex");
+			const assistant = parent.createEl("div", {
+				cls: "llm-assistant-logo",
+			});
+			assistant.appendChild(assistantLogo());
+		}
 		MarkdownRenderer.render(
 			this.plugin.app,
 			content,
@@ -705,8 +714,12 @@ export class ChatContainer {
 
 	generateIMLikeMessages(messages: Message[]) {
 		let finalMessage = false;
-		messages.map(({ content }, index) => {
+		messages.map(({ role, content }, index) => {
 			if (index === messages.length - 1) finalMessage = true;
+			if (role === "assistant") {
+				this.createMessage(content, index, finalMessage, true);
+				return;
+			}
 			this.createMessage(content, index, finalMessage);
 		});
 		this.historyMessages.scroll(0, 9999);

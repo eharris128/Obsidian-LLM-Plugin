@@ -41,6 +41,7 @@ import {
 } from "utils/utils";
 import { Header } from "./Header";
 import { MessageStore } from "./MessageStore";
+import logo from "assets/LLMgal.svg";
 
 export class ChatContainer {
 	historyMessages: HTMLElement;

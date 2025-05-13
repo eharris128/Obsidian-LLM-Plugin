@@ -525,7 +525,7 @@ export class ChatContainer {
 		this.historyMessages = parentElement.createDiv();
 		this.historyMessages.className =
 			classNames[this.viewType]["messages-div"];
-		if (this.messages.length === 0) {
+		if (this.getMessages().length === 0) {
 			this.displayNoChatView(this.historyMessages);
 		}
 		const promptContainer = parentElement.createDiv();

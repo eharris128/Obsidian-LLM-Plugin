@@ -24,7 +24,8 @@ export class ChatModal2 extends Modal {
 		const header = new Header(this.plugin, "modal");
 		const chatContainer = new ChatContainer(
 			this.plugin,
-			"modal" /*, closeModal*/
+			"modal",
+			this.plugin.messageStore
 		);
 		const historyContainer = new HistoryContainer(this.plugin, "modal");
 		const settingsContainer = new SettingsContainer(this.plugin, "modal");

@@ -41,6 +41,7 @@ import {
 } from "utils/utils";
 import { Header } from "./Header";
 import { MessageStore } from "./MessageStore";
+import logo from "assets/LLMgal.svg";
 
 export class ChatContainer {
 	historyMessages: HTMLElement;
@@ -497,6 +498,23 @@ export class ChatContainer {
 		parentElement.scrollTo(0, 9999);
 	}
 
+	displayNoChatView(parentElement: Element) {
+		parentElement.addClass("llm-justify-content-center");
+		parentElement.addClass("center-llmgal");
+
+		const llmGal = parentElement.createDiv();
+		llmGal.addClass("llm-icon-wrapper");
+		llmGal.addClass("llm-icon-new-chat");
+
+		// Parse SVG string to DOM element
+		const parser = new DOMParser();
+		const svgDoc = parser.parseFromString(logo, "image/svg+xml");
+		const svgElement = svgDoc.documentElement;
+
+		// Append the SVG element
+		llmGal.appendChild(svgElement);
+	}
+
 	async generateChatContainer(parentElement: Element, header: Header) {
 		// If we are working with assistants, then we need a valid openAi API key.
 		// If we are working with claude, then we need a valid claude key.
@@ -507,10 +525,12 @@ export class ChatContainer {
 		this.historyMessages = parentElement.createDiv();
 		this.historyMessages.className =
 			classNames[this.viewType]["messages-div"];
+		if (this.getMessages().length === 0) {
+			this.displayNoChatView(this.historyMessages);
+		}
 		const promptContainer = parentElement.createDiv();
 		const promptField = new TextAreaComponent(promptContainer);
 		const sendButton = new ButtonComponent(promptContainer);
-
 		if (this.viewType === "floating-action-button") {
 			promptContainer.addClass("llm-flex");
 		}
@@ -747,5 +767,10 @@ export class ChatContainer {
 
 	resetChat() {
 		this.historyMessages.empty();
+		this.historyMessages.removeClass("center-llmgal");
+	}
+	newChat() {
+		this.historyMessages.empty();
+		this.displayNoChatView(this.historyMessages);
 	}
 }

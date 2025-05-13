@@ -59,7 +59,8 @@
 	justify-content: flex-end;
 }
 
-.llm-right-buttons-div, .llm-left-buttons-div {
+.llm-right-buttons-div,
+.llm-left-buttons-div {
 	flex: 1;
 }
 
@@ -235,9 +236,9 @@
 
 .llm-assistant-buttons {
 	width: 85px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
 	padding: 0 10px;
 	margin-bottom: 8px;
 }
@@ -258,7 +259,7 @@
 }
 
 .mod-sidedock .llm-assistant-logo,
-.fab-messages-div .llm-assistant-logo  {
+.fab-messages-div .llm-assistant-logo {
 	margin-right: var(--size-4-2);
 }
 
@@ -279,6 +280,11 @@
 }
 div.im-like-message.llm-widget-chat-message > p {
 	margin: 0;
+}
+
+.center-llmgal {
+	margin-top: auto;
+	margin-bottom: auto;
 }
 
 /*
@@ -557,6 +563,14 @@ FAB MESSAGE ICON CSS
 	}
 }
 
+.llm-icon-new-history > svg > path {
+	fill: var(--text-muted);
+}
+
+.llm-icon-new-chat > svg > path {
+	fill: var(--text-faint);
+}
+
 #llm-settings-credits {
 	text-align: center;
 }
@@ -573,10 +587,11 @@ FAB MESSAGE ICON CSS
 
 .llm-hero-names {
 	font-size: 14px;
-	margin: 0px
+	margin: 0px;
 }
 
-.llm-text-muted, .version {
+.llm-text-muted,
+.version {
 	color: var(--llm-text-muted);
 	font-size: 12px;
 }

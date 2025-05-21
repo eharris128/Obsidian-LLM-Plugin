@@ -66,7 +66,7 @@ export class Header {
 		chatContainer: ChatContainer,
 		historyContainer: HistoryContainer,
 		settingsContainer: SettingsContainer,
-		assistantsContainer: AssistantsContainer,
+		assistantsContainer: AssistantsContainer
 	) {
 		const { modelName } = getViewInfo(this.plugin, this.viewType);
 		const titleDiv = createDiv();
@@ -93,7 +93,10 @@ export class Header {
 				chatContainer,
 				this
 			);
-			this.clickHandler(this.chatHistoryButton, [this.settingsButton, this.assistantsButton]);
+			this.clickHandler(this.chatHistoryButton, [
+				this.settingsButton,
+				this.assistantsButton,
+			]);
 			if (!chatHistoryContainerDiv.isShown()) {
 				chatHistoryContainerDiv.show();
 				settingsContainerDiv.hide();
@@ -109,7 +112,10 @@ export class Header {
 		this.assistantsButton.setTooltip("Assistants");
 		assistantsContainer.generateAssistantsContainer(assistantContainerDiv);
 		this.assistantsButton.onClick(() => {
-			this.clickHandler(this.assistantsButton, [this.settingsButton, this.chatHistoryButton]);
+			this.clickHandler(this.assistantsButton, [
+				this.settingsButton,
+				this.chatHistoryButton,
+			]);
 			if (!assistantContainerDiv.isShown()) {
 				assistantContainerDiv.show();
 				settingsContainerDiv.hide();
@@ -136,7 +142,10 @@ export class Header {
 				settingsContainerDiv,
 				this
 			);
-			this.clickHandler(this.settingsButton, [this.chatHistoryButton, this.assistantsButton]);
+			this.clickHandler(this.settingsButton, [
+				this.chatHistoryButton,
+				this.assistantsButton,
+			]);
 			if (!settingsContainerDiv.isShown()) {
 				settingsContainerDiv.show();
 				chatContainerDiv.hide();
@@ -154,14 +163,14 @@ export class Header {
 			this.clickHandler(this.newChatButton, [
 				this.settingsButton,
 				this.chatHistoryButton,
-				this.assistantsButton
+				this.assistantsButton,
 			]);
 			this.setHeader(modelName, "New chat");
 			chatContainerDiv.show();
 			settingsContainerDiv.hide();
 			chatHistoryContainerDiv.hide();
 			assistantContainerDiv.hide();
-			chatContainer.resetChat();
+			chatContainer.newChat();
 			chatContainer.resetMessages();
 			setHistoryIndex(this.plugin, this.viewType);
 		});

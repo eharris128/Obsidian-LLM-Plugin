@@ -663,19 +663,30 @@ export class ChatContainer {
 
 		if (assistant) {
 			const parent = imLikeMessage.createDiv();
+			parent.addClass("llm-flex-reverse");
+			const assistantMessage = parent.createDiv();
+			assistantMessage.addClass("llm-flex-column");
 			imLikeMessage.addClass("llm-flex");
 			const assistant = parent.createEl("div", {
 				cls: "llm-assistant-logo",
 			});
 			assistant.appendChild(assistantLogo());
+			MarkdownRenderer.render(
+				this.plugin.app,
+				content,
+				assistantMessage,
+				"",
+				this.plugin
+			);
+		} else {
+			MarkdownRenderer.render(
+				this.plugin.app,
+				content,
+				imLikeMessage,
+				"",
+				this.plugin
+			);
 		}
-		MarkdownRenderer.render(
-			this.plugin.app,
-			content,
-			imLikeMessage,
-			"",
-			this.plugin
-		);
 		const copyButton = imLikeMessage.querySelectorAll(
 			".copy-code-button"
 		) as NodeListOf<HTMLElement>;
@@ -686,7 +697,11 @@ export class ChatContainer {
 			"im-like-message-container",
 			"llm-flex"
 		);
-		copyToClipboardButton.buttonEl.addClass("add-text", "llm-hide");
+		copyToClipboardButton.buttonEl.addClass(
+			"add-text",
+			"llm-hide",
+			"mt-auto"
+		);
 
 		imLikeMessage.addClass(
 			"im-like-message",

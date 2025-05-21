@@ -12,6 +12,14 @@
 .llm-flex {
 	display: flex;
 }
+.llm-flex-column {
+	display: flex;
+	flex-direction: column;
+}
+.llm-flex-reverse {
+	display: flex;
+	flex-direction: row-reverse;
+}
 
 .assistants-create-button-div {
 	border-top: unset;
@@ -24,6 +32,10 @@
 .llm-update-settings {
 	padding-top: 0.75em;
 	border-top: 1px solid var(--background-modifier-border);
+}
+
+.mt-auto {
+	margin-top: auto;
 }
 
 /* TITLE */

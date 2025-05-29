@@ -62,13 +62,14 @@ export class ChatContainer {
 		this.messageStore.subscribe(this.updateMessages.bind(this));
 	}
 
-	private updateMessages() {
-		const currentIndex = this.plugin.settings.currentIndex
-		const messages =
-			this.plugin.settings.promptHistory[currentIndex].messages;
+	private updateMessages(message: Message[]) {
+		const currentIndex = this.plugin.settings.currentIndex;
+		if (currentIndex > -1) {
+			message = this.plugin.settings.promptHistory[currentIndex].messages;
+		}
 		if (this.viewType === this.plugin.settings.currentView) {
 			this.resetChat();
-			this.generateIMLikeMessages(messages);
+			this.generateIMLikeMessages(message);
 			return;
 		}
 	}
@@ -162,9 +163,10 @@ export class ChatContainer {
 	}
 
 	async regenerateOutput() {
-		console.log(this.plugin.settings.currentIndex)
-		const currentIndex = this.plugin.settings.currentIndex
-		const messages = this.plugin.settings.promptHistory[currentIndex].messages
+		console.log(this.plugin.settings.currentIndex);
+		const currentIndex = this.plugin.settings.currentIndex;
+		const messages =
+			this.plugin.settings.promptHistory[currentIndex].messages;
 		this.messageStore.setMessages(messages);
 		this.removeLastMessageAndHistoryMessage();
 		this.handleGenerate();

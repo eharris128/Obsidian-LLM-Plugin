@@ -62,13 +62,15 @@ export class ChatContainer {
 		this.messageStore.subscribe(this.updateMessages.bind(this));
 	}
 
-	private updateMessages(messages: Message[]) {
-		const { historyIndex } = getViewInfo(this.plugin, this.viewType);
-		if (historyIndex === this.plugin.settings.currentIndex) {
+	private updateMessages() {
+		const currentIndex = this.plugin.settings.currentIndex
+		const messages =
+			this.plugin.settings.promptHistory[currentIndex].messages;
+		if (this.viewType === this.plugin.settings.currentView) {
 			this.resetChat();
 			this.generateIMLikeMessages(messages);
+			return;
 		}
-		return;
 	}
 
 	getMessages() {
@@ -160,6 +162,10 @@ export class ChatContainer {
 	}
 
 	async regenerateOutput() {
+		console.log(this.plugin.settings.currentIndex)
+		const currentIndex = this.plugin.settings.currentIndex
+		const messages = this.plugin.settings.promptHistory[currentIndex].messages
+		this.messageStore.setMessages(messages);
 		this.removeLastMessageAndHistoryMessage();
 		this.handleGenerate();
 	}
@@ -383,9 +389,6 @@ export class ChatContainer {
 			this.messageStore.setMessages(messages);
 		}
 
-		this.plugin.settings.currentIndex = historyIndex;
-		this.plugin.saveSettings();
-
 		// The refresh button should only be displayed on the most recent
 		// assistant message.
 		const refreshButton = this.historyMessages.querySelector(
@@ -502,7 +505,6 @@ export class ChatContainer {
 		// If we are working with claude, then we need a valid claude key.
 		// If we are working with a local model, then we only need to be able to perform a health check against
 		// that model.
-
 		this.messageStore.setMessages([]);
 		this.historyMessages = parentElement.createDiv();
 		this.historyMessages.className =

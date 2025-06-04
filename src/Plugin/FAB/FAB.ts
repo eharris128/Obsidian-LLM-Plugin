@@ -6,6 +6,7 @@ import { SettingsContainer } from "Plugin/Components/SettingsContainer";
 import LLMPlugin from "main";
 import { ButtonComponent } from "obsidian";
 import { classNames } from "utils/classNames";
+import { getViewInfo, setView } from "utils/utils";
 
 const ROOT_WORKSPACE_CLASS = ".mod-vertical.mod-root";
 
@@ -17,6 +18,15 @@ export class FAB {
 
 	generateFAB() {
 		const fabContainer = createDiv();
+		fabContainer.addEventListener("mouseenter", () => {
+			const { historyIndex } = getViewInfo(
+				this.plugin,
+				"floating-action-button"
+			);
+			setView(this.plugin, "floating-action-button");
+			this.plugin.settings.currentIndex = historyIndex;
+			this.plugin.saveSettings();
+		});
 		fabContainer.setAttribute("class", `floating-action-button`);
 		fabContainer.setAttribute("id", "_floating-action-button");
 		const viewArea = fabContainer.createDiv();
@@ -55,7 +65,7 @@ export class FAB {
 			chatContainer,
 			historyContainer,
 			settingsContainer,
-			assistantsContainer,
+			assistantsContainer
 		);
 		let history = this.plugin.settings.promptHistory;
 

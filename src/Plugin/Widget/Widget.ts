@@ -25,7 +25,7 @@ export class WidgetView extends ItemView {
 	}
 
 	async onOpen() {
-		this.icon = "message-circle"
+		this.icon = "bot-message-square"
 		const container = this.containerEl.children[1];
 		const history = this.plugin.settings.promptHistory;
 		container.empty();

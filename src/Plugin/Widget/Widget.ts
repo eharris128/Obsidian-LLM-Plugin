@@ -26,7 +26,11 @@ export class WidgetView extends ItemView {
 	}
 
 	async onOpen() {
+<<<<<<< HEAD
 		this.icon = "message-circle";
+=======
+		this.icon = "bot-message-square"
+>>>>>>> d2dfd5759a73c3c39631a26433e1d57c72e10a4f
 		const container = this.containerEl.children[1];
 		const history = this.plugin.settings.promptHistory;
 		container.addEventListener("mouseenter", () => {

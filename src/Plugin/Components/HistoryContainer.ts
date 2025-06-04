@@ -19,20 +19,21 @@ export class HistoryContainer {
 	}
 
 	getChatContainerClassPrefix() {
-		if (this.viewType === 'floating-action-button') {
-			return 'fab';
-		} else if (this.viewType === 'widget') {
+		if (this.viewType === "floating-action-button") {
+			return "fab";
+		} else if (this.viewType === "widget") {
 			return this.viewType;
-		} else if (this.viewType === 'modal') {
-			return this.viewType
+		} else if (this.viewType === "modal") {
+			return this.viewType;
 		}
-	};
-	
+	}
+
 	displayNoHistoryView(parentElement: HTMLElement) {
-		parentElement.addClass('llm-justify-content-center');
+		parentElement.addClass("llm-justify-content-center");
 
 		const llmGal = parentElement.createDiv();
 		llmGal.addClass("llm-icon-wrapper");
+		llmGal.addClass("llm-icon-new-history");
 
 		// Parse SVG string to DOM element
 		const parser = new DOMParser();
@@ -44,29 +45,32 @@ export class HistoryContainer {
 
 		const cta = llmGal.createEl("div", {
 			attr: {
-				class: 'empty-history-cta llm-font-size-medium llm-justify-content-center'
+				class: "empty-history-cta llm-font-size-medium llm-justify-content-center",
 			},
-			text: 'Looking kind of empty. Start chatting and conversations will appear here.'
-		})
-		cta.addClass('text-align-center')
+			text: "Looking kind of empty. Start chatting and conversations will appear here.",
+		});
+		cta.addClass("text-align-center");
 
-		const createChatButton = new ButtonComponent(cta)
-		createChatButton.setButtonText('New chat')
-		createChatButton.setClass('llm-empty-history-button')
-		createChatButton.setClass('mod-cta')
+		const createChatButton = new ButtonComponent(cta);
+		createChatButton.setButtonText("New chat");
+		createChatButton.setClass("llm-empty-history-button");
+		createChatButton.setClass("mod-cta");
 
 		createChatButton.onClick(() => {
-			parentElement.hide();	
-			const activeHistoryButton = document.querySelector('.chat-history.is-active')
-			activeHistoryButton?.classList.remove('is-active');
+			parentElement.hide();
+			const activeHistoryButton = document.querySelector(
+				".chat-history.is-active"
+			);
+			activeHistoryButton?.classList.remove("is-active");
 
-			const prefix = this.getChatContainerClassPrefix()
-			const chatContainer = document.querySelector(`[class*="${prefix}-chat-container"]`) as HTMLElement
+			const prefix = this.getChatContainerClassPrefix();
+			const chatContainer = document.querySelector(
+				`[class*="${prefix}-chat-container"]`
+			) as HTMLElement;
 
 			chatContainer.show();
-			parentElement.classList.remove('llm-justify-content-center');
-		})
-	
+			parentElement.classList.remove("llm-justify-content-center");
+		});
 	}
 
 	generateHistoryContainer(
@@ -77,8 +81,8 @@ export class HistoryContainer {
 		Header: Header
 	) {
 		if (!history.length) {
-			this.displayNoHistoryView(parentElement)
-			return
+			this.displayNoHistoryView(parentElement);
+			return;
 		}
 
 		const settingType = getSettingType(this.viewType);
@@ -101,8 +105,7 @@ export class HistoryContainer {
 			const header = this.plugin.settings.promptHistory[index].prompt;
 			const modelName =
 				this.plugin.settings.promptHistory[index].modelName;
-			const model =
-				this.plugin.settings.promptHistory[index].model;
+			const model = this.plugin.settings.promptHistory[index].model;
 			this.plugin.settings[settingType].modelName = modelName;
 			if (!model.includes("asst")) {
 				this.plugin.settings[settingType].model =
@@ -152,7 +155,8 @@ export class HistoryContainer {
 		history.map((historyItem: HistoryItem, index: number) => {
 			const item = parentElement.createDiv();
 			const text = item.createEl("p");
-			const displayHTML = historyItem?.prompt || historyItem?.messages[0]?.content;
+			const displayHTML =
+				historyItem?.prompt || historyItem?.messages[0]?.content;
 			text.textContent = displayHTML;
 			const buttonsDiv = item.createDiv();
 			buttonsDiv.addClass("history-buttons-div", "llm-flex");

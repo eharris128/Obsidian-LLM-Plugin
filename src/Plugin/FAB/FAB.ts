@@ -94,7 +94,7 @@ export class FAB {
 
 		let button = new ButtonComponent(fabContainer);
 		button
-			.setIcon("message-circle")
+			.setIcon("bot-message-square")
 			.setClass("buttonItem")
 			.onClick(() => {
 				if (!viewArea.isShown()) {

@@ -48,7 +48,7 @@ export async function messageGPT4AllServer(params: ChatParams, url: string) {
 			temperature: params.temperature,
 		}),
 	} as RequestUrlParam;
-	const response = await requestUrl(request).then((res) => res.json());
+	const response = await requestUrl(request).then((res) => res.json);
 	return response.choices[0].message;
 }
 

@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, Platform	 } from "obsidian";
+import { Plugin, WorkspaceLeaf, Platform } from "obsidian";
 import {
 	HistoryItem,
 	ImageQuality,
@@ -12,10 +12,7 @@ import { Assistants } from "Assistants/AssistantHandler";
 import { History } from "History/HistoryHandler";
 import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
-import {
-	TAB_VIEW_TYPE,
-	WidgetView,
-} from "Plugin/Widget/Widget";
+import { TAB_VIEW_TYPE, WidgetView } from "Plugin/Widget/Widget";
 import SettingsView from "Settings/SettingsView";
 import { Assistant } from "openai/resources/beta/assistants";
 import { generateAssistantsList, getApiKeyValidity } from "utils/utils";
@@ -29,11 +26,20 @@ import {
 	gemini,
 } from "utils/constants";
 import { MessageStore } from "Plugin/Components/MessageStore";
-import { DesktopOperatingSystem, MobileOperatingSystem, OperatingSystem } from "services/OperatingSystem";
-import { DesktopFileSystem, MobileFileSystem, FileSystem } from "services/FileSystem";
+import {
+	DesktopOperatingSystem,
+	MobileOperatingSystem,
+	OperatingSystem,
+} from "services/OperatingSystem";
+import {
+	DesktopFileSystem,
+	MobileFileSystem,
+	FileSystem,
+} from "services/FileSystem";
 
 export interface LLMPluginSettings {
 	currentIndex: number;
+	currentView: string | null;
 	modalSettings: ViewSettings;
 	widgetSettings: ViewSettings;
 	fabSettings: ViewSettings;
@@ -80,6 +86,7 @@ const defaultSettings = {
 
 export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	currentIndex: -1,
+	currentView: null,
 	modalSettings: {
 		...defaultSettings,
 	},
@@ -110,8 +117,12 @@ export default class LLMPlugin extends Plugin {
 	messageStore: MessageStore;
 
 	async onload() {
-		this.fileSystem = Platform.isDesktop ? new DesktopFileSystem() : new MobileFileSystem(this);
-		this.os = Platform.isDesktop ? new DesktopOperatingSystem() : new MobileOperatingSystem();
+		this.fileSystem = Platform.isDesktop
+			? new DesktopFileSystem()
+			: new MobileFileSystem(this);
+		this.os = Platform.isDesktop
+			? new DesktopOperatingSystem()
+			: new MobileOperatingSystem();
 		await this.loadSettings();
 		await this.checkForAPIKeyBasedModel();
 		this.registerRibbonIcons();
@@ -121,10 +132,7 @@ export default class LLMPlugin extends Plugin {
 		this.messageStore.setMessages([]);
 		this.saveSettings();
 
-		this.registerView(
-			TAB_VIEW_TYPE,
-			(tab) => new WidgetView(tab, this)
-		);
+		this.registerView(TAB_VIEW_TYPE, (tab) => new WidgetView(tab, this));
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.fab = new FAB(this);
@@ -174,13 +182,9 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	private registerRibbonIcons() {
-		this.addRibbonIcon(
-			"bot",
-			"Ask a question",
-			(evt: MouseEvent) => {
-				new ChatModal2(this).open();
-			}
-		);
+		this.addRibbonIcon("bot", "Ask a question", (evt: MouseEvent) => {
+			new ChatModal2(this).open();
+		});
 	}
 
 	async activateTab() {

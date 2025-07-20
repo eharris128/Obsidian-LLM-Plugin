@@ -2,8 +2,15 @@ import LLMPlugin, { LLMPluginSettings } from "main";
 import { FileSystem } from "services/FileSystem";
 import { Editor, requestUrl, RequestUrlParam } from "obsidian";
 import OpenAI, { toFile } from "openai";
-import Anthropic from '@anthropic-ai/sdk';
-import { openAI, claude, chat, claudeSonnetJuneModel, gemini, geminiModel } from "utils/constants";
+import Anthropic from "@anthropic-ai/sdk";
+import {
+	openAI,
+	claude,
+	chat,
+	claudeSonnetJuneModel,
+	gemini,
+	geminiModel,
+} from "utils/constants";
 import { models, modelNames } from "utils/models";
 import {
 	ChatParams,
@@ -13,11 +20,13 @@ import {
 	ViewSettings,
 	ViewType,
 } from "Types/types";
-import {
-	SingletonNotice
-} from "Plugin/Components/SingletonNotice"
+import { SingletonNotice } from "Plugin/Components/SingletonNotice";
 import { Assistant } from "openai/resources/beta/assistants";
-import { GoogleGenerativeAI, Content, GenerateContentRequest } from "@google/generative-ai";
+import {
+	GoogleGenerativeAI,
+	Content,
+	GenerateContentRequest,
+} from "@google/generative-ai";
 
 export function getGpt4AllPath(plugin: LLMPlugin) {
 	const platform = plugin.os.platform();
@@ -27,7 +36,7 @@ export function getGpt4AllPath(plugin: LLMPlugin) {
 	} else if (platform === "linux") {
 		return `${homedir}/gpt4all`;
 	} else {
-		// Mac 
+		// Mac
 		return `${homedir}/Library/Application Support/nomic.ai/GPT4All`;
 	}
 }
@@ -70,9 +79,7 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 			await client.messages.create({
 				model: claudeSonnetJuneModel,
 				max_tokens: 1,
-				messages: [
-					{ "role": "user", "content": "Reply 'a'" }
-				]
+				messages: [{ role: "user", content: "Reply 'a'" }],
 			});
 			return { provider, valid: true };
 		} else if (provider === gemini) {
@@ -82,7 +89,7 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 				generationConfig: {
 					candidateCount: 1,
 					maxOutputTokens: 1,
-				}
+				},
 			});
 			await model.generateContent("Reply 'a'");
 			return { provider, valid: true };
@@ -90,20 +97,23 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 	} catch (error) {
 		if (error.status === 401) {
 			console.error(`Invalid API key for ${providerKeyPair.provider}.`);
-			SingletonNotice.show(`Invalid API key for ${upperCaseFirst(providerKeyPair.provider)}.`);
+			SingletonNotice.show(
+				`Invalid API key for ${upperCaseFirst(
+					providerKeyPair.provider
+				)}.`
+			);
 		} else {
 			console.log("An error occurred:", error.message);
 		}
-		return false
+		return false;
 	}
 }
 
 export async function geminiMessage(
 	params: ChatParams,
-	Gemini_API_KEY: string,
+	Gemini_API_KEY: string
 ) {
-	const { model, topP, messages, tokens, temperature } =
-		params as ChatParams;
+	const { model, topP, messages, tokens, temperature } = params as ChatParams;
 	// Docs - https://ai.google.dev/api/generate-content#v1beta.GenerationConfig
 	const genAI = new GoogleGenerativeAI(Gemini_API_KEY);
 	const client = genAI.getGenerativeModel({
@@ -113,46 +123,44 @@ export async function geminiMessage(
 			maxOutputTokens: tokens,
 			temperature,
 			topP: topP ?? undefined,
-		}
+		},
 	});
 
-	const contents: Content[] = messages.map(message => {
+	const contents: Content[] = messages.map((message) => {
 		// NOTE -> If we want to provide previous model responses to Gemini, we need to convert them to the correct format.
 		// the 'asisstant' role is swapped out with the 'model' role.
 		// Docs reference - C:\Users\echar\Documents\llm-plugin-vault\.obsidian\plugins\Obsidian-LLM-Plugin\node_modules\@google\generative-ai\dist\generative-ai.d.ts
-		const role = message.role === 'user' ? 'user' : 'model';
+		const role = message.role === "user" ? "user" : "model";
 		return {
 			role,
-			parts: [{ text: message.content }] // Convert content to Part[]
-		}
+			parts: [{ text: message.content }], // Convert content to Part[]
+		};
 	});
-	const generateContentRequest: GenerateContentRequest = { contents }
+	const generateContentRequest: GenerateContentRequest = { contents };
 	const stream = await client.generateContentStream(generateContentRequest);
-	return stream
+	return stream;
 }
 
 export async function claudeMessage(
 	params: ChatParams,
-	Claude_API_KEY: string,
+	Claude_API_KEY: string
 ) {
 	const client = new Anthropic({
 		apiKey: Claude_API_KEY,
 		dangerouslyAllowBrowser: true,
 	});
 
-	const { model, messages, tokens, temperature } =
-		params as ChatParams;
+	const { model, messages, tokens, temperature } = params as ChatParams;
 
 	// Anthropic SDK Docs - https://github.com/anthropics/anthropic-sdk-typescript/blob/HEAD/helpers.md#messagestream-api
-	const stream = client.messages
-		.stream({
-			model,
-			messages,
-			max_tokens: tokens,
-			temperature,
-			stream: true,
-		})
-	return stream
+	const stream = client.messages.stream({
+		model,
+		messages,
+		max_tokens: tokens,
+		temperature,
+		stream: true,
+	});
+	return stream;
 }
 
 /* FOR NOW USING GPT4ALL PARAMS, BUT SHOULD PROBABLY MAKE NEW OPENAI PARAMS TYPE */
@@ -168,8 +176,7 @@ export async function openAIMessage(
 	});
 
 	if (endpointType === chat) {
-		const { model, messages, tokens, temperature } =
-			params as ChatParams;
+		const { model, messages, tokens, temperature } = params as ChatParams;
 		const stream = await openai.chat.completions.create(
 			{
 				model,
@@ -315,13 +322,10 @@ export function getViewInfo(
 		historyIndex: -1,
 		modelEndpoint: "",
 		endpointURL: "",
-	}
+	};
 }
 
-export function changeDefaultModel(
-	model: string,
-	plugin: LLMPlugin,
-) {
+export function changeDefaultModel(model: string, plugin: LLMPlugin) {
 	plugin.settings.defaultModel = model;
 	// Question -> why do we not update the FAB model here?
 	const modelName = modelNames[model];
@@ -329,22 +333,16 @@ export function changeDefaultModel(
 
 	plugin.settings.modalSettings.model = model;
 	plugin.settings.modalSettings.modelName = modelName;
-	plugin.settings.modalSettings.modelType =
-		models[modelName].type;
-	plugin.settings.modalSettings.endpointURL =
-		models[modelName].url;
-	plugin.settings.modalSettings.modelEndpoint =
-		models[modelName].endpoint;
+	plugin.settings.modalSettings.modelType = models[modelName].type;
+	plugin.settings.modalSettings.endpointURL = models[modelName].url;
+	plugin.settings.modalSettings.modelEndpoint = models[modelName].endpoint;
 
 	// Widget settings
 	plugin.settings.widgetSettings.model = model;
 	plugin.settings.widgetSettings.modelName = modelName;
-	plugin.settings.widgetSettings.modelType =
-		models[modelName].type;
-	plugin.settings.widgetSettings.endpointURL =
-		models[modelName].url;
-	plugin.settings.widgetSettings.modelEndpoint =
-		models[modelName].endpoint;
+	plugin.settings.widgetSettings.modelType = models[modelName].type;
+	plugin.settings.widgetSettings.endpointURL = models[modelName].url;
+	plugin.settings.widgetSettings.modelEndpoint = models[modelName].endpoint;
 
 	plugin.saveSettings();
 }
@@ -369,6 +367,11 @@ export function setHistoryIndex(
 		return;
 	}
 	plugin.settings[settingType].historyIndex = length - 1;
+	plugin.saveSettings();
+}
+
+export function setView(plugin: LLMPlugin, viewType: ViewType) {
+	plugin.settings.currentView = viewType
 	plugin.saveSettings();
 }
 
@@ -425,7 +428,7 @@ export async function createAssistant(
 
 export function getAssistant(plugin: LLMPlugin, assistant_id: string) {
 	return plugin.settings.assistants.find(
-		(assistant) => (assistant.id === assistant_id)
+		(assistant) => assistant.id === assistant_id
 	) as Assistant & { modelType: string };
 }
 
@@ -437,13 +440,11 @@ export async function listAssistants(OpenAI_API_Key: string) {
 
 	const myAssistants = await openai.beta.assistants.list();
 
-	return myAssistants.data
+	return myAssistants.data;
 }
 
 export async function generateAssistantsList(settings: LLMPluginSettings) {
-	const assisitantsFromOpenAI = await listAssistants(
-		settings.openAIAPIKey
-	);
+	const assisitantsFromOpenAI = await listAssistants(settings.openAIAPIKey);
 	const processedAssisitants = assisitantsFromOpenAI.map(
 		(assistant: Assistant & { modelType: string }) => ({
 			...assistant,
@@ -453,7 +454,10 @@ export async function generateAssistantsList(settings: LLMPluginSettings) {
 	settings.assistants = processedAssisitants;
 }
 
-export async function deleteAssistant(OpenAI_API_Key: string, assistant_id: string) {
+export async function deleteAssistant(
+	OpenAI_API_Key: string,
+	assistant_id: string
+) {
 	const openai = new OpenAI({
 		apiKey: OpenAI_API_Key,
 		dangerouslyAllowBrowser: true,
@@ -469,7 +473,7 @@ export async function listVectors(OpenAI_API_Key: string) {
 	});
 
 	const vectorStores = await openai.beta.vectorStores.list();
-	return vectorStores.data
+	return vectorStores.data;
 }
 
 export async function deleteVector(OpenAI_API_Key: string, vector_id: string) {
@@ -478,7 +482,7 @@ export async function deleteVector(OpenAI_API_Key: string, vector_id: string) {
 		dangerouslyAllowBrowser: true,
 	});
 
-	await openai.beta.vectorStores.del(vector_id)
+	await openai.beta.vectorStores.del(vector_id);
 }
 
 export async function createVectorAndUpdate(
@@ -503,7 +507,10 @@ export async function createVectorAndUpdate(
 				chunks.push(value);
 			}
 			const fileContent = new Uint8Array(chunks.flat());
-			const fileToUpload = await toFile(new Blob([fileContent]), filePath); // Pass filename to preserve extension
+			const fileToUpload = await toFile(
+				new Blob([fileContent]),
+				filePath
+			); // Pass filename to preserve extension
 			const file = await openai.files.create({
 				file: fileToUpload,
 				purpose: "assistants",

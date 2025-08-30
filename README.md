@@ -1,7 +1,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/e5b8b04e-126e-4b08-b76f-134d0491bbac">
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/6342227f-a2c6-40a8-8cd8-39e89d0741ab">
-  <img alt="Shows project promo image in light and dark mode" src="https://user-images.githubusercontent.com/25423296/163456779-a8556205-d0a5-45e2-ac17-42d089e3c3f8.png">
+  <img alt="Shows project promo image in light and dark mode">
 </picture>
 
 # Interact with LLMs in Obsidian

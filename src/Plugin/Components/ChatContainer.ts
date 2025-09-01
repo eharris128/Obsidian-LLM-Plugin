@@ -63,36 +63,44 @@ export class ChatContainer {
 		this.messageStore.subscribe(this.updateMessages.bind(this));
 	}
 
-private updateMessages(message: Message[]) {
-    const currentIndex = this.plugin.settings.currentIndex;
-    const fabIndex = this.plugin.settings.fabSettings.historyIndex;
-    const widgetIndex = this.plugin.settings.widgetSettings.historyIndex;
-    
-    if (currentIndex > -1) {
-        message = this.plugin.settings.promptHistory[currentIndex].messages;
-    }
-    
-    // Always update the current view
-    if (this.viewType === this.plugin.settings.currentView) {
-        this.resetChat();
-        this.generateIMLikeMessages(message);
-        return;
-    }
-    
-    // Update FAB view if it's showing the same history item
-    if (this.viewType === "floating-action-button" && fabIndex === currentIndex && currentIndex > -1) {
-        this.resetChat();
-        this.generateIMLikeMessages(message);
-        return;
-    }
-    
-    // Update Widget view if it's showing the same history item
-    if (this.viewType === "widget" && widgetIndex === currentIndex && currentIndex > -1) {
-        this.resetChat();
-        this.generateIMLikeMessages(message);
-        return;
-    }
-}
+	private updateMessages(message: Message[]) {
+		const currentIndex = this.plugin.settings.currentIndex;
+		const fabIndex = this.plugin.settings.fabSettings.historyIndex;
+		const widgetIndex = this.plugin.settings.widgetSettings.historyIndex;
+
+		if (currentIndex > -1) {
+			message = this.plugin.settings.promptHistory[currentIndex].messages;
+		}
+
+		// Always update the current view
+		if (this.viewType === this.plugin.settings.currentView) {
+			this.resetChat();
+			this.generateIMLikeMessages(message);
+			return;
+		}
+
+		// Update FAB view if it's showing the same history item
+		if (
+			this.viewType === "floating-action-button" &&
+			fabIndex === currentIndex &&
+			currentIndex > -1
+		) {
+			this.resetChat();
+			this.generateIMLikeMessages(message);
+			return;
+		}
+
+		// Update Widget view if it's showing the same history item
+		if (
+			this.viewType === "widget" &&
+			widgetIndex === currentIndex &&
+			currentIndex > -1
+		) {
+			this.resetChat();
+			this.generateIMLikeMessages(message);
+			return;
+		}
+	}
 
 	getMessages() {
 		return this.messageStore.getMessages();
@@ -792,6 +800,7 @@ private updateMessages(message: Message[]) {
 		messages.pop();
 		this.messageStore.setMessages(messages);
 		this.historyMessages.lastElementChild?.remove();
+		this.plugin.history.update(this.plugin.settings.currentIndex, messages);
 	}
 
 	removeMessage(header: Header, modelName: string) {

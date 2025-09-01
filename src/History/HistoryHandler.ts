@@ -1,4 +1,4 @@
-import {  HistoryItem, Message } from "Types/types";
+import { HistoryItem, Message } from "Types/types";
 import LLMPlugin from "main";
 
 export class History {
@@ -19,17 +19,22 @@ export class History {
 		}
 	}
 
+	update(index: number, messages: Message[]) {
+		this.plugin.settings.promptHistory[index].messages = messages;
+		this.plugin.saveSettings();
+	}
+
 	reset() {
 		this.plugin.settings.promptHistory = [];
 		this.plugin.saveSettings();
 	}
 
-    //take in an index from the selected chat history
-    //overwrite history with new prompt/additional prompt
+	//take in an index from the selected chat history
+	//overwrite history with new prompt/additional prompt
 	overwriteHistory(messages: Message[], index: number) {
-		const historyItem = this.plugin.settings.promptHistory[index]
+		const historyItem = this.plugin.settings.promptHistory[index];
 		historyItem.messages = messages;
-		this.plugin.settings.promptHistory[index] = historyItem
-		this.plugin.saveSettings()
+		this.plugin.settings.promptHistory[index] = historyItem;
+		this.plugin.saveSettings();
 	}
 }

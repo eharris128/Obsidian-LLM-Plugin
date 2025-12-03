@@ -11,6 +11,7 @@ import {
 } from "utils/utils";
 import { assistant as ASSISTANT, chat, GPT4All, messages, openAI } from "utils/constants"
 import { Header } from "./Header";
+import { FileSelector } from "./FileSelector";
 
 export class SettingsContainer {
 	viewType: ViewType;
@@ -127,6 +128,7 @@ export class SettingsContainer {
 		}
 		if (endpoint === chat || messages) {
 			this.generateChatSettings(parentContainer, modelType);
+			this.generateContextSettings(parentContainer);
 		}
 	}
 
@@ -251,7 +253,7 @@ export class SettingsContainer {
 
 		new Setting(parentContainer)
 			.setName("Tokens")
-			.setDesc("The number of tokens used in the completion.")
+			.setDesc("Maximum number of tokens in the response. Higher values allow longer responses. Recommended: 4096-8192 for Gemini models.")
 			.addText((text) => {
 				text.setValue(`${viewSettings.chatSettings.maxTokens}`);
 				text.inputEl.type = "number";
@@ -355,6 +357,164 @@ export class SettingsContainer {
 						this.plugin.saveSettings();
 					});
 				});
+		}
+	}
+
+	generateContextSettings(parentContainer: HTMLElement) {
+		const settingType = getSettingType(this.viewType);
+		const viewSettings = this.plugin.settings[settingType];
+		const contextSettings = viewSettings.contextSettings;
+
+		// Context section header
+		const contextHeader = parentContainer.createEl("h3", {
+			text: "Context Settings",
+		});
+		contextHeader.style.marginTop = "1.5em";
+		contextHeader.style.marginBottom = "0.5em";
+
+		// Include active file
+		new Setting(parentContainer)
+			.setName("Include active file")
+			.setDesc(
+				"Automatically include the content of the currently active file in the context sent to the AI."
+			)
+			.addToggle((toggle) => {
+				toggle
+					.setValue(contextSettings.includeActiveFile)
+					.onChange(async (value) => {
+						contextSettings.includeActiveFile = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		// Include selection
+		new Setting(parentContainer)
+			.setName("Include selected text")
+			.setDesc(
+				"Automatically include any text selected in the editor in the context sent to the AI."
+			)
+			.addToggle((toggle) => {
+				toggle
+					.setValue(contextSettings.includeSelection)
+					.onChange(async (value) => {
+						contextSettings.includeSelection = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		// Context token budget percentage
+		new Setting(parentContainer)
+			.setName("Context token budget (%)")
+			.setDesc(
+				"Percentage of max tokens to allocate for context (0-100). The remaining percentage is reserved for the AI's response. For example, 70% means 70% for context and 30% for the response."
+			)
+			.addText((text) => {
+				text.setValue(`${contextSettings.maxContextTokensPercent}`);
+				text.inputEl.type = "number";
+				text.inputEl.min = "0";
+				text.inputEl.max = "100";
+				text.onChange((change) => {
+					const value = parseInt(change);
+					if (!isNaN(value) && value >= 0 && value <= 100) {
+						contextSettings.maxContextTokensPercent = value;
+						this.plugin.saveSettings();
+					}
+				});
+			});
+
+		// Select files button
+		const selectFilesSetting = new Setting(parentContainer)
+			.setName("Additional files")
+			.setDesc(
+				"Select additional files from your vault to include in the context."
+			)
+			.addButton((button) => {
+				button.setButtonText("Select Files").onClick(() => {
+					const modal = new FileSelector(
+						this.plugin.app,
+						this.plugin,
+						this.viewType,
+						contextSettings.selectedFiles,
+						(files) => {
+							contextSettings.selectedFiles = files;
+							this.plugin.saveSettings();
+							this.updateSelectedFilesDisplay(
+								parentContainer,
+								selectFilesSetting.settingEl
+							);
+						}
+					);
+					modal.open();
+				});
+			});
+
+		// Display selected files
+		this.updateSelectedFilesDisplay(parentContainer, selectFilesSetting.settingEl);
+	}
+
+	updateSelectedFilesDisplay(
+		parentContainer: HTMLElement,
+		selectFilesSetting: HTMLElement
+	) {
+		const settingType = getSettingType(this.viewType);
+		const contextSettings = this.plugin.settings[settingType].contextSettings;
+
+		// Remove existing display
+		const existingDisplay = parentContainer.querySelector(
+			".llm-selected-files-display"
+		);
+		if (existingDisplay) {
+			existingDisplay.remove();
+		}
+
+		// Create new display if there are selected files
+		if (contextSettings.selectedFiles.length > 0) {
+			const displayDiv = document.createElement("div");
+			displayDiv.className = "llm-selected-files-display";
+			displayDiv.style.marginLeft = "2em";
+			displayDiv.style.marginTop = "0.5em";
+			displayDiv.style.fontSize = "0.9em";
+
+			const title = displayDiv.createEl("div", {
+				text: `Selected files (${contextSettings.selectedFiles.length}):`,
+			});
+			title.style.fontWeight = "500";
+			title.style.marginBottom = "0.25em";
+
+			const fileList = displayDiv.createEl("ul");
+			fileList.style.margin = "0";
+			fileList.style.paddingLeft = "1.5em";
+
+			for (const filePath of contextSettings.selectedFiles) {
+				const fileItem = fileList.createEl("li");
+				fileItem.style.marginBottom = "0.25em";
+
+				const fileText = fileItem.createEl("span", {
+					text: filePath,
+				});
+				fileText.style.color = "var(--text-muted)";
+
+				const removeButton = fileItem.createEl("button", {
+					text: "×",
+				});
+				removeButton.style.marginLeft = "0.5em";
+				removeButton.style.padding = "0 0.5em";
+				removeButton.style.cursor = "pointer";
+				removeButton.addEventListener("click", () => {
+					contextSettings.selectedFiles =
+						contextSettings.selectedFiles.filter(
+							(f) => f !== filePath
+						);
+					this.plugin.saveSettings();
+					this.updateSelectedFilesDisplay(
+						parentContainer,
+						selectFilesSetting
+					);
+				});
+			}
+
+			// Insert after the select files setting
+			selectFilesSetting.after(displayDiv);
 		}
 	}
 

@@ -20,6 +20,16 @@ import {
 	chat,
 	claudeSonnetJuneModel,
 	geminiModel,
+	gemini2FlashModel,
+	gemini2FlashThinkingModel,
+	gemini2FlashStableModel,
+	gemini2FlashLiteModel,
+	gemini25ProModel,
+	gemini25FlashModel,
+	gemini25FlashLiteModel,
+	gemini3ProPreviewModel,
+	geminiFlashLatestModel,
+	geminiFlashLiteLatestModel,
 	openAIModel,
 	openAI,
 	claude,
@@ -70,7 +80,7 @@ const defaultSettings = {
 		quality: "standard" as ImageQuality,
 	},
 	chatSettings: {
-		maxTokens: 300,
+		maxTokens: 8192,
 		temperature: 0.65,
 		GPT4All: {},
 		openAI: {
@@ -81,6 +91,12 @@ const defaultSettings = {
 			responseFormat: "",
 			topP: 1,
 		},
+	},
+	contextSettings: {
+		includeActiveFile: true,
+		includeSelection: true,
+		selectedFiles: [],
+		maxContextTokensPercent: 70, // 70% for context, 30% for response
 	},
 };
 
@@ -240,7 +256,17 @@ export default class LLMPlugin extends Plugin {
 					activeClaudeModel = model === claudeSonnetJuneModel;
 					break;
 				case geminiModel:
-					activeGeminiModel = model === geminiModel;
+				case gemini2FlashModel:
+				case gemini2FlashThinkingModel:
+				case gemini2FlashStableModel:
+				case gemini2FlashLiteModel:
+				case gemini25ProModel:
+				case gemini25FlashModel:
+				case gemini25FlashLiteModel:
+				case gemini3ProPreviewModel:
+				case geminiFlashLatestModel:
+				case geminiFlashLiteLatestModel:
+					activeGeminiModel = true;
 					break;
 				case openAIModel:
 					activeOpenAIModel = model === openAIModel;
@@ -291,20 +317,34 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	async checkForAPIKeyBasedModel() {
+		const isGeminiModel = (model: string) => [
+			geminiModel,
+			gemini2FlashModel,
+			gemini2FlashThinkingModel,
+			gemini2FlashStableModel,
+			gemini2FlashLiteModel,
+			gemini25ProModel,
+			gemini25FlashModel,
+			gemini25FlashLiteModel,
+			gemini3ProPreviewModel,
+			geminiFlashLatestModel,
+			geminiFlashLiteLatestModel
+		].includes(model);
+
 		const fabModelRequiresKey =
 			this.settings.fabSettings.model === openAIModel ||
 			this.settings.fabSettings.model === claudeSonnetJuneModel ||
-			this.settings.fabSettings.model === geminiModel;
+			isGeminiModel(this.settings.fabSettings.model);
 
 		const widgetModelRequresKey =
 			this.settings.widgetSettings.model === openAIModel ||
 			this.settings.widgetSettings.model === claudeSonnetJuneModel ||
-			this.settings.widgetSettings.model === geminiModel;
+			isGeminiModel(this.settings.widgetSettings.model);
 
 		const modalModelRequresKey =
 			this.settings.modalSettings.model === openAIModel ||
 			this.settings.modalSettings.model === claudeSonnetJuneModel ||
-			this.settings.modalSettings.model === geminiModel;
+			isGeminiModel(this.settings.modalSettings.model);
 
 		const activeModelRequiresKey =
 			fabModelRequiresKey ||

@@ -562,6 +562,36 @@ FAB MESSAGE ICON CSS
 	}
 }
 
+/* THINKING ANIMATION */
+.llm-thinking-animation {
+	display: flex;
+	align-items: center;
+	gap: 0.3em;
+	padding: 0.5em 0;
+	color: var(--text-muted);
+}
+
+.llm-thinking-text {
+	font-size: 10pt;
+	font-style: italic;
+	opacity: 0.8;
+	animation: pulse 1.5s ease-in-out infinite;
+}
+
+.llm-thinking-dots {
+	display: inline-flex;
+	align-items: baseline;
+}
+
+@keyframes pulse {
+	0%, 100% {
+		opacity: 0.6;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
 .llm-icon-wrapper {
 	display: flex;
 	flex-direction: column;

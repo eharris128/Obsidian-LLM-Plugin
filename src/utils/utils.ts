@@ -272,6 +272,7 @@ export function getViewInfo(
 			historyIndex: plugin.settings.modalSettings.historyIndex,
 			modelEndpoint: plugin.settings.modalSettings.modelEndpoint,
 			endpointURL: plugin.settings.modalSettings.endpointURL,
+			contextSettings: plugin.settings.modalSettings.contextSettings,
 		};
 	}
 
@@ -287,6 +288,7 @@ export function getViewInfo(
 			historyIndex: plugin.settings.widgetSettings.historyIndex,
 			modelEndpoint: plugin.settings.widgetSettings.modelEndpoint,
 			endpointURL: plugin.settings.widgetSettings.endpointURL,
+			contextSettings: plugin.settings.widgetSettings.contextSettings,
 		};
 	}
 
@@ -302,6 +304,7 @@ export function getViewInfo(
 			historyIndex: plugin.settings.fabSettings.historyIndex,
 			modelEndpoint: plugin.settings.fabSettings.modelEndpoint,
 			endpointURL: plugin.settings.fabSettings.endpointURL,
+			contextSettings: plugin.settings.fabSettings.contextSettings,
 		};
 	}
 
@@ -322,6 +325,12 @@ export function getViewInfo(
 		historyIndex: -1,
 		modelEndpoint: "",
 		endpointURL: "",
+		contextSettings: {
+			includeActiveFile: false,
+			includeSelection: false,
+			selectedFiles: [],
+			maxContextTokensPercent: 0,
+		},
 	};
 }
 

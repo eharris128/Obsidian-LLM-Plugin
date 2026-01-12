@@ -80,7 +80,7 @@ const defaultSettings = {
 		quality: "standard" as ImageQuality,
 	},
 	chatSettings: {
-		maxTokens: 8192,
+		maxTokens: 4096,
 		temperature: 0.65,
 		GPT4All: {},
 		openAI: {

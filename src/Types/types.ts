@@ -1,6 +1,27 @@
 import { Assistant } from "openai/resources/beta/assistants";
 import { assistant } from "utils/constants";
+import { TFile } from "obsidian";
 
+export type ContextSettings = {
+	includeActiveFile: boolean;
+	includeSelection: boolean;
+	selectedFiles: string[]; // Array of file paths
+	maxContextTokensPercent: number; // Percentage of maxTokens to use for context (0-100)
+};
+
+export type VaultContext = {
+	activeFile?: {
+		path: string;
+		name: string;
+		content: string;
+	};
+	selectedText?: string;
+	additionalFiles: {
+		path: string;
+		name: string;
+		content: string;
+	}[];
+};
 
 type InitialParams = {
 	prompt: string;
@@ -39,6 +60,7 @@ export type AssistantHistoryItem = InitialParams & {
 export type ChatHistoryItem = InitialParams &
 	ChatParams & {
 		modelName: string;
+		vaultContext?: VaultContext;
 	};
 
 export type ProviderKeyPair = {
@@ -86,6 +108,7 @@ export type ViewSettings = {
 	historyIndex: number;
 	imageSettings: ImageSettings;
 	chatSettings: ChatSettings;
+	contextSettings: ContextSettings;
 };
 
 export type ResponseFormat = "url" | "b64_json";

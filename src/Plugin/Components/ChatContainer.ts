@@ -25,6 +25,16 @@ import {
 	chat,
 	gemini,
 	geminiModel,
+	gemini2FlashModel,
+	gemini2FlashThinkingModel,
+	gemini2FlashStableModel,
+	gemini2FlashLiteModel,
+	gemini25ProModel,
+	gemini25FlashModel,
+	gemini25FlashLiteModel,
+	gemini3ProPreviewModel,
+	geminiFlashLatestModel,
+	geminiFlashLiteLatestModel,
 	GPT4All,
 	messages,
 } from "utils/constants";
@@ -42,6 +52,7 @@ import {
 import { Header } from "./Header";
 import { MessageStore } from "./MessageStore";
 import logo from "assets/LLMgal.svg";
+import { ContextBuilder } from "services/ContextBuilder";
 
 export class ChatContainer {
 	historyMessages: HTMLElement;
@@ -53,6 +64,8 @@ export class ChatContainer {
 	viewType: ViewType;
 	previewText: string;
 	messageStore: MessageStore;
+	contextBuilder: ContextBuilder;
+	currentVaultContext: any = null; // Store context for current generation
 	constructor(
 		private plugin: LLMPlugin,
 		viewType: ViewType,
@@ -61,6 +74,7 @@ export class ChatContainer {
 		this.viewType = viewType;
 		this.messageStore = messageStore;
 		this.messageStore.subscribe(this.updateMessages.bind(this));
+		this.contextBuilder = new ContextBuilder(this.plugin.app);
 	}
 
 	private updateMessages(message: Message[]) {
@@ -254,25 +268,47 @@ export class ChatContainer {
 					const message_context = {
 						...params,
 						messages: this.getMessages(),
-						assistant_id: assistantId,
-						modelName,
-					} as AssistantHistoryItem;
-					this.historyPush(message_context);
-					resolve(true);
+					assistant_id: assistantId,
+					modelName,
+				} as AssistantHistoryItem;
+				this.historyPush(message_context, this.currentVaultContext);
+				resolve(true);
 				});
 			});
 		}
 		// End assistant handling
 
-		if (model === geminiModel) {
+		// Check if the model is any Gemini model
+		const isGeminiModel = [
+			geminiModel,
+			gemini2FlashModel,
+			gemini2FlashThinkingModel,
+			gemini2FlashStableModel,
+			gemini2FlashLiteModel,
+			gemini25ProModel,
+			gemini25FlashModel,
+			gemini25FlashLiteModel,
+			gemini3ProPreviewModel,
+			geminiFlashLatestModel,
+			geminiFlashLiteLatestModel
+		].includes(model);
+
+		if (isGeminiModel) {
+			this.setDiv(true);
+			this.showThinkingAnimation();
+			
 			const stream = await geminiMessage(
 				params as ChatParams,
 				this.plugin.settings.geminiAPIKey
 			);
-			this.setDiv(true);
 
 			try {
+				let firstChunk = true;
 				for await (const chunk of stream.stream) {
+					if (firstChunk) {
+						this.streamingDiv.empty();
+						firstChunk = false;
+					}
 					this.previewText += chunk.text() || "";
 					this.streamingDiv.textContent = this.previewText;
 					this.historyMessages.scroll(0, 9999);
@@ -304,18 +340,25 @@ export class ChatContainer {
 				...(params as ChatParams),
 				messages: this.getMessages(),
 			} as ChatHistoryItem;
-			this.historyPush(message_context);
+			this.historyPush(message_context, this.currentVaultContext);
 			return true;
 		}
 
 		if (modelEndpoint === messages) {
+			this.setDiv(true);
+			this.showThinkingAnimation();
+			
 			const stream = await claudeMessage(
 				params as ChatParams,
 				this.plugin.settings.claudeAPIKey
 			);
-			this.setDiv(true);
 
+			let firstText = true;
 			stream.on("text", (text) => {
+				if (firstText) {
+					this.streamingDiv.empty();
+					firstText = false;
+				}
 				this.previewText += text || "";
 				this.streamingDiv.textContent = this.previewText;
 				this.historyMessages.scroll(0, 9999);
@@ -343,7 +386,7 @@ export class ChatContainer {
 				...(params as ChatParams),
 				messages: this.getMessages(),
 			} as ChatHistoryItem;
-			this.historyPush(message_context);
+			this.historyPush(message_context, this.currentVaultContext);
 			return true;
 		}
 		// NOTE -> modelEndpoint === chat while modelType === GPT4All, so the ordering
@@ -356,7 +399,7 @@ export class ChatContainer {
 					this.streamingDiv.textContent = response.content;
 					this.messageStore.addMessage(response);
 					this.previewText = response.content;
-					this.historyPush(params as ChatHistoryItem);
+					this.historyPush(params as ChatHistoryItem, this.currentVaultContext);
 				}
 			);
 		} else if (modelEndpoint === chat) {
@@ -394,7 +437,7 @@ export class ChatContainer {
 				...(params as ChatParams),
 				messages: this.messageStore.getMessages(),
 			} as ChatHistoryItem;
-			this.historyPush(message_context);
+			this.historyPush(message_context, this.currentVaultContext);
 			return true;
 		}
 		return true;
@@ -427,12 +470,52 @@ export class ChatContainer {
 		if (this.historyMessages.children.length < 1) {
 			header.setHeader(modelName, this.prompt);
 		}
-		this.messageStore.addMessage({ role: "user", content: this.prompt });
+
+		// Build and inject vault context
+		const settingType = getSettingType(this.viewType);
+		const contextSettings = this.plugin.settings[settingType].contextSettings;
+		const maxTokens = this.plugin.settings[settingType].chatSettings.maxTokens;
+		const contextTokenBudget = this.contextBuilder.calculateContextTokenBudget(
+			maxTokens,
+			contextSettings.maxContextTokensPercent
+		);
+
+		let vaultContext = null;
+		let contextString: string | null = null;
+
+		// Only build context for chat endpoints (not images)
+		if (modelEndpoint !== "images") {
+			try {
+				contextString = await this.contextBuilder.buildFormattedContext(
+					contextSettings,
+					contextTokenBudget
+				);
+				if (contextString) {
+					vaultContext = await this.contextBuilder.buildContext(contextSettings);
+					// Store for use in historyPush
+					this.currentVaultContext = vaultContext;
+					// Inject context as first user message
+					const contextMessage = {
+						role: "user" as const,
+						content: contextString,
+					};
+					this.messageStore.addMessage(contextMessage);
+				}
+			} catch (error) {
+				console.error("Error building vault context:", error);
+			}
+		}
+
+		const userMessage = { role: "user" as const, content: this.prompt };
+		this.messageStore.addMessage(userMessage);
+		this.appendNewMessage(userMessage);
 		const params = this.getParams(modelEndpoint, model, modelType);
 		try {
 			this.previewText = "";
 			if (modelEndpoint !== "images") {
 				await this.handleGenerate();
+				// Clear context after generation
+				this.currentVaultContext = null;
 			}
 			if (modelEndpoint === "images") {
 				this.setDiv(false);
@@ -452,10 +535,13 @@ export class ChatContainer {
 						content,
 					});
 					this.appendImage(response);
-					this.historyPush({
-						...params,
-						messages: this.getMessages(),
-					} as ImageHistoryItem);
+					this.historyPush(
+						{
+							...params,
+							messages: this.getMessages(),
+						} as ImageHistoryItem,
+						this.currentVaultContext
+					);
 				});
 			}
 			header.enableButtons();
@@ -478,7 +564,7 @@ export class ChatContainer {
 		}
 	}
 
-	historyPush(params: HistoryItem) {
+	historyPush(params: HistoryItem, vaultContext?: any) {
 		const { modelName, historyIndex, modelEndpoint, assistantId } =
 			getViewInfo(this.plugin, this.viewType);
 		if (historyIndex > -1) {
@@ -494,8 +580,13 @@ export class ChatContainer {
 			modelEndpoint === gemini ||
 			modelEndpoint === messages
 		) {
+			const chatParams = params as ChatHistoryItem;
+			// Add vault context to history if it exists
+			if (vaultContext) {
+				chatParams.vaultContext = vaultContext;
+			}
 			this.plugin.history.push({
-				...(params as ChatHistoryItem),
+				...chatParams,
 				modelName,
 			});
 		}
@@ -666,6 +757,22 @@ export class ChatContainer {
 			new Notice("Regenerating response...");
 			this.regenerateOutput();
 		});
+	}
+
+	showThinkingAnimation() {
+		this.streamingDiv.empty();
+		const thinkingContainer = this.streamingDiv.createEl("div", { 
+			cls: "llm-thinking-animation" 
+		});
+		const thinkingText = thinkingContainer.createEl("span", { 
+			cls: "llm-thinking-text",
+			text: "Thinking"
+		});
+		const dots = thinkingContainer.createEl("span", { cls: "llm-thinking-dots" });
+		for (let i = 0; i < 3; i++) {
+			const dot = dots.createEl("span", { cls: "streaming-dot" });
+			dot.textContent = ".";
+		}
 	}
 
 	appendImage(imageURLs: string[]) {

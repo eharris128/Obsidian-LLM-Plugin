@@ -1,6 +1,6 @@
 ---
 name: Feedback
-about: Describe this issue template's purpose here.
+about: Feature requests, bugs, and other comments
 title: ''
 labels: feedback
 assignees: eharris128

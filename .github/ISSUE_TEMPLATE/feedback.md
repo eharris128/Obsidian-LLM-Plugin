@@ -1,10 +1,10 @@
 ---
-name: Custom issue template
+name: Feedback
 about: Describe this issue template's purpose here.
 title: ''
 labels: feedback
-assignees: ''
+assignees: eharris128
 
 ---
 
-We love rocks
+

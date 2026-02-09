@@ -11,8 +11,11 @@
 	"keywords": [],
 	"author": "Evan Harris, Ryan Mahoney",
 	"license": "MIT",
+	"engines": {
+		"node": ">=24.0.0"
+	},
 	"devDependencies": {
-		"@types/node": "^16.11.6",
+		"@types/node": "^24.0.0",
 		"@typescript-eslint/eslint-plugin": "5.29.0",
 		"@typescript-eslint/parser": "5.29.0",
 		"builtin-modules": "3.3.0",

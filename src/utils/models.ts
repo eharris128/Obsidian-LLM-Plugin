@@ -1,5 +1,5 @@
 import { Model } from "Types/types";
-import { claude, chat, gemini, geminiModel, GPT4All, messages } from "utils/constants"
+import { claude, chat, gemini, geminiModel, gemini2FlashModel, gemini2FlashThinkingModel, gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel, gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel, geminiFlashLatestModel, geminiFlashLiteLatestModel, GPT4All, messages } from "utils/constants"
 
 export const openAIModels: Record<string, Model> = {
 	"ChatGPT-3.5 turbo": {
@@ -111,6 +111,66 @@ export const models: Record<string, Model> = {
 		endpoint: "gemini",
 		url: "gemini",
 	},
+	"Gemini-3-Pro-Preview": {
+		model: gemini3ProPreviewModel,
+		type: gemini,
+		endpoint: "gemini",
+		url: "gemini",
+	},
+	"Gemini-2.5-Pro": {
+		model: gemini25ProModel,
+		type: gemini,
+		endpoint: "gemini",
+		url: "gemini",
+	},
+	"Gemini-Flash-Latest": {
+		model: geminiFlashLatestModel,
+		type: gemini,
+		endpoint: "gemini",
+		url: "gemini",
+	},
+	"Gemini-Flash-Lite-Latest": {
+		model: geminiFlashLiteLatestModel,
+		type: gemini,
+		endpoint: "gemini",
+		url: "gemini",
+	},
+	"Gemini-2.5-Flash": {
+		model: gemini25FlashModel,
+		type: gemini,
+		endpoint: "gemini",
+		url: "gemini",
+	},
+	"Gemini-2.5-Flash-Lite": {
+		model: gemini25FlashLiteModel,
+		type: gemini,
+		endpoint: "gemini",
+		url: "gemini",
+	},
+	"Gemini-2.0-Flash": {
+		model: gemini2FlashStableModel,
+		type: gemini,
+		endpoint: "gemini",
+		url: "gemini",
+	},
+	"Gemini-2.0-Flash-Lite": {
+		model: gemini2FlashLiteModel,
+		type: gemini,
+		endpoint: "gemini",
+		url: "gemini",
+	},
+	"Gemini-2.0-flash-exp": {
+		model: gemini2FlashModel,
+		type: gemini,
+		endpoint: "gemini",
+		url: "gemini",
+	},
+	"Gemini-2.0-flash-thinking-exp": {
+		model: gemini2FlashThinkingModel,
+		type: gemini,
+		endpoint: "gemini",
+		url: "gemini",
+	},
 	"DALL·E 3": {
 		model: "dall-e-3",
 		type: "openAI",
@@ -143,6 +203,16 @@ export const modelNames: Record<string, string> = {
 	"gpt-4o": "GPT-4o",
 	"claude-3-5-sonnet-20240620": "Claude-3-5-Sonnet-20240620",
 	"gemini-1.5-flash": "Gemini-1.5-flash",
+	"gemini-3-pro-preview": "Gemini-3-Pro-Preview",
+	"gemini-2.5-pro": "Gemini-2.5-Pro",
+	"gemini-flash-latest": "Gemini-Flash-Latest",
+	"gemini-flash-lite-latest": "Gemini-Flash-Lite-Latest",
+	"gemini-2.5-flash": "Gemini-2.5-Flash",
+	"gemini-2.5-flash-lite": "Gemini-2.5-Flash-Lite",
+	"gemini-2.0-flash": "Gemini-2.0-Flash",
+	"gemini-2.0-flash-lite": "Gemini-2.0-Flash-Lite",
+	"gemini-2.0-flash-exp": "Gemini-2.0-flash-exp",
+	"gemini-2.0-flash-thinking-exp-1219": "Gemini-2.0-flash-thinking-exp",
 	// "text-embedding-3-small": "Text Embedding 3 (Small)",
 	"dall-e-3": "DALL·E 3",
 	"dall-e-2": "DALL·E 2",

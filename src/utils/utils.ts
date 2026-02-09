@@ -22,11 +22,7 @@ import {
 } from "Types/types";
 import { SingletonNotice } from "Plugin/Components/SingletonNotice";
 import { Assistant } from "openai/resources/beta/assistants";
-import {
-	GoogleGenerativeAI,
-	Content,
-	GenerateContentRequest,
-} from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 export function getGpt4AllPath(plugin: LLMPlugin) {
 	const platform = plugin.os.platform();
@@ -83,15 +79,15 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 			});
 			return { provider, valid: true };
 		} else if (provider === gemini) {
-			const client = new GoogleGenerativeAI(key);
-			const model = client.getGenerativeModel({
+			const client = new GoogleGenAI({ apiKey: key });
+			await client.models.generateContent({
 				model: geminiModel,
-				generationConfig: {
+				contents: "Reply 'a'",
+				config: {
 					candidateCount: 1,
 					maxOutputTokens: 1,
 				},
 			});
-			await model.generateContent("Reply 'a'");
 			return { provider, valid: true };
 		}
 	} catch (error) {
@@ -114,30 +110,28 @@ export async function geminiMessage(
 	Gemini_API_KEY: string
 ) {
 	const { model, topP, messages, tokens, temperature } = params as ChatParams;
-	// Docs - https://ai.google.dev/api/generate-content#v1beta.GenerationConfig
-	const genAI = new GoogleGenerativeAI(Gemini_API_KEY);
-	const client = genAI.getGenerativeModel({
+	const client = new GoogleGenAI({ apiKey: Gemini_API_KEY });
+
+	const contents = messages.map((message) => {
+		// NOTE -> If we want to provide previous model responses to Gemini, we need to convert them to the correct format.
+		// the 'assistant' role is swapped out with the 'model' role.
+		const role = message.role === "user" ? "user" : "model";
+		return {
+			role,
+			parts: [{ text: message.content }],
+		};
+	});
+
+	const stream = await client.models.generateContentStream({
 		model,
-		generationConfig: {
+		contents,
+		config: {
 			candidateCount: 1,
 			maxOutputTokens: tokens,
 			temperature,
 			topP: topP ?? undefined,
 		},
 	});
-
-	const contents: Content[] = messages.map((message) => {
-		// NOTE -> If we want to provide previous model responses to Gemini, we need to convert them to the correct format.
-		// the 'asisstant' role is swapped out with the 'model' role.
-		// Docs reference - C:\Users\echar\Documents\llm-plugin-vault\.obsidian\plugins\Obsidian-LLM-Plugin\node_modules\@google\generative-ai\dist\generative-ai.d.ts
-		const role = message.role === "user" ? "user" : "model";
-		return {
-			role,
-			parts: [{ text: message.content }], // Convert content to Part[]
-		};
-	});
-	const generateContentRequest: GenerateContentRequest = { contents };
-	const stream = await client.generateContentStream(generateContentRequest);
 	return stream;
 }
 

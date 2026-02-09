@@ -304,12 +304,12 @@ export class ChatContainer {
 
 			try {
 				let firstChunk = true;
-				for await (const chunk of stream.stream) {
+				for await (const chunk of stream) {
 					if (firstChunk) {
 						this.streamingDiv.empty();
 						firstChunk = false;
 					}
-					this.previewText += chunk.text() || "";
+					this.previewText += chunk.text || "";
 					this.streamingDiv.textContent = this.previewText;
 					this.historyMessages.scroll(0, 9999);
 				}

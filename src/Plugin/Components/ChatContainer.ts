@@ -750,6 +750,7 @@ export class ChatContainer {
 		promptContainer.addClass(classNames[this.viewType]["prompt-container"]);
 		promptField.inputEl.className = classNames[this.viewType]["text-area"];
 		promptField.inputEl.id = "chat-prompt-text-area";
+		promptField.inputEl.tabIndex = 0;
 		promptContainer.addEventListener("input", () => {
 			this.auto_height(promptField, parentElement);
 		});
@@ -781,6 +782,11 @@ export class ChatContainer {
 			promptField.inputEl.setText("");
 			promptField.setValue("");
 		});
+
+		// Auto-focus the input field when the container is created
+		setTimeout(() => {
+			promptField.inputEl.focus();
+		}, 100);
 	}
 
 	setMessages(replaceChatHistory: boolean = false) {

@@ -183,7 +183,6 @@ function resolveNodePath(): string {
 	for (const candidate of candidates) {
 		try {
 			if (fs.existsSync(candidate)) {
-				console.log("[Claude Code] Resolved node path:", candidate);
 				return candidate;
 			}
 		} catch { /* ignore */ }
@@ -196,7 +195,7 @@ function resolveNodePath(): string {
 export function claudeCodeMessage(
 	prompt: string,
 	oauthToken: string,
-	linearApiKey: string,
+	linearWorkspaces: Array<{ name: string; apiKey: string }>,
 	cwd: string,
 	pluginDir: string,
 	sessionId?: string
@@ -211,10 +210,25 @@ export function claudeCodeMessage(
 		"cli.js"
 	);
 	const nodePath = resolveNodePath();
-	const mcpHeaders: Record<string, string> = {};
-	if (linearApiKey) {
-		mcpHeaders["Authorization"] = `Bearer ${linearApiKey}`;
+
+	// Build MCP servers and allowedTools from workspace list
+	const mcpServers: Record<string, any> = {};
+	const allowedTools: string[] = [];
+
+	for (const ws of linearWorkspaces) {
+		if (!ws.apiKey) continue;
+		// Sanitize name to create a valid MCP server key
+		const key = ws.name
+			? `linear-${ws.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`
+			: "linear";
+		mcpServers[key] = {
+			type: "http",
+			url: "https://mcp.linear.app/mcp",
+			headers: { Authorization: `Bearer ${ws.apiKey}` },
+		};
+		allowedTools.push(`mcp__${key}__*`);
 	}
+
 	const result = claudeCodeQuery({
 		prompt,
 		options: {
@@ -223,21 +237,15 @@ export function claudeCodeMessage(
 			spawnClaudeCodeProcess: (options: any) => {
 				const cmd =
 					options.command === "node" ? nodePath : options.command;
-				console.log("[Claude Code] Custom spawn called:", cmd, options.args);
 				return spawn(cmd, options.args, {
 					cwd: options.cwd,
 					env: options.env,
 					stdio: ["pipe", "pipe", "pipe"],
 				});
 			},
-			mcpServers: {
-				linear: {
-					type: "http",
-					url: "https://mcp.linear.app/mcp",
-					...(Object.keys(mcpHeaders).length > 0 ? { headers: mcpHeaders } : {}),
-				},
-			},
-			allowedTools: ["mcp__linear__*"],
+			...(Object.keys(mcpServers).length > 0
+				? { mcpServers, allowedTools }
+				: {}),
 			permissionMode: "acceptEdits",
 			cwd,
 			env: {

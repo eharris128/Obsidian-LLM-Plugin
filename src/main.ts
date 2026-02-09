@@ -57,7 +57,7 @@ export interface LLMPluginSettings {
 	assistants: Assistant[];
 	claudeAPIKey: string;
 	claudeCodeOAuthToken: string;
-	linearApiKey: string;
+	linearWorkspaces: Array<{ name: string; apiKey: string }>;
 	geminiAPIKey: string;
 	openAIAPIKey: string;
 	GPT4AllStreaming: boolean;
@@ -120,7 +120,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	openAIAPIKey: "",
 	claudeAPIKey: "",
 	claudeCodeOAuthToken: "",
-	linearApiKey: "",
+	linearWorkspaces: [],
 	geminiAPIKey: "",
 	GPT4AllStreaming: false,
 	//this setting determines whether or not fab is shown by default
@@ -230,15 +230,20 @@ export default class LLMPlugin extends Plugin {
 	async loadSettings() {
 		const dataJSON = await this.loadData();
 		if (dataJSON) {
-			this.settings = Object.assign({}, dataJSON);
+			this.settings = Object.assign({}, DEFAULT_SETTINGS, dataJSON);
 			this.settings.fabSettings.historyIndex = -1;
 			this.settings.widgetSettings.historyIndex = -1;
+
+			// Migrate linearApiKey → linearWorkspaces
+			if ((dataJSON as any).linearApiKey && !dataJSON.linearWorkspaces) {
+				this.settings.linearWorkspaces = [
+					{ name: "Linear", apiKey: (dataJSON as any).linearApiKey },
+				];
+				delete (this.settings as any).linearApiKey;
+				await this.saveSettings();
+			}
 		} else {
-			this.settings = Object.assign(
-				{},
-				DEFAULT_SETTINGS,
-				await this.loadData()
-			);
+			this.settings = Object.assign({}, DEFAULT_SETTINGS);
 		}
 	}
 

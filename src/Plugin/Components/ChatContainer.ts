@@ -254,31 +254,26 @@ export class ChatContainer {
 			const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
 			const path = require("path");
 			const pluginDir = path.join(vaultPath, this.plugin.manifest.dir);
-			console.log("[Claude Code] Starting query, pluginDir:", pluginDir);
 			let stream;
 			try {
 				stream = claudeCodeMessage(
 					this.prompt,
 					this.plugin.settings.claudeCodeOAuthToken,
-					this.plugin.settings.linearApiKey,
+					this.plugin.settings.linearWorkspaces,
 					vaultPath,
 					pluginDir,
 					this.claudeCodeSessionId ?? undefined
 				);
-				console.log("[Claude Code] Query created, session:", this.claudeCodeSessionId);
 			} catch (err) {
-				console.error("[Claude Code] Failed to create query:", err);
 				throw err;
 			}
 
 			try {
 				let firstText = true;
 				for await (const message of stream) {
-					console.log("[Claude Code] SDK message:", message.type, message);
 					// Capture session ID from first message
 					if (!this.claudeCodeSessionId && (message as any).session_id) {
 						this.claudeCodeSessionId = (message as any).session_id;
-						console.log("[Claude Code] Session ID captured:", this.claudeCodeSessionId);
 					}
 					if (message.type === "assistant") {
 						for (const block of message.message.content) {
@@ -294,9 +289,7 @@ export class ChatContainer {
 						}
 					}
 				}
-				console.log("[Claude Code] Stream ended");
 			} catch (err) {
-				console.error("[Claude Code] Stream error:", err);
 				throw err;
 			}
 
@@ -603,7 +596,11 @@ export class ChatContainer {
 
 		const userMessage = { role: "user" as const, content: this.prompt };
 		this.messageStore.addMessage(userMessage);
-		this.appendNewMessage(userMessage);
+		// Only manually append if subscription won't handle rendering
+		// (i.e., when this view is not the current active view)
+		if (this.viewType !== this.plugin.settings.currentView) {
+			this.appendNewMessage(userMessage);
+		}
 		const params = this.getParams(modelEndpoint, model, modelType);
 		try {
 			this.previewText = "";

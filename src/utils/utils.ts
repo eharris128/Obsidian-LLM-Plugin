@@ -195,7 +195,6 @@ export async function openAIMessage(
 		const {
 			prompt,
 			model,
-			messages,
 			quality,
 			size,
 			style,

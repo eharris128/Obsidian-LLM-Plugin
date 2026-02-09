@@ -5,7 +5,7 @@ import {
 	Notice,
 	TextAreaComponent,
 } from "obsidian";
-import { ChatCompletionChunk, Images } from "openai/resources";
+import { ChatCompletionChunk } from "openai/resources";
 import { Stream } from "openai/streaming";
 import { errorMessages } from "Plugin/Errors/errors";
 import {
@@ -764,7 +764,7 @@ export class ChatContainer {
 		const thinkingContainer = this.streamingDiv.createEl("div", { 
 			cls: "llm-thinking-animation" 
 		});
-		const thinkingText = thinkingContainer.createEl("span", { 
+		thinkingContainer.createEl("span", {
 			cls: "llm-thinking-text",
 			text: "Thinking"
 		});

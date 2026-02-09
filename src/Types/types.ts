@@ -1,6 +1,5 @@
 import { Assistant } from "openai/resources/beta/assistants";
 import { assistant } from "utils/constants";
-import { TFile } from "obsidian";
 
 export type ContextSettings = {
 	includeActiveFile: boolean;

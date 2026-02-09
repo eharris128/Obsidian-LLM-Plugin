@@ -138,7 +138,7 @@ export default class SettingsView extends PluginSettingTab {
 
 		// Add Toggle File Context button
 		new Setting(containerEl)
-			.setName("Enable File Context")
+			.setName("Enable file context")
 			.setDesc("Enable the file context feature that allows AI to access vault files. When disabled, AI will not have access to any files from your vault.")
 			.addToggle((toggle) => {
 				toggle

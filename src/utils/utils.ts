@@ -214,7 +214,7 @@ export async function openAIMessage(
 			style,
 		});
 		let imageURLs: string[] = [];
-		image.data.map((image) => {
+		image.data?.map((image) => {
 			return imageURLs.push(image.url!);
 		});
 		return imageURLs;
@@ -471,7 +471,7 @@ export async function deleteAssistant(
 		dangerouslyAllowBrowser: true,
 	});
 
-	await openai.beta.assistants.del(assistant_id);
+	await openai.beta.assistants.delete(assistant_id);
 }
 
 export async function listVectors(OpenAI_API_Key: string) {
@@ -480,7 +480,7 @@ export async function listVectors(OpenAI_API_Key: string) {
 		dangerouslyAllowBrowser: true,
 	});
 
-	const vectorStores = await openai.beta.vectorStores.list();
+	const vectorStores = await openai.vectorStores.list();
 	return vectorStores.data;
 }
 
@@ -490,7 +490,7 @@ export async function deleteVector(OpenAI_API_Key: string, vector_id: string) {
 		dangerouslyAllowBrowser: true,
 	});
 
-	await openai.beta.vectorStores.del(vector_id);
+	await openai.vectorStores.delete(vector_id);
 }
 
 export async function createVectorAndUpdate(
@@ -527,11 +527,11 @@ export async function createVectorAndUpdate(
 		})
 	);
 
-	let vectorStore = await openai.beta.vectorStores.create({
+	let vectorStore = await openai.vectorStores.create({
 		name: "Assistant Files",
 	});
 
-	await openai.beta.vectorStores.fileBatches.create(vectorStore.id, {
+	await openai.vectorStores.fileBatches.create(vectorStore.id, {
 		file_ids,
 	});
 

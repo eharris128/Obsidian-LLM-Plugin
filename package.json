@@ -29,6 +29,6 @@
 	"dependencies": {
 		"@anthropic-ai/sdk": "^0.74.0",
 		"@google/generative-ai": "^0.8.0",
-		"openai": "^4.53.0"
+		"openai": "^6.18.0"
 	}
 }

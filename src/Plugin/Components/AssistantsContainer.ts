@@ -11,7 +11,7 @@ import {
 	Platform
 } from "obsidian";
 import { Assistant } from "openai/resources/beta/assistants";
-import { VectorStore } from "openai/resources/beta/vector-stores/vector-stores";
+import { VectorStore } from "openai/resources/vector-stores/vector-stores";
 import { ViewType } from "Types/types";
 import { openAIModels, models } from "utils/models";
 import {

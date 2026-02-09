@@ -60,6 +60,7 @@ export interface LLMPluginSettings {
 	openAIAPIKey: string;
 	GPT4AllStreaming: boolean;
 	showFAB: boolean;
+	enableFileContext: boolean;
 	defaultModel: string;
 }
 
@@ -120,6 +121,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	GPT4AllStreaming: false,
 	//this setting determines whether or not fab is shown by default
 	showFAB: false,
+	enableFileContext: false,
 	defaultModel: "",
 };
 

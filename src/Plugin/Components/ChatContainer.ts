@@ -471,7 +471,7 @@ export class ChatContainer {
 			header.setHeader(modelName, this.prompt);
 		}
 
-		// Build and inject vault context
+		// Build and inject vault context (only if the feature is enabled)
 		const settingType = getSettingType(this.viewType);
 		const contextSettings = this.plugin.settings[settingType].contextSettings;
 		const maxTokens = this.plugin.settings[settingType].chatSettings.maxTokens;
@@ -483,8 +483,8 @@ export class ChatContainer {
 		let vaultContext = null;
 		let contextString: string | null = null;
 
-		// Only build context for chat endpoints (not images)
-		if (modelEndpoint !== "images") {
+		// Only build context for chat endpoints (not images) and if feature is enabled
+		if (modelEndpoint !== "images" && this.plugin.settings.enableFileContext) {
 			try {
 				contextString = await this.contextBuilder.buildFormattedContext(
 					contextSettings,

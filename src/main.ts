@@ -56,6 +56,8 @@ export interface LLMPluginSettings {
 	promptHistory: HistoryItem[];
 	assistants: Assistant[];
 	claudeAPIKey: string;
+	claudeCodeOAuthToken: string;
+	linearApiKey: string;
 	geminiAPIKey: string;
 	openAIAPIKey: string;
 	GPT4AllStreaming: boolean;
@@ -117,6 +119,8 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	assistants: [],
 	openAIAPIKey: "",
 	claudeAPIKey: "",
+	claudeCodeOAuthToken: "",
+	linearApiKey: "",
 	geminiAPIKey: "",
 	GPT4AllStreaming: false,
 	//this setting determines whether or not fab is shown by default
@@ -254,6 +258,9 @@ export default class LLMPlugin extends Plugin {
 		settingsObjects.forEach((settings) => {
 			const model = settings.model;
 			switch (model) {
+				case "claude-code":
+					// Claude Code uses OAuth token, not an API key — skip API validation
+					break;
 				case claudeSonnetJuneModel:
 					activeClaudeModel = model === claudeSonnetJuneModel;
 					break;
@@ -336,16 +343,19 @@ export default class LLMPlugin extends Plugin {
 		const fabModelRequiresKey =
 			this.settings.fabSettings.model === openAIModel ||
 			this.settings.fabSettings.model === claudeSonnetJuneModel ||
+			this.settings.fabSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.fabSettings.model);
 
 		const widgetModelRequresKey =
 			this.settings.widgetSettings.model === openAIModel ||
 			this.settings.widgetSettings.model === claudeSonnetJuneModel ||
+			this.settings.widgetSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.widgetSettings.model);
 
 		const modalModelRequresKey =
 			this.settings.modalSettings.model === openAIModel ||
 			this.settings.modalSettings.model === claudeSonnetJuneModel ||
+			this.settings.modalSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.modalSettings.model);
 
 		const activeModelRequiresKey =

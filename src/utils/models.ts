@@ -1,5 +1,5 @@
 import { Model } from "Types/types";
-import { claude, chat, gemini, geminiModel, gemini2FlashModel, gemini2FlashThinkingModel, gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel, gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel, geminiFlashLatestModel, geminiFlashLiteLatestModel, GPT4All, messages } from "utils/constants"
+import { claude, claudeCode, claudeCodeEndpoint, chat, gemini, geminiModel, gemini2FlashModel, gemini2FlashThinkingModel, gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel, gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel, geminiFlashLatestModel, geminiFlashLiteLatestModel, GPT4All, messages } from "utils/constants"
 
 export const openAIModels: Record<string, Model> = {
 	"ChatGPT-3.5 turbo": {
@@ -171,6 +171,13 @@ export const models: Record<string, Model> = {
 		endpoint: "gemini",
 		url: "gemini",
 	},
+	// Claude Code (Agent SDK)
+	"Claude Code": {
+		model: "claude-code",
+		type: claudeCode,
+		endpoint: claudeCodeEndpoint,
+		url: "",
+	},
 	"DALL·E 3": {
 		model: "dall-e-3",
 		type: "openAI",
@@ -213,6 +220,7 @@ export const modelNames: Record<string, string> = {
 	"gemini-2.0-flash-lite": "Gemini-2.0-Flash-Lite",
 	"gemini-2.0-flash-exp": "Gemini-2.0-flash-exp",
 	"gemini-2.0-flash-thinking-exp-1219": "Gemini-2.0-flash-thinking-exp",
+	"claude-code": "Claude Code",
 	// "text-embedding-3-small": "Text Embedding 3 (Small)",
 	"dall-e-3": "DALL·E 3",
 	"dall-e-2": "DALL·E 2",

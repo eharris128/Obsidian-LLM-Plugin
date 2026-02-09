@@ -11,6 +11,23 @@ import {
 	gemini,
 	geminiModel,
 } from "utils/constants";
+import { query as claudeCodeQuery } from "@anthropic-ai/claude-agent-sdk";
+
+// Patch events.setMaxListeners for Electron compatibility.
+// The Agent SDK calls setMaxListeners(n, abortSignal), but Electron's
+// renderer-process AbortSignal doesn't extend Node.js EventTarget,
+// causing a TypeError. This wrapper catches and ignores that case.
+const events = require("events");
+const _origSetMaxListeners = events.setMaxListeners;
+if (_origSetMaxListeners) {
+	events.setMaxListeners = function (n: number, ...eventTargets: any[]) {
+		try {
+			return _origSetMaxListeners(n, ...eventTargets);
+		} catch {
+			// Electron: browser AbortSignal is not a Node.js EventTarget
+		}
+	};
+}
 import { models, modelNames } from "utils/models";
 import {
 	ChatParams,
@@ -133,6 +150,103 @@ export async function geminiMessage(
 		},
 	});
 	return stream;
+}
+
+// Resolve the absolute path to `node` by checking common install locations.
+// Electron's renderer process has a limited PATH, so we check the filesystem directly.
+function resolveNodePath(): string {
+	const fs = require("fs");
+	const homedir = require("os").homedir();
+	const candidates: string[] = [];
+
+	// nvm — pick the latest installed version
+	const nvmDir = `${homedir}/.nvm/versions/node`;
+	try {
+		if (fs.existsSync(nvmDir)) {
+			const versions = fs.readdirSync(nvmDir).sort().reverse();
+			if (versions.length > 0) {
+				candidates.push(`${nvmDir}/${versions[0]}/bin/node`);
+			}
+		}
+	} catch { /* ignore */ }
+
+	candidates.push(
+		`${homedir}/.volta/bin/node`,                       // volta
+		`${homedir}/.local/share/fnm/aliases/default/bin/node`, // fnm
+		`${homedir}/.asdf/shims/node`,                      // asdf
+		`${homedir}/.local/bin/node`,
+		"/usr/local/bin/node",
+		"/usr/bin/node",
+		"/snap/bin/node",
+	);
+
+	for (const candidate of candidates) {
+		try {
+			if (fs.existsSync(candidate)) {
+				console.log("[Claude Code] Resolved node path:", candidate);
+				return candidate;
+			}
+		} catch { /* ignore */ }
+	}
+
+	console.warn("[Claude Code] Could not find node binary, falling back to 'node'");
+	return "node";
+}
+
+export function claudeCodeMessage(
+	prompt: string,
+	oauthToken: string,
+	linearApiKey: string,
+	cwd: string,
+	pluginDir: string,
+	sessionId?: string
+) {
+	const path = require("path");
+	const { spawn } = require("child_process");
+	const cliPath = path.join(
+		pluginDir,
+		"node_modules",
+		"@anthropic-ai",
+		"claude-agent-sdk",
+		"cli.js"
+	);
+	const nodePath = resolveNodePath();
+	const mcpHeaders: Record<string, string> = {};
+	if (linearApiKey) {
+		mcpHeaders["Authorization"] = `Bearer ${linearApiKey}`;
+	}
+	const result = claudeCodeQuery({
+		prompt,
+		options: {
+			pathToClaudeCodeExecutable: cliPath,
+			...(sessionId ? { resume: sessionId } : {}),
+			spawnClaudeCodeProcess: (options: any) => {
+				const cmd =
+					options.command === "node" ? nodePath : options.command;
+				console.log("[Claude Code] Custom spawn called:", cmd, options.args);
+				return spawn(cmd, options.args, {
+					cwd: options.cwd,
+					env: options.env,
+					stdio: ["pipe", "pipe", "pipe"],
+				});
+			},
+			mcpServers: {
+				linear: {
+					type: "http",
+					url: "https://mcp.linear.app/mcp",
+					...(Object.keys(mcpHeaders).length > 0 ? { headers: mcpHeaders } : {}),
+				},
+			},
+			allowedTools: ["mcp__linear__*"],
+			permissionMode: "acceptEdits",
+			cwd,
+			env: {
+				...process.env,
+				CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
+			},
+		},
+	});
+	return result;
 }
 
 export async function claudeMessage(

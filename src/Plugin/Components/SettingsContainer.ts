@@ -9,7 +9,7 @@ import {
 	getViewInfo,
 	getGpt4AllPath
 } from "utils/utils";
-import { assistant as ASSISTANT, chat, GPT4All, messages, openAI } from "utils/constants"
+import { assistant as ASSISTANT, chat, claudeCodeEndpoint, GPT4All, messages, openAI } from "utils/constants"
 import { Header } from "./Header";
 import { FileSelector } from "./FileSelector";
 
@@ -125,6 +125,11 @@ export class SettingsContainer {
 		}
 		if (endpoint === "moderations") {
 			this.generateModerationsSettings(parentContainer);
+		}
+		if (endpoint === claudeCodeEndpoint) {
+			// Claude Code Agent SDK manages its own model config;
+			// no temperature/tokens settings needed.
+			return;
 		}
 		if (endpoint === chat || messages) {
 			this.generateChatSettings(parentContainer, modelType);

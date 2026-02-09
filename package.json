@@ -27,6 +27,7 @@
 		"typescript-eslint": "8.55.0"
 	},
 	"dependencies": {
+		"@anthropic-ai/claude-agent-sdk": "^0.2.37",
 		"@anthropic-ai/sdk": "0.74.0",
 		"@google/genai": "1.40.0",
 		"openai": "6.18.0"

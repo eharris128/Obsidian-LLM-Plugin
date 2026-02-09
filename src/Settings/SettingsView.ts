@@ -136,6 +136,34 @@ export default class SettingsView extends PluginSettingTab {
 					});
 			});
 
+		// Claude Code settings
+		const claudeCodeSection = containerEl.createDiv();
+		claudeCodeSection.createEl("h3", { text: "Claude Code" });
+
+		new Setting(claudeCodeSection)
+			.setName("Claude Code OAuth token")
+			.setDesc("OAuth token for authenticating with Claude Code (CLAUDE_CODE_OAUTH_TOKEN).")
+			.addText((text) => {
+				text.inputEl.type = "password";
+				text.setValue(this.plugin.settings.claudeCodeOAuthToken);
+				text.onChange((value) => {
+					this.plugin.settings.claudeCodeOAuthToken = value;
+					this.plugin.saveSettings();
+				});
+			});
+
+		new Setting(claudeCodeSection)
+			.setName("Linear API key")
+			.setDesc("Personal API key from Linear (Settings > API > Personal API keys). Used to authenticate with the Linear MCP server.")
+			.addText((text) => {
+				text.inputEl.type = "password";
+				text.setValue(this.plugin.settings.linearApiKey);
+				text.onChange((value) => {
+					this.plugin.settings.linearApiKey = value;
+					this.plugin.saveSettings();
+				});
+			});
+
 		// Add Toggle File Context button
 		new Setting(containerEl)
 			.setName("Enable file context")

@@ -1,5 +1,4 @@
 import LLMPlugin from "main";
-import { Assistant } from "openai/resources/beta/assistants";
 import { AIAssistant } from "Types/types";
 
 export class Assistants {
@@ -12,7 +11,7 @@ export class Assistants {
 			this.plugin.settings.assistants = assistants;
 			this.plugin.saveSettings();
 			return true;
-		} catch (exception: any) {
+		} catch {
 			return false;
 		}
 	}

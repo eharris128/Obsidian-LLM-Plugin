@@ -11,7 +11,7 @@ import {
 	Platform
 } from "obsidian";
 import { Assistant } from "openai/resources/beta/assistants";
-import { VectorStore } from "openai/resources/beta/vector-stores/vector-stores";
+import { VectorStore } from "openai/resources/vector-stores/vector-stores";
 import { ViewType } from "Types/types";
 import { openAIModels, models } from "utils/models";
 import {
@@ -58,7 +58,7 @@ export class AssistantsContainer {
 	}
 
 	async generateAssistantsContainer(parentContainer: HTMLElement) {
-		const optionDropdown = new Setting(parentContainer)
+		new Setting(parentContainer)
 			.setName("Assistants options")
 			.setDesc("What do you want to do?")
 			.addDropdown((dropdown: DropdownComponent) => {
@@ -193,7 +193,7 @@ export class AssistantsContainer {
 			this.plugin.settings.openAIAPIKey
 		);
 		let chosenAssistant: Assistant;
-		const assistants = new Setting(parentContainer)
+		new Setting(parentContainer)
 			.setName("Assistants")
 			.setDesc("Which assistant do you want to update?")
 			.addDropdown((dropdown: DropdownComponent) => {
@@ -233,14 +233,7 @@ export class AssistantsContainer {
 		submitButton.onClick((event: MouseEvent) => {
 			event.preventDefault();
 
-			const assistantObj = {
-				name: this.updateAssistantName,
-				instructions: this.updateAssistantIntructions,
-				model: this.updateAssistantModel,
-				tools: [{ type: this.updateAssistantToolType }],
-				topP: this.updateAssistantTopP,
-				temperature: this.updateAssistantTemperature,
-			};
+			// TODO: implement assistant update API call
 		});
 	}
 
@@ -365,8 +358,7 @@ export class AssistantsContainer {
 	}
 
 	createVector(parentContainer: HTMLElement) {
-		let vectorName = "";
-		const name = new Setting(parentContainer)
+		new Setting(parentContainer)
 			.setName("Vector storage name")
 			.setDesc("The name for your new vector storage")
 			.addText((text: TextComponent) => {
@@ -436,7 +428,7 @@ export class AssistantsContainer {
 		option: string,
 		assistant?: Assistant
 	) {
-		const assistantName = new Setting(parentContainer)
+		new Setting(parentContainer)
 			.setName("Assistant name")
 			.setDesc("The name to be attributed to the new assistant")
 			.addText((text) => {
@@ -449,7 +441,7 @@ export class AssistantsContainer {
 				});
 			});
 
-		const assistantIntructions = new Setting(parentContainer)
+		new Setting(parentContainer)
 			.setName("Assistant instructions")
 			.setDesc("The system instructions for the assistant to follow.")
 			.addText((text) => {
@@ -462,7 +454,7 @@ export class AssistantsContainer {
 				});
 			});
 
-		const assistantModel = new Setting(parentContainer)
+		new Setting(parentContainer)
 			.setName("Assistant model")
 			.setDesc("Which LLM you want your assistant to use")
 			.addDropdown((dropdown: DropdownComponent) => {
@@ -480,7 +472,7 @@ export class AssistantsContainer {
 				});
 			});
 
-		const assistantToolType = new Setting(parentContainer)
+		new Setting(parentContainer)
 			.setName("Assistant tool type")
 			.setDesc("File search or code review") // NOTE -> we do not support Code Review at this point.
 			.addDropdown((dropdown: DropdownComponent) => {
@@ -511,7 +503,7 @@ export class AssistantsContainer {
 		parentContainer: HTMLElement,
 		assistant?: Assistant
 	) {
-		const tool_resources = new Setting(parentContainer)
+		new Setting(parentContainer)
 			.setName("Tool resources")
 			.setDesc(
 				"A set of resources that are used by the assistant's tools. The resources are specific to the type of tool. For example, the code_interpreter tool requires a list of file IDs, while the file_search tool requires a list of vector store IDs."
@@ -520,7 +512,7 @@ export class AssistantsContainer {
 				const trDiv = parentContainer.createEl("div");
 				toggle.onChange((change) => {
 					if (change) {
-						const vector_store_ids = new Setting(trDiv)
+						new Setting(trDiv)
 							.setName("Vector store")
 							.setDesc(
 								"The new vector store id to attach to ths assistant"

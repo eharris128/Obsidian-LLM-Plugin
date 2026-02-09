@@ -1,7 +1,6 @@
-import { App, Modal, Setting, TFile, TextComponent } from "obsidian";
+import { App, Modal, Setting, TextComponent } from "obsidian";
 import LLMPlugin from "main";
 import { ViewType } from "Types/types";
-import { getSettingType } from "utils/utils";
 
 export class FileSelector extends Modal {
 	plugin: LLMPlugin;

@@ -11,6 +11,23 @@ import {
 	gemini,
 	geminiModel,
 } from "utils/constants";
+import { query as claudeCodeQuery } from "@anthropic-ai/claude-agent-sdk";
+
+// Patch events.setMaxListeners for Electron compatibility.
+// The Agent SDK calls setMaxListeners(n, abortSignal), but Electron's
+// renderer-process AbortSignal doesn't extend Node.js EventTarget,
+// causing a TypeError. This wrapper catches and ignores that case.
+const events = require("events");
+const _origSetMaxListeners = events.setMaxListeners;
+if (_origSetMaxListeners) {
+	events.setMaxListeners = function (n: number, ...eventTargets: any[]) {
+		try {
+			return _origSetMaxListeners(n, ...eventTargets);
+		} catch {
+			// Electron: browser AbortSignal is not a Node.js EventTarget
+		}
+	};
+}
 import { models, modelNames } from "utils/models";
 import {
 	ChatParams,
@@ -22,11 +39,7 @@ import {
 } from "Types/types";
 import { SingletonNotice } from "Plugin/Components/SingletonNotice";
 import { Assistant } from "openai/resources/beta/assistants";
-import {
-	GoogleGenerativeAI,
-	Content,
-	GenerateContentRequest,
-} from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 export function getGpt4AllPath(plugin: LLMPlugin) {
 	const platform = plugin.os.platform();
@@ -83,15 +96,15 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 			});
 			return { provider, valid: true };
 		} else if (provider === gemini) {
-			const client = new GoogleGenerativeAI(key);
-			const model = client.getGenerativeModel({
+			const client = new GoogleGenAI({ apiKey: key });
+			await client.models.generateContent({
 				model: geminiModel,
-				generationConfig: {
+				contents: "Reply 'a'",
+				config: {
 					candidateCount: 1,
 					maxOutputTokens: 1,
 				},
 			});
-			await model.generateContent("Reply 'a'");
 			return { provider, valid: true };
 		}
 	} catch (error) {
@@ -114,31 +127,134 @@ export async function geminiMessage(
 	Gemini_API_KEY: string
 ) {
 	const { model, topP, messages, tokens, temperature } = params as ChatParams;
-	// Docs - https://ai.google.dev/api/generate-content#v1beta.GenerationConfig
-	const genAI = new GoogleGenerativeAI(Gemini_API_KEY);
-	const client = genAI.getGenerativeModel({
+	const client = new GoogleGenAI({ apiKey: Gemini_API_KEY });
+
+	const contents = messages.map((message) => {
+		// NOTE -> If we want to provide previous model responses to Gemini, we need to convert them to the correct format.
+		// the 'assistant' role is swapped out with the 'model' role.
+		const role = message.role === "user" ? "user" : "model";
+		return {
+			role,
+			parts: [{ text: message.content }],
+		};
+	});
+
+	const stream = await client.models.generateContentStream({
 		model,
-		generationConfig: {
+		contents,
+		config: {
 			candidateCount: 1,
 			maxOutputTokens: tokens,
 			temperature,
 			topP: topP ?? undefined,
 		},
 	});
-
-	const contents: Content[] = messages.map((message) => {
-		// NOTE -> If we want to provide previous model responses to Gemini, we need to convert them to the correct format.
-		// the 'asisstant' role is swapped out with the 'model' role.
-		// Docs reference - C:\Users\echar\Documents\llm-plugin-vault\.obsidian\plugins\Obsidian-LLM-Plugin\node_modules\@google\generative-ai\dist\generative-ai.d.ts
-		const role = message.role === "user" ? "user" : "model";
-		return {
-			role,
-			parts: [{ text: message.content }], // Convert content to Part[]
-		};
-	});
-	const generateContentRequest: GenerateContentRequest = { contents };
-	const stream = await client.generateContentStream(generateContentRequest);
 	return stream;
+}
+
+// Resolve the absolute path to `node` by checking common install locations.
+// Electron's renderer process has a limited PATH, so we check the filesystem directly.
+function resolveNodePath(): string {
+	const fs = require("fs");
+	const homedir = require("os").homedir();
+	const candidates: string[] = [];
+
+	// nvm — pick the latest installed version
+	const nvmDir = `${homedir}/.nvm/versions/node`;
+	try {
+		if (fs.existsSync(nvmDir)) {
+			const versions = fs.readdirSync(nvmDir).sort().reverse();
+			if (versions.length > 0) {
+				candidates.push(`${nvmDir}/${versions[0]}/bin/node`);
+			}
+		}
+	} catch { /* ignore */ }
+
+	candidates.push(
+		`${homedir}/.volta/bin/node`,                       // volta
+		`${homedir}/.local/share/fnm/aliases/default/bin/node`, // fnm
+		`${homedir}/.asdf/shims/node`,                      // asdf
+		`${homedir}/.local/bin/node`,
+		"/usr/local/bin/node",
+		"/usr/bin/node",
+		"/snap/bin/node",
+	);
+
+	for (const candidate of candidates) {
+		try {
+			if (fs.existsSync(candidate)) {
+				return candidate;
+			}
+		} catch { /* ignore */ }
+	}
+
+	console.warn("[Claude Code] Could not find node binary, falling back to 'node'");
+	return "node";
+}
+
+export function claudeCodeMessage(
+	prompt: string,
+	oauthToken: string,
+	linearWorkspaces: Array<{ name: string; apiKey: string }>,
+	cwd: string,
+	pluginDir: string,
+	sessionId?: string
+) {
+	const path = require("path");
+	const { spawn } = require("child_process");
+	const cliPath = path.join(
+		pluginDir,
+		"node_modules",
+		"@anthropic-ai",
+		"claude-agent-sdk",
+		"cli.js"
+	);
+	const nodePath = resolveNodePath();
+
+	// Build MCP servers and allowedTools from workspace list
+	const mcpServers: Record<string, any> = {};
+	const allowedTools: string[] = [];
+
+	for (const ws of linearWorkspaces) {
+		if (!ws.apiKey) continue;
+		// Sanitize name to create a valid MCP server key
+		const key = ws.name
+			? `linear-${ws.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`
+			: "linear";
+		mcpServers[key] = {
+			type: "http",
+			url: "https://mcp.linear.app/mcp",
+			headers: { Authorization: `Bearer ${ws.apiKey}` },
+		};
+		allowedTools.push(`mcp__${key}__*`);
+	}
+
+	const result = claudeCodeQuery({
+		prompt,
+		options: {
+			pathToClaudeCodeExecutable: cliPath,
+			...(sessionId ? { resume: sessionId } : {}),
+			spawnClaudeCodeProcess: (options: any) => {
+				const cmd =
+					options.command === "node" ? nodePath : options.command;
+				return spawn(cmd, options.args, {
+					cwd: options.cwd,
+					env: options.env,
+					stdio: ["pipe", "pipe", "pipe"],
+				});
+			},
+			...(Object.keys(mcpServers).length > 0
+				? { mcpServers, allowedTools }
+				: {}),
+			permissionMode: "acceptEdits",
+			cwd,
+			env: {
+				...process.env,
+				CLAUDE_CODE_OAUTH_TOKEN: oauthToken,
+			},
+		},
+	});
+	return result;
 }
 
 export async function claudeMessage(
@@ -195,7 +311,6 @@ export async function openAIMessage(
 		const {
 			prompt,
 			model,
-			messages,
 			quality,
 			size,
 			style,
@@ -215,7 +330,7 @@ export async function openAIMessage(
 			style,
 		});
 		let imageURLs: string[] = [];
-		image.data.map((image) => {
+		image.data?.map((image) => {
 			return imageURLs.push(image.url!);
 		});
 		return imageURLs;
@@ -472,7 +587,7 @@ export async function deleteAssistant(
 		dangerouslyAllowBrowser: true,
 	});
 
-	await openai.beta.assistants.del(assistant_id);
+	await openai.beta.assistants.delete(assistant_id);
 }
 
 export async function listVectors(OpenAI_API_Key: string) {
@@ -481,7 +596,7 @@ export async function listVectors(OpenAI_API_Key: string) {
 		dangerouslyAllowBrowser: true,
 	});
 
-	const vectorStores = await openai.beta.vectorStores.list();
+	const vectorStores = await openai.vectorStores.list();
 	return vectorStores.data;
 }
 
@@ -491,7 +606,7 @@ export async function deleteVector(OpenAI_API_Key: string, vector_id: string) {
 		dangerouslyAllowBrowser: true,
 	});
 
-	await openai.beta.vectorStores.del(vector_id);
+	await openai.vectorStores.delete(vector_id);
 }
 
 export async function createVectorAndUpdate(
@@ -528,11 +643,11 @@ export async function createVectorAndUpdate(
 		})
 	);
 
-	let vectorStore = await openai.beta.vectorStores.create({
+	let vectorStore = await openai.vectorStores.create({
 		name: "Assistant Files",
 	});
 
-	await openai.beta.vectorStores.fileBatches.create(vectorStore.id, {
+	await openai.vectorStores.fileBatches.create(vectorStore.id, {
 		file_ids,
 	});
 

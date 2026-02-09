@@ -14,7 +14,7 @@ export class History {
 			this.plugin.settings.promptHistory = history;
 			this.plugin.saveSettings();
 			return true;
-		} catch (exception: any) {
+		} catch {
 			return false;
 		}
 	}

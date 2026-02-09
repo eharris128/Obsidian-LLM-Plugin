@@ -56,6 +56,8 @@ export interface LLMPluginSettings {
 	promptHistory: HistoryItem[];
 	assistants: Assistant[];
 	claudeAPIKey: string;
+	claudeCodeOAuthToken: string;
+	linearWorkspaces: Array<{ name: string; apiKey: string }>;
 	geminiAPIKey: string;
 	openAIAPIKey: string;
 	GPT4AllStreaming: boolean;
@@ -117,6 +119,8 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	assistants: [],
 	openAIAPIKey: "",
 	claudeAPIKey: "",
+	claudeCodeOAuthToken: "",
+	linearWorkspaces: [],
 	geminiAPIKey: "",
 	GPT4AllStreaming: false,
 	//this setting determines whether or not fab is shown by default
@@ -226,15 +230,20 @@ export default class LLMPlugin extends Plugin {
 	async loadSettings() {
 		const dataJSON = await this.loadData();
 		if (dataJSON) {
-			this.settings = Object.assign({}, dataJSON);
+			this.settings = Object.assign({}, DEFAULT_SETTINGS, dataJSON);
 			this.settings.fabSettings.historyIndex = -1;
 			this.settings.widgetSettings.historyIndex = -1;
+
+			// Migrate linearApiKey → linearWorkspaces
+			if ((dataJSON as any).linearApiKey && !dataJSON.linearWorkspaces) {
+				this.settings.linearWorkspaces = [
+					{ name: "Linear", apiKey: (dataJSON as any).linearApiKey },
+				];
+				delete (this.settings as any).linearApiKey;
+				await this.saveSettings();
+			}
 		} else {
-			this.settings = Object.assign(
-				{},
-				DEFAULT_SETTINGS,
-				await this.loadData()
-			);
+			this.settings = Object.assign({}, DEFAULT_SETTINGS);
 		}
 	}
 
@@ -254,6 +263,9 @@ export default class LLMPlugin extends Plugin {
 		settingsObjects.forEach((settings) => {
 			const model = settings.model;
 			switch (model) {
+				case "claude-code":
+					// Claude Code uses OAuth token, not an API key — skip API validation
+					break;
 				case claudeSonnetJuneModel:
 					activeClaudeModel = model === claudeSonnetJuneModel;
 					break;
@@ -336,16 +348,19 @@ export default class LLMPlugin extends Plugin {
 		const fabModelRequiresKey =
 			this.settings.fabSettings.model === openAIModel ||
 			this.settings.fabSettings.model === claudeSonnetJuneModel ||
+			this.settings.fabSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.fabSettings.model);
 
 		const widgetModelRequresKey =
 			this.settings.widgetSettings.model === openAIModel ||
 			this.settings.widgetSettings.model === claudeSonnetJuneModel ||
+			this.settings.widgetSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.widgetSettings.model);
 
 		const modalModelRequresKey =
 			this.settings.modalSettings.model === openAIModel ||
 			this.settings.modalSettings.model === claudeSonnetJuneModel ||
+			this.settings.modalSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.modalSettings.model);
 
 		const activeModelRequiresKey =

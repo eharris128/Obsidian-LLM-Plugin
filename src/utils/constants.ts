@@ -1,7 +1,10 @@
 export const claude = "claude"
+export const claudeCode = "claudeCode"
 export const openAI = "openAI"
 export const gemini = "gemini"
 export const GPT4All = "GPT4All"
+
+export const claudeCodeEndpoint = "claudeCodeAgent"
 
 export const claudeSonnetJuneModel = "claude-3-5-sonnet-20240620"
 export const geminiModel = "gemini-1.5-flash"

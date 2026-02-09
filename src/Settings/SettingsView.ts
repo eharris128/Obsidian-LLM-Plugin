@@ -136,6 +136,47 @@ export default class SettingsView extends PluginSettingTab {
 					});
 			});
 
+		// Claude Code settings
+		const claudeCodeSection = containerEl.createDiv();
+		claudeCodeSection.createEl("h3", { text: "Claude Code" });
+
+		new Setting(claudeCodeSection)
+			.setName("Claude Code OAuth token")
+			.setDesc("OAuth token for authenticating with Claude Code (CLAUDE_CODE_OAUTH_TOKEN).")
+			.addText((text) => {
+				text.inputEl.type = "password";
+				text.setValue(this.plugin.settings.claudeCodeOAuthToken);
+				text.onChange((value) => {
+					this.plugin.settings.claudeCodeOAuthToken = value;
+					this.plugin.saveSettings();
+				});
+			});
+
+		// Linear workspaces list
+		const linearSection = claudeCodeSection.createDiv();
+		linearSection.createEl("h4", { text: "Linear Workspaces (Claude Code only)" });
+		const desc = linearSection.createEl("p", { cls: "setting-item-description" });
+		desc.appendText("Add Linear workspaces with their ");
+		desc.createEl("a", {
+			text: "API keys",
+			href: "https://linear.app/settings/account/security",
+		});
+		desc.appendText(". Each workspace gets its own MCP server.");
+
+		const workspaceListEl = linearSection.createDiv({ cls: "linear-workspace-list" });
+		this.renderWorkspaceList(workspaceListEl);
+
+		new Setting(linearSection)
+			.setName("Add workspace")
+			.addButton((button) => {
+				button.setButtonText("+ Add Linear workspace");
+				button.onClick(() => {
+					this.plugin.settings.linearWorkspaces.push({ name: "", apiKey: "" });
+					this.plugin.saveSettings();
+					this.renderWorkspaceList(workspaceListEl);
+				});
+			});
+
 		// Add Toggle File Context button
 		new Setting(containerEl)
 			.setName("Enable file context")
@@ -188,6 +229,42 @@ export default class SettingsView extends PluginSettingTab {
 			attr: { class: "llm-text-muted version" }
 		});
 		credits.appendChild(creditsVersion);
+	}
+
+	private renderWorkspaceList(containerEl: HTMLElement) {
+		containerEl.empty();
+		const workspaces = this.plugin.settings.linearWorkspaces;
+
+		workspaces.forEach((ws, index) => {
+			const row = new Setting(containerEl)
+				.addText((text) => {
+					text.setPlaceholder("Workspace name");
+					text.setValue(ws.name);
+					text.onChange((value) => {
+						this.plugin.settings.linearWorkspaces[index].name = value;
+						this.plugin.saveSettings();
+					});
+				})
+				.addText((text) => {
+					text.setPlaceholder("API key");
+					text.inputEl.type = "password";
+					text.setValue(ws.apiKey);
+					text.onChange((value) => {
+						this.plugin.settings.linearWorkspaces[index].apiKey = value;
+						this.plugin.saveSettings();
+					});
+				})
+				.addButton((button) => {
+					button.setIcon("trash");
+					button.setTooltip("Remove workspace");
+					button.onClick(() => {
+						this.plugin.settings.linearWorkspaces.splice(index, 1);
+						this.plugin.saveSettings();
+						this.renderWorkspaceList(containerEl);
+					});
+				});
+			row.setName(ws.name || `Workspace ${index + 1}`);
+		});
 	}
 
 	private showApiKeyInput(type: APIKeyType, containerEl: HTMLElement) {

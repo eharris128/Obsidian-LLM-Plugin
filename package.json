@@ -11,19 +11,25 @@
 	"keywords": [],
 	"author": "Evan Harris, Ryan Mahoney",
 	"license": "MIT",
+	"engines": {
+		"node": ">=24.0.0"
+	},
 	"devDependencies": {
-		"@types/node": "^16.11.6",
-		"@typescript-eslint/eslint-plugin": "5.29.0",
-		"@typescript-eslint/parser": "5.29.0",
-		"builtin-modules": "3.3.0",
-		"esbuild": "0.17.3",
-		"obsidian": "latest",
-		"tslib": "2.4.0",
-		"typescript": "4.7.4"
+		"@eslint/js": "9.39.2",
+		"@types/node": "24.10.12",
+		"builtin-modules": "5.0.0",
+		"esbuild": "0.27.3",
+		"eslint": "9.39.2",
+		"globals": "17.3.0",
+		"obsidian": "1.11.4",
+		"tslib": "2.8.1",
+		"typescript": "5.9.3",
+		"typescript-eslint": "8.55.0"
 	},
 	"dependencies": {
-		"@anthropic-ai/sdk": "^0.27.3",
-		"@google/generative-ai": "^0.8.0",
-		"openai": "^4.53.0"
+		"@anthropic-ai/claude-agent-sdk": "^0.2.37",
+		"@anthropic-ai/sdk": "0.74.0",
+		"@google/genai": "1.40.0",
+		"openai": "6.18.0"
 	}
 }

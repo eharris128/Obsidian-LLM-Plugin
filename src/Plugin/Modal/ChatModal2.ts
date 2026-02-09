@@ -17,10 +17,6 @@ export class ChatModal2 extends Modal {
 			.getElementsByClassName("modal-close-button")[0]
 			.setAttr("style", "display: none");
 		const { contentEl } = this;
-		const closeModal = () => {
-			this.close();
-		};
-
 		const header = new Header(this.plugin, "modal");
 		const chatContainer = new ChatContainer(
 			this.plugin,

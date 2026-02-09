@@ -1,5 +1,5 @@
 import LLMPlugin from "main";
-import { ButtonComponent, setTooltip } from "obsidian";
+import { ButtonComponent } from "obsidian";
 import { ChatContainer } from "./ChatContainer";
 import { HistoryContainer } from "./HistoryContainer";
 import { ViewType } from "Types/types";

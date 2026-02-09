@@ -5,7 +5,7 @@ import {
 	Notice,
 	TextAreaComponent,
 } from "obsidian";
-import { ChatCompletionChunk, Images } from "openai/resources";
+import { ChatCompletionChunk } from "openai/resources";
 import { Stream } from "openai/streaming";
 import { errorMessages } from "Plugin/Errors/errors";
 import {
@@ -23,6 +23,7 @@ import { classNames } from "utils/classNames";
 import {
 	assistant,
 	chat,
+	claudeCodeEndpoint,
 	gemini,
 	geminiModel,
 	gemini2FlashModel,
@@ -41,6 +42,7 @@ import {
 import assistantLogo from "Plugin/Components/AssistantLogo";
 import {
 	assistantsMessage,
+	claudeCodeMessage,
 	getSettingType,
 	getViewInfo,
 	messageGPT4AllServer,
@@ -66,6 +68,7 @@ export class ChatContainer {
 	messageStore: MessageStore;
 	contextBuilder: ContextBuilder;
 	currentVaultContext: any = null; // Store context for current generation
+	claudeCodeSessionId: string | null = null;
 	constructor(
 		private plugin: LLMPlugin,
 		viewType: ViewType,
@@ -206,9 +209,11 @@ export class ChatContainer {
 
 	async regenerateOutput() {
 		const currentIndex = this.plugin.settings.currentIndex;
-		const messages =
-			this.plugin.settings.promptHistory[currentIndex].messages;
-		this.messageStore.setMessages(messages);
+		if (currentIndex >= 0 && this.plugin.settings.promptHistory[currentIndex]) {
+			const messages =
+				this.plugin.settings.promptHistory[currentIndex].messages;
+			this.messageStore.setMessages(messages);
+		}
 		this.removeLastMessageAndHistoryMessage();
 		this.handleGenerate();
 	}
@@ -223,7 +228,7 @@ export class ChatContainer {
 			assistantId,
 			modelName,
 		} = getViewInfo(this.plugin, this.viewType);
-		let shouldHaveAPIKey = modelType !== GPT4All;
+		let shouldHaveAPIKey = modelType !== GPT4All && modelEndpoint !== claudeCodeEndpoint;
 		const messagesForParams = this.getMessages();
 		// TODO - fix this logic to actually do an API key check against the current view model.
 		if (shouldHaveAPIKey) {
@@ -235,7 +240,90 @@ export class ChatContainer {
 				throw new Error("No API key");
 			}
 		}
+		if (modelEndpoint === claudeCodeEndpoint) {
+			if (!this.plugin.settings.claudeCodeOAuthToken) {
+				throw new Error("No Claude Code OAuth token");
+			}
+		}
 		const params = this.getParams(modelEndpoint, model, modelType);
+		// Start Claude Code handling
+		if (modelEndpoint === claudeCodeEndpoint) {
+			this.setDiv(true);
+			this.showThinkingAnimation();
+
+			const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
+			const path = require("path");
+			const pluginDir = path.join(vaultPath, this.plugin.manifest.dir);
+			let stream;
+			try {
+				stream = claudeCodeMessage(
+					this.prompt,
+					this.plugin.settings.claudeCodeOAuthToken,
+					this.plugin.settings.linearWorkspaces,
+					vaultPath,
+					pluginDir,
+					this.claudeCodeSessionId ?? undefined
+				);
+			} catch (err) {
+				throw err;
+			}
+
+			try {
+				let firstText = true;
+				for await (const message of stream) {
+					// Capture session ID from first message
+					if (!this.claudeCodeSessionId && (message as any).session_id) {
+						this.claudeCodeSessionId = (message as any).session_id;
+					}
+					if (message.type === "assistant") {
+						for (const block of message.message.content) {
+							if (block.type === "text") {
+								if (firstText) {
+									this.streamingDiv.empty();
+									firstText = false;
+								}
+								this.previewText += block.text;
+								this.streamingDiv.textContent = this.previewText;
+								this.historyMessages.scroll(0, 9999);
+							}
+						}
+					}
+				}
+			} catch (err) {
+				throw err;
+			}
+
+			this.streamingDiv.empty();
+			MarkdownRenderer.render(
+				this.plugin.app,
+				this.previewText,
+				this.streamingDiv,
+				"",
+				this.plugin
+			);
+			const copyButton = this.streamingDiv.querySelectorAll(
+				".copy-code-button"
+			) as NodeListOf<HTMLElement>;
+			copyButton.forEach((item) => {
+				item.setAttribute("style", "display: none");
+			});
+			this.messageStore.addMessage({
+				role: assistant,
+				content: this.previewText,
+			});
+			const message_context = {
+				prompt: this.prompt,
+				messages: this.getMessages(),
+				model,
+				temperature: 0,
+				tokens: 0,
+				modelName,
+			} as ChatHistoryItem;
+			this.historyPush(message_context, this.currentVaultContext);
+			return true;
+		}
+		// End Claude Code handling
+
 		// Start assistant handling
 		if (modelEndpoint === assistant) {
 			const stream = await assistantsMessage(
@@ -304,12 +392,12 @@ export class ChatContainer {
 
 			try {
 				let firstChunk = true;
-				for await (const chunk of stream.stream) {
+				for await (const chunk of stream) {
 					if (firstChunk) {
 						this.streamingDiv.empty();
 						firstChunk = false;
 					}
-					this.previewText += chunk.text() || "";
+					this.previewText += chunk.text || "";
 					this.streamingDiv.textContent = this.previewText;
 					this.historyMessages.scroll(0, 9999);
 				}
@@ -508,7 +596,11 @@ export class ChatContainer {
 
 		const userMessage = { role: "user" as const, content: this.prompt };
 		this.messageStore.addMessage(userMessage);
-		this.appendNewMessage(userMessage);
+		// Only manually append if subscription won't handle rendering
+		// (i.e., when this view is not the current active view)
+		if (this.viewType !== this.plugin.settings.currentView) {
+			this.appendNewMessage(userMessage);
+		}
 		const params = this.getParams(modelEndpoint, model, modelType);
 		try {
 			this.previewText = "";
@@ -578,7 +670,8 @@ export class ChatContainer {
 		if (
 			modelEndpoint === chat ||
 			modelEndpoint === gemini ||
-			modelEndpoint === messages
+			modelEndpoint === messages ||
+			modelEndpoint === claudeCodeEndpoint
 		) {
 			const chatParams = params as ChatHistoryItem;
 			// Add vault context to history if it exists
@@ -657,6 +750,7 @@ export class ChatContainer {
 		promptContainer.addClass(classNames[this.viewType]["prompt-container"]);
 		promptField.inputEl.className = classNames[this.viewType]["text-area"];
 		promptField.inputEl.id = "chat-prompt-text-area";
+		promptField.inputEl.tabIndex = 0;
 		promptContainer.addEventListener("input", () => {
 			this.auto_height(promptField, parentElement);
 		});
@@ -688,6 +782,11 @@ export class ChatContainer {
 			promptField.inputEl.setText("");
 			promptField.setValue("");
 		});
+
+		// Auto-focus the input field when the container is created
+		setTimeout(() => {
+			promptField.inputEl.focus();
+		}, 100);
 	}
 
 	setMessages(replaceChatHistory: boolean = false) {
@@ -706,6 +805,7 @@ export class ChatContainer {
 
 	resetMessages() {
 		this.messageStore.setMessages([]);
+		this.claudeCodeSessionId = null;
 	}
 
 	setDiv(streaming: boolean) {
@@ -764,7 +864,7 @@ export class ChatContainer {
 		const thinkingContainer = this.streamingDiv.createEl("div", { 
 			cls: "llm-thinking-animation" 
 		});
-		const thinkingText = thinkingContainer.createEl("span", { 
+		thinkingContainer.createEl("span", {
 			cls: "llm-thinking-text",
 			text: "Thinking"
 		});
@@ -907,7 +1007,9 @@ export class ChatContainer {
 		messages.pop();
 		this.messageStore.setMessages(messages);
 		this.historyMessages.lastElementChild?.remove();
-		this.plugin.history.update(this.plugin.settings.currentIndex, messages);
+		if (this.plugin.settings.currentIndex >= 0) {
+			this.plugin.history.update(this.plugin.settings.currentIndex, messages);
+		}
 	}
 
 	removeMessage(header: Header, modelName: string) {
@@ -923,6 +1025,7 @@ export class ChatContainer {
 	}
 	newChat() {
 		this.historyMessages.empty();
+		this.claudeCodeSessionId = null;
 		this.displayNoChatView(this.historyMessages);
 	}
 }

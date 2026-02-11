@@ -50,7 +50,6 @@ function resolveNpmPath(): string {
 		} catch { /* ignore */ }
 	}
 
-	console.warn("[Claude Code] Could not find npm binary, falling back to '" + bin + "'");
 	return bin;
 }
 
@@ -124,16 +123,9 @@ function doInstall(pluginDir: string): Promise<void> {
 			"--no-optional",
 		];
 
-		console.log(`[Claude Code] Running: ${nodePath} ${args.join(" ")} in ${pluginDir}`);
-
 		const child = spawn(nodePath, args, {
 			cwd: pluginDir,
 			stdio: ["ignore", "pipe", "pipe"],
-		});
-
-		let stderr = "";
-		child.stderr?.on("data", (chunk: Buffer) => {
-			stderr += chunk.toString();
 		});
 
 		const timeout = setTimeout(() => {
@@ -145,7 +137,6 @@ function doInstall(pluginDir: string): Promise<void> {
 		child.on("error", (err: Error) => {
 			clearTimeout(timeout);
 			notice.hide();
-			console.error("[Claude Code] npm install error:", err);
 			reject(new Error("SDK installation failed: " + err.message));
 		});
 
@@ -154,18 +145,15 @@ function doInstall(pluginDir: string): Promise<void> {
 			notice.hide();
 
 			if (code !== 0) {
-				console.error("[Claude Code] npm install stderr:", stderr);
 				reject(new Error("SDK installation failed: npm exited with code " + code));
 				return;
 			}
 
 			if (!isSDKInstalled(pluginDir)) {
-				console.error("[Claude Code] cli.js not found after install");
 				reject(new Error("SDK installation failed: cli.js not found after install"));
 				return;
 			}
 
-			console.log("[Claude Code] SDK installed successfully");
 			new Notice("Claude Code runtime installed successfully!");
 			resolve();
 		});

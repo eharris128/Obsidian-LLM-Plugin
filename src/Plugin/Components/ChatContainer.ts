@@ -256,7 +256,7 @@ export class ChatContainer {
 			const pluginDir = path.join(vaultPath, this.plugin.manifest.dir);
 			let stream;
 			try {
-				stream = claudeCodeMessage(
+				stream = await claudeCodeMessage(
 					this.prompt,
 					this.plugin.settings.claudeCodeOAuthToken,
 					this.plugin.settings.linearWorkspaces,

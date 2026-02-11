@@ -12,6 +12,7 @@ import {
 	geminiModel,
 } from "utils/constants";
 import { query as claudeCodeQuery } from "@anthropic-ai/claude-agent-sdk";
+import { ensureSDKInstalled } from "services/ClaudeAgentSDKInstaller";
 
 // Patch events.setMaxListeners for Electron compatibility.
 // The Agent SDK calls setMaxListeners(n, abortSignal), but Electron's
@@ -192,7 +193,7 @@ function resolveNodePath(): string {
 	return "node";
 }
 
-export function claudeCodeMessage(
+export async function claudeCodeMessage(
 	prompt: string,
 	oauthToken: string,
 	linearWorkspaces: Array<{ name: string; apiKey: string }>,
@@ -200,6 +201,7 @@ export function claudeCodeMessage(
 	pluginDir: string,
 	sessionId?: string
 ) {
+	await ensureSDKInstalled(pluginDir);
 	const path = require("path");
 	const { spawn } = require("child_process");
 	const cliPath = path.join(

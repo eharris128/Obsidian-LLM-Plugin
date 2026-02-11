@@ -1,7 +1,7 @@
 {
 	"id": "large-language-models",
 	"name": "Large Language Models",
-	"version": "0.20.0",
+	"version": "0.21.0",
 	"minAppVersion": "0.15.0",
 	"description": "Enables access to LLMs via remote providers (OpenAI, Claude, Gemini) and local LLMs via GPT4ALL.",
 	"author": "eharris128, r-mahoney, & jsmorabito",

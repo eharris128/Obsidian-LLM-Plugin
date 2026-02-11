@@ -84,8 +84,19 @@ export async function ensureSDKInstalled(pluginDir: string): Promise<void> {
 }
 
 function doInstall(pluginDir: string): Promise<void> {
+	const path = require("path");
 	const { spawn } = require("child_process");
 	const npmPath = resolveNpmPath();
+
+	// Electron's renderer has a minimal PATH that lacks the node binary dir.
+	// npm's shebang (#!/usr/bin/env node) needs node on the PATH, so we
+	// prepend the directory containing the resolved npm binary.
+	const npmDir = path.dirname(npmPath);
+	const sep = process.platform === "win32" ? ";" : ":";
+	const env = {
+		...process.env,
+		PATH: npmDir + sep + (process.env.PATH || ""),
+	};
 
 	return new Promise<void>((resolve, reject) => {
 		const notice = new Notice(
@@ -105,6 +116,7 @@ function doInstall(pluginDir: string): Promise<void> {
 
 		const child = spawn(npmPath, args, {
 			cwd: pluginDir,
+			env,
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 

@@ -88,15 +88,12 @@ function doInstall(pluginDir: string): Promise<void> {
 	const { spawn } = require("child_process");
 	const npmPath = resolveNpmPath();
 
-	// Electron's renderer has a minimal PATH that lacks the node binary dir.
-	// npm's shebang (#!/usr/bin/env node) needs node on the PATH, so we
-	// prepend the directory containing the resolved npm binary.
-	const npmDir = path.dirname(npmPath);
-	const sep = process.platform === "win32" ? ";" : ":";
-	const env = {
-		...process.env,
-		PATH: npmDir + sep + (process.env.PATH || ""),
-	};
+	// Derive the node binary from the same bin/ directory as npm.
+	// This avoids the #!/usr/bin/env node shebang issue in Electron entirely —
+	// we spawn node directly and pass the npm script as an argument.
+	const isWin = process.platform === "win32";
+	const nodeBin = isWin ? "node.exe" : "node";
+	const nodePath = path.join(path.dirname(npmPath), nodeBin);
 
 	return new Promise<void>((resolve, reject) => {
 		const notice = new Notice(
@@ -105,6 +102,7 @@ function doInstall(pluginDir: string): Promise<void> {
 		);
 
 		const args = [
+			npmPath,
 			"install",
 			SDK_PACKAGE,
 			"--no-save",
@@ -112,11 +110,10 @@ function doInstall(pluginDir: string): Promise<void> {
 			"--no-optional",
 		];
 
-		console.log(`[Claude Code] Running: ${npmPath} ${args.join(" ")} in ${pluginDir}`);
+		console.log(`[Claude Code] Running: ${nodePath} ${args.join(" ")} in ${pluginDir}`);
 
-		const child = spawn(npmPath, args, {
+		const child = spawn(nodePath, args, {
 			cwd: pluginDir,
-			env,
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 

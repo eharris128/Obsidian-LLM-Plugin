@@ -83,6 +83,16 @@ export async function ensureSDKInstalled(pluginDir: string): Promise<void> {
 	}
 }
 
+function ensurePackageJson(pluginDir: string): void {
+	const path = require("path");
+	const fs = require("fs");
+	const pkgPath = path.join(pluginDir, "package.json");
+	if (!fs.existsSync(pkgPath)) {
+		// Anchor npm to this directory so it doesn't walk up the tree
+		fs.writeFileSync(pkgPath, '{"private":true}\n');
+	}
+}
+
 function doInstall(pluginDir: string): Promise<void> {
 	const path = require("path");
 	const { spawn } = require("child_process");
@@ -94,6 +104,10 @@ function doInstall(pluginDir: string): Promise<void> {
 	const isWin = process.platform === "win32";
 	const nodeBin = isWin ? "node.exe" : "node";
 	const nodePath = path.join(path.dirname(npmPath), nodeBin);
+
+	// Release builds don't ship package.json — without one npm walks up the
+	// directory tree and installs into a parent node_modules instead.
+	ensurePackageJson(pluginDir);
 
 	return new Promise<void>((resolve, reject) => {
 		const notice = new Notice(

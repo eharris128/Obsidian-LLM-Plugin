@@ -178,14 +178,8 @@ export const models: Record<string, Model> = {
 		endpoint: claudeCodeEndpoint,
 		url: "",
 	},
-	"DALL·E 3": {
-		model: "dall-e-3",
-		type: "openAI",
-		endpoint: "images",
-		url: "/images/generations",
-	},
-	"DALL·E 2": {
-		model: "dall-e-2",
+	"GPT Image 1": {
+		model: "gpt-image-1",
 		type: "openAI",
 		endpoint: "images",
 		url: "/images/generations",
@@ -271,8 +265,7 @@ export const modelNames: Record<string, string> = {
 	"gemini-2.0-flash-thinking-exp-1219": "Gemini-2.0-flash-thinking-exp",
 	"claude-code": "Claude Code",
 	// "text-embedding-3-small": "Text Embedding 3 (Small)",
-	"dall-e-3": "DALL·E 3",
-	"dall-e-2": "DALL·E 2",
+	"gpt-image-1": "GPT Image 1",
 	"mistral-large-latest": "Mistral Large",
 	"mistral-medium-latest": "Mistral Medium",
 	"mistral-small-latest": "Mistral Small",

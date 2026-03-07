@@ -43,6 +43,28 @@ import { SingletonNotice } from "Plugin/Components/SingletonNotice";
 import { Assistant } from "openai/resources/beta/assistants";
 import { GoogleGenAI } from "@google/genai";
 
+async function retryWithBackoff<T>(
+	fn: () => Promise<T>,
+	maxRetries = 5,
+	baseDelayMs = 1000
+): Promise<T> {
+	for (let attempt = 0; attempt <= maxRetries; attempt++) {
+		try {
+			return await fn();
+		} catch (error: any) {
+			const status = error?.status ?? error?.httpStatus ?? error?.code;
+			if (status === 429 && attempt < maxRetries) {
+				const delay = baseDelayMs * Math.pow(2, attempt);
+				const jitter = Math.random() * delay * 0.5;
+				await new Promise((r) => setTimeout(r, delay + jitter));
+				continue;
+			}
+			throw error;
+		}
+	}
+	throw new Error("retryWithBackoff: unreachable");
+}
+
 export function getGpt4AllPath(plugin: LLMPlugin) {
 	const platform = plugin.os.platform();
 	const homedir = plugin.os.homedir();
@@ -146,14 +168,16 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 			return { provider, valid: true };
 		} else if (provider === gemini) {
 			const client = new GoogleGenAI({ apiKey: key });
-			await client.models.generateContent({
-				model: geminiModel,
-				contents: "Reply 'a'",
-				config: {
-					candidateCount: 1,
-					maxOutputTokens: 1,
-				},
-			});
+			await retryWithBackoff(() =>
+				client.models.generateContent({
+					model: geminiModel,
+					contents: "Reply 'a'",
+					config: {
+						candidateCount: 1,
+						maxOutputTokens: 1,
+					},
+				})
+			);
 			return { provider, valid: true };
 		}
 	} catch (error) {
@@ -188,16 +212,18 @@ export async function geminiMessage(
 		};
 	});
 
-	const stream = await client.models.generateContentStream({
-		model,
-		contents,
-		config: {
-			candidateCount: 1,
-			maxOutputTokens: tokens,
-			temperature,
-			topP: topP ?? undefined,
-		},
-	});
+	const stream = await retryWithBackoff(() =>
+		client.models.generateContentStream({
+			model,
+			contents,
+			config: {
+				candidateCount: 1,
+				maxOutputTokens: tokens,
+				temperature,
+				topP: topP ?? undefined,
+			},
+		})
+	);
 	return stream;
 }
 

@@ -23,3 +23,9 @@ data.json
 
 #environment variables
 .env
+
+# Gas Town (added by gt)
+.runtime/
+.claude/
+.logs/
+__pycache__/

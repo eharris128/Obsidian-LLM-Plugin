@@ -139,6 +139,22 @@ export default class SettingsView extends PluginSettingTab {
 				dropdown.setValue(this.plugin.settings.modalSettings.model);
 			});
 
+		// Empty chat avatar selector
+		new Setting(containerEl)
+			.setName("Empty chat avatar")
+			.setDesc("Choose which avatar to display on empty/new chats")
+			.addDropdown((dropdown: DropdownComponent) => {
+				dropdown.addOption("llm-gal", "LLM Gal");
+				dropdown.addOption("llm-guy", "LLM Guy");
+				dropdown.addOption("zen-kid", "Zen Kid");
+				dropdown.addOption("ninja-cat", "Ninja Cat");
+				dropdown.setValue(this.plugin.settings.emptyChatAvatar || "llm-gal");
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.emptyChatAvatar = value;
+					await this.plugin.saveSettings();
+				});
+			});
+
 		// Add Toggle FAB button
 		new Setting(containerEl)
 			.setName("Toggle FAB")

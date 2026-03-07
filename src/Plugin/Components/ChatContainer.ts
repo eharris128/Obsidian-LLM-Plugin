@@ -57,8 +57,19 @@ import {
 } from "utils/utils";
 import { Header } from "./Header";
 import { MessageStore } from "./MessageStore";
-import logo from "assets/LLMgal.svg";
+import defaultLogo from "assets/LLMgal.svg";
+import zenKidLogo from "assets/zen-kid.svg";
+import ninjaCatLogo from "assets/ninja-cat.svg";
+import llmGuyLogo from "assets/llm-guy.svg";
+import llmGalLogo from "assets/llm-gal.svg";
 import { ContextBuilder } from "services/ContextBuilder";
+
+const avatarSvgs: Record<string, string> = {
+	"llm-gal": llmGalLogo,
+	"llm-guy": llmGuyLogo,
+	"zen-kid": zenKidLogo,
+	"ninja-cat": ninjaCatLogo,
+};
 
 export class ChatContainer {
 	historyMessages: HTMLElement;
@@ -821,12 +832,12 @@ export class ChatContainer {
 		llmGal.addClass("llm-icon-wrapper");
 		llmGal.addClass("llm-icon-new-chat");
 
-		// Parse SVG string to DOM element
+		const selectedAvatar = this.plugin.settings.emptyChatAvatar || "llm-gal";
+		const svgString = avatarSvgs[selectedAvatar] || defaultLogo;
 		const parser = new DOMParser();
-		const svgDoc = parser.parseFromString(logo, "image/svg+xml");
+		const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
 		const svgElement = svgDoc.documentElement;
 
-		// Append the SVG element
 		llmGal.appendChild(svgElement);
 	}
 

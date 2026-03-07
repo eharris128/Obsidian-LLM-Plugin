@@ -69,6 +69,7 @@ export interface LLMPluginSettings {
 	defaultModel: string;
 	ollamaHost: string;
 	ollamaModels: string[];
+	emptyChatAvatar: string;
 }
 
 const defaultSettings = {
@@ -136,6 +137,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	defaultModel: "",
 	ollamaHost: "http://localhost:11434",
 	ollamaModels: [],
+	emptyChatAvatar: "llm-gal",
 };
 
 export default class LLMPlugin extends Plugin {

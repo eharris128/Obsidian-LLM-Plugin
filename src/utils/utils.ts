@@ -389,21 +389,18 @@ export async function openAIMessage(
 			model,
 			quality,
 			size,
-			style,
 			numberOfImages,
 		} = params as ImageParams;
 		const image = await openai.images.generate({
 			model,
 			prompt,
 			size: size as
-				| "256x256"
-				| "512x512"
 				| "1024x1024"
-				| "1792x1024"
-				| "1024x1792",
+				| "1536x1024"
+				| "1024x1536"
+				| "auto",
 			quality,
 			n: numberOfImages,
-			style,
 		});
 		let imageURLs: string[] = [];
 		image.data?.map((image) => {
@@ -506,8 +503,7 @@ export function getViewInfo(
 			numberOfImages: 0,
 			response_format: "url",
 			size: "1024x1024",
-			style: "natural",
-			quality: "standard",
+			quality: "medium",
 		},
 		chatSettings: { maxTokens: 0, temperature: 0 },
 		model: "",

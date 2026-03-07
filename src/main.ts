@@ -3,7 +3,6 @@ import {
 	HistoryItem,
 	ImageQuality,
 	ImageSize,
-	ImageStyle,
 	ResponseFormat,
 	ViewSettings,
 } from "./Types/types";
@@ -85,8 +84,7 @@ const defaultSettings = {
 		numberOfImages: 1,
 		response_format: "url" as ResponseFormat,
 		size: "1024x1024" as ImageSize,
-		style: "vivid" as ImageStyle,
-		quality: "standard" as ImageQuality,
+		quality: "medium" as ImageQuality,
 	},
 	chatSettings: {
 		maxTokens: 4096,

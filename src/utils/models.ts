@@ -1,5 +1,5 @@
 import { Model } from "Types/types";
-import { claude, claudeCode, claudeCodeEndpoint, chat, gemini, geminiModel, gemini2FlashModel, gemini2FlashThinkingModel, gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel, gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel, geminiFlashLatestModel, geminiFlashLiteLatestModel, GPT4All, messages, ollama } from "utils/constants"
+import { claude, claudeCode, claudeCodeEndpoint, chat, gemini, geminiModel, gemini2FlashModel, gemini2FlashThinkingModel, gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel, gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel, geminiFlashLatestModel, geminiFlashLiteLatestModel, GPT4All, messages, ollama, mistral } from "utils/constants"
 
 export const openAIModels: Record<string, Model> = {
 	"ChatGPT-3.5 turbo": {
@@ -190,6 +190,55 @@ export const models: Record<string, Model> = {
 		endpoint: "images",
 		url: "/images/generations",
 	},
+	// Mistral AI Models
+	"Mistral Large": {
+		model: "mistral-large-latest",
+		type: mistral,
+		endpoint: chat,
+		url: "/v1/chat/completions",
+	},
+	"Mistral Medium": {
+		model: "mistral-medium-latest",
+		type: mistral,
+		endpoint: chat,
+		url: "/v1/chat/completions",
+	},
+	"Mistral Small": {
+		model: "mistral-small-latest",
+		type: mistral,
+		endpoint: chat,
+		url: "/v1/chat/completions",
+	},
+	"Mistral Nemo": {
+		model: "mistral-nemo-12b-24-07",
+		type: mistral,
+		endpoint: chat,
+		url: "/v1/chat/completions",
+	},
+	"Magistral Medium": {
+		model: "magistral-medium-latest",
+		type: mistral,
+		endpoint: chat,
+		url: "/v1/chat/completions",
+	},
+	"Magistral Small": {
+		model: "magistral-small-latest",
+		type: mistral,
+		endpoint: chat,
+		url: "/v1/chat/completions",
+	},
+	"Devstral Small": {
+		model: "devstral-small-latest",
+		type: mistral,
+		endpoint: chat,
+		url: "/v1/chat/completions",
+	},
+	"Codestral": {
+		model: "codestral-latest",
+		type: mistral,
+		endpoint: chat,
+		url: "/v1/chat/completions",
+	},
 };
 
 export const modelNames: Record<string, string> = {
@@ -224,6 +273,14 @@ export const modelNames: Record<string, string> = {
 	// "text-embedding-3-small": "Text Embedding 3 (Small)",
 	"dall-e-3": "DALL·E 3",
 	"dall-e-2": "DALL·E 2",
+	"mistral-large-latest": "Mistral Large",
+	"mistral-medium-latest": "Mistral Medium",
+	"mistral-small-latest": "Mistral Small",
+	"mistral-nemo-12b-24-07": "Mistral Nemo",
+	"magistral-medium-latest": "Magistral Medium",
+	"magistral-small-latest": "Magistral Small",
+	"devstral-small-latest": "Devstral Small",
+	"codestral-latest": "Codestral",
 };
 
 export function buildOllamaModels(ollamaModelNames: string[]): { models: Record<string, Model>, names: Record<string, string> } {

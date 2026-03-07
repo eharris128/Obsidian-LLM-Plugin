@@ -14,7 +14,7 @@ import logo from "assets/LLMguy.svg";
 import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
 
-type APIKeyType = 'claude' | 'gemini' | 'openai';
+type APIKeyType = 'claude' | 'gemini' | 'openai' | 'mistral';
 
 interface APIKeyConfig {
 	name: string;
@@ -45,6 +45,12 @@ export default class SettingsView extends PluginSettingTab {
 			desc: "OpenAI models require an API key for authentication.",
 			key: 'openAIAPIKey',
 			generateUrl: "https://platform.openai.com/api-keys"
+		},
+		mistral: {
+			name: "Mistral API key",
+			desc: "Mistral AI models require an API key for authentication.",
+			key: 'mistralAPIKey',
+			generateUrl: "https://console.mistral.ai/api-keys"
 		}
 	};
 

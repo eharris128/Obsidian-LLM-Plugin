@@ -1,5 +1,5 @@
 import { Model } from "Types/types";
-import { claude, claudeCode, claudeCodeEndpoint, chat, gemini, geminiModel, gemini2FlashModel, gemini2FlashThinkingModel, gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel, gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel, geminiFlashLatestModel, geminiFlashLiteLatestModel, GPT4All, messages } from "utils/constants"
+import { claude, claudeCode, claudeCodeEndpoint, chat, gemini, geminiModel, gemini2FlashModel, gemini2FlashThinkingModel, gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel, gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel, geminiFlashLatestModel, geminiFlashLiteLatestModel, GPT4All, messages, ollama } from "utils/constants"
 
 export const openAIModels: Record<string, Model> = {
 	"ChatGPT-3.5 turbo": {
@@ -225,3 +225,19 @@ export const modelNames: Record<string, string> = {
 	"dall-e-3": "DALL·E 3",
 	"dall-e-2": "DALL·E 2",
 };
+
+export function buildOllamaModels(ollamaModelNames: string[]): { models: Record<string, Model>, names: Record<string, string> } {
+	const ollamaModels: Record<string, Model> = {};
+	const ollamaNames: Record<string, string> = {};
+	for (const name of ollamaModelNames) {
+		const displayName = `Ollama: ${name}`;
+		ollamaModels[displayName] = {
+			model: name,
+			type: ollama,
+			endpoint: chat,
+			url: "/v1/chat/completions",
+		};
+		ollamaNames[name] = displayName;
+	}
+	return { models: ollamaModels, names: ollamaNames };
+}

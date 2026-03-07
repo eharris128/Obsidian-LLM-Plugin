@@ -10,6 +10,7 @@ import {
 	claudeSonnetJuneModel,
 	gemini,
 	geminiModel,
+	ollama,
 } from "utils/constants";
 import { query as claudeCodeQuery } from "@anthropic-ai/claude-agent-sdk";
 import { ensureSDKInstalled } from "services/ClaudeAgentSDKInstaller";
@@ -73,6 +74,34 @@ export async function messageGPT4AllServer(params: ChatParams, url: string) {
 	} as RequestUrlParam;
 	const response = await requestUrl(request).then((res) => res.json);
 	return response.choices[0].message;
+}
+
+export async function fetchOllamaModels(host: string): Promise<string[]> {
+	const request = {
+		url: `${host}/api/tags`,
+		method: "GET",
+	} as RequestUrlParam;
+	const response = await requestUrl(request).then((res) => res.json);
+	return (response.models || []).map((m: any) => m.name as string);
+}
+
+export async function ollamaMessage(params: ChatParams, host: string) {
+	const openai = new OpenAI({
+		apiKey: "ollama",
+		baseURL: `${host}/v1`,
+		dangerouslyAllowBrowser: true,
+	});
+
+	const { model, messages, tokens, temperature } = params;
+	const stream = await openai.chat.completions.create({
+		model,
+		messages,
+		max_tokens: tokens,
+		temperature,
+		stream: true,
+	});
+
+	return stream;
 }
 
 export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {

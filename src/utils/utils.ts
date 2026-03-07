@@ -104,6 +104,25 @@ export async function ollamaMessage(params: ChatParams, host: string) {
 	return stream;
 }
 
+export async function mistralMessage(params: ChatParams, mistralAPIKey: string) {
+	const openai = new OpenAI({
+		apiKey: mistralAPIKey,
+		baseURL: "https://api.mistral.ai/v1",
+		dangerouslyAllowBrowser: true,
+	});
+
+	const { model, messages, tokens, temperature } = params;
+	const stream = await openai.chat.completions.create({
+		model,
+		messages,
+		max_tokens: tokens,
+		temperature,
+		stream: true,
+	});
+
+	return stream;
+}
+
 export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 	try {
 		const { key, provider } = providerKeyPair;

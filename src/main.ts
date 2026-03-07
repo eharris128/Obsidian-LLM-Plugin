@@ -60,6 +60,7 @@ export interface LLMPluginSettings {
 	claudeCodeOAuthToken: string;
 	linearWorkspaces: Array<{ name: string; apiKey: string }>;
 	geminiAPIKey: string;
+	mistralAPIKey: string;
 	openAIAPIKey: string;
 	GPT4AllStreaming: boolean;
 	showFAB: boolean;
@@ -123,6 +124,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	assistants: [],
 	openAIAPIKey: "",
 	claudeAPIKey: "",
+	mistralAPIKey: "",
 	claudeCodeOAuthToken: "",
 	linearWorkspaces: [],
 	geminiAPIKey: "",

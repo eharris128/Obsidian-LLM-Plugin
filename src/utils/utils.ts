@@ -131,6 +131,17 @@ export async function mistralMessage(params: ChatParams, mistralAPIKey: string) 
 		apiKey: mistralAPIKey,
 		baseURL: "https://api.mistral.ai/v1",
 		dangerouslyAllowBrowser: true,
+		fetch: (url: RequestInfo, init?: RequestInit) => {
+			if (init?.headers) {
+				const headers = init.headers as Record<string, string>;
+				for (const key of Object.keys(headers)) {
+					if (key.startsWith("x-stainless-")) {
+						delete headers[key];
+					}
+				}
+			}
+			return globalThis.fetch(url, init);
+		},
 	});
 
 	const { model, messages, tokens, temperature } = params;

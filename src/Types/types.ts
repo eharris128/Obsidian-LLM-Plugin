@@ -43,8 +43,7 @@ export type ImageParams = InitialParams & {
 	numberOfImages: number;
 	response_format: "url" | "b64_json";
 	size: string;
-	style: "vivid" | "natural";
-	quality?: "hd" | "standard";
+	quality?: "low" | "medium" | "high";
 };
 
 export type AIAssistant = Assistant & {
@@ -111,21 +110,17 @@ export type ViewSettings = {
 };
 
 export type ResponseFormat = "url" | "b64_json";
-export type ImageStyle = "vivid" | "natural";
-export type ImageQuality = "hd" | "standard";
+export type ImageQuality = "low" | "medium" | "high";
 export type ImageSize =
-	| "256x256"
-	| "512x512"
 	| "1024x1024"
-	| "1024x1024"
-	| "1792x1024"
-	| "1024x1792";
+	| "1536x1024"
+	| "1024x1536"
+	| "auto";
 
 type ImageSettings = {
 	numberOfImages: number;
 	response_format: ResponseFormat;
 	size: ImageSize;
-	style: ImageStyle;
 	quality: ImageQuality;
 };
 

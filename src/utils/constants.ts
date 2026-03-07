@@ -3,6 +3,7 @@ export const claudeCode = "claudeCode"
 export const openAI = "openAI"
 export const gemini = "gemini"
 export const GPT4All = "GPT4All"
+export const ollama = "ollama"
 
 export const claudeCodeEndpoint = "claudeCodeAgent"
 

@@ -7,11 +7,12 @@ import {
 	Setting,
 	TextComponent,
 } from "obsidian";
-import { changeDefaultModel, getGpt4AllPath } from "utils/utils";
-import { models, modelNames } from "utils/models";
-import { GPT4All } from "utils/constants";
+import { changeDefaultModel, getGpt4AllPath, fetchOllamaModels } from "utils/utils";
+import { models, modelNames, buildOllamaModels } from "utils/models";
+import { GPT4All, ollama } from "utils/constants";
 import logo from "assets/LLMguy.svg";
 import { FAB } from "Plugin/FAB/FAB";
+import { ChatModal2 } from "Plugin/Modal/ChatModal2";
 
 type APIKeyType = 'claude' | 'gemini' | 'openai';
 
@@ -93,21 +94,34 @@ export default class SettingsView extends PluginSettingTab {
 					modelNames[this.plugin.settings.defaultModel],
 					"Select default model"
 				);
-				let keys = Object.keys(models);
+
+				// Merge static models with dynamic Ollama models
+				const ollamaBuilt = buildOllamaModels(this.plugin.settings.ollamaModels);
+				const allModels = { ...models, ...ollamaBuilt.models };
+				const allModelNames = { ...modelNames, ...ollamaBuilt.names };
+
+				let keys = Object.keys(allModels);
 				for (let model of keys) {
-					if (models[model].type === GPT4All) {
+					if (allModels[model].type === GPT4All) {
 						const gpt4AllPath = getGpt4AllPath(this.plugin);
-						const fullPath = `${gpt4AllPath}/${models[model].model}`;
+						const fullPath = `${gpt4AllPath}/${allModels[model].model}`;
 						const exists = this.plugin.fileSystem.existsSync(fullPath);
 						if (exists) {
-							dropdown.addOption(models[model].model, model);
+							dropdown.addOption(allModels[model].model, model);
 						}
 					} else {
-						dropdown.addOption(models[model].model, model);
+						dropdown.addOption(allModels[model].model, model);
 					}
 				}
 				dropdown.onChange((change) => {
 					valueChanged = true;
+					// For Ollama models, we need to use the merged dicts
+					const name = allModelNames[change];
+					if (name && allModels[name]?.type === ollama) {
+						// Register dynamically so changeDefaultModel can find it
+						models[name] = allModels[name];
+						modelNames[change] = name;
+					}
 					changeDefaultModel(change, this.plugin)
 				});
 				dropdown.selectEl.addEventListener('blur', () => {
@@ -134,6 +148,84 @@ export default class SettingsView extends PluginSettingTab {
 							this.fab.regenerateFAB();
 						}
 					});
+			});
+
+		// Add Toggle Ribbon Icon
+		new Setting(containerEl)
+			.setName("Show ribbon icon")
+			.setDesc("Show the 'Ask a question' icon in the ribbon bar")
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.showRibbonIcon)
+					.onChange(async (value) => {
+						this.plugin.settings.showRibbonIcon = value;
+						await this.plugin.saveSettings();
+						if (value && !this.plugin.ribbonIconEl) {
+							this.plugin.ribbonIconEl = this.plugin.addRibbonIcon(
+								"bot",
+								"Ask a question",
+								() => {
+									new ChatModal2(this.plugin).open();
+								}
+							);
+						} else if (!value && this.plugin.ribbonIconEl) {
+							this.plugin.ribbonIconEl.remove();
+							this.plugin.ribbonIconEl = null;
+						}
+					});
+			});
+
+		// Ollama settings
+		const ollamaSection = containerEl.createDiv();
+		ollamaSection.createEl("h3", { text: "Ollama" });
+
+		new Setting(ollamaSection)
+			.setName("Ollama host")
+			.setDesc("URL of your Ollama server (default: http://localhost:11434)")
+			.addText((text) => {
+				text.setPlaceholder("http://localhost:11434");
+				text.setValue(this.plugin.settings.ollamaHost);
+				text.onChange((value) => {
+					this.plugin.settings.ollamaHost = value;
+					this.plugin.saveSettings();
+				});
+			});
+
+		const ollamaModelListEl = ollamaSection.createDiv();
+		if (this.plugin.settings.ollamaModels.length > 0) {
+			ollamaModelListEl.createEl("p", {
+				text: `Discovered models: ${this.plugin.settings.ollamaModels.join(", ")}`,
+				cls: "setting-item-description",
+			});
+		}
+
+		new Setting(ollamaSection)
+			.setName("Refresh models")
+			.setDesc("Fetch available models from your Ollama server")
+			.addButton((button) => {
+				button.setButtonText("Refresh");
+				button.onClick(async () => {
+					try {
+						button.setButtonText("Fetching...");
+						button.setDisabled(true);
+						const foundModels = await fetchOllamaModels(
+							this.plugin.settings.ollamaHost
+						);
+						this.plugin.settings.ollamaModels = foundModels;
+						await this.plugin.saveSettings();
+						// Refresh the settings display
+						this.display();
+					} catch (error) {
+						console.error("Failed to fetch Ollama models:", error);
+						ollamaModelListEl.empty();
+						ollamaModelListEl.createEl("p", {
+							text: "Failed to connect to Ollama. Is it running?",
+							cls: "setting-item-description",
+						});
+						button.setButtonText("Refresh");
+						button.setDisabled(false);
+					}
+				});
 			});
 
 		// Claude Code settings

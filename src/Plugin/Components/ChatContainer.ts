@@ -38,6 +38,7 @@ import {
 	geminiFlashLiteLatestModel,
 	GPT4All,
 	messages,
+	ollama,
 } from "utils/constants";
 import assistantLogo from "Plugin/Components/AssistantLogo";
 import {
@@ -46,6 +47,7 @@ import {
 	getSettingType,
 	getViewInfo,
 	messageGPT4AllServer,
+	ollamaMessage,
 	claudeMessage,
 	geminiMessage,
 	openAIMessage,
@@ -161,7 +163,7 @@ export class ChatContainer {
 		}
 
 		if (endpoint === chat) {
-			if (modelType === GPT4All) {
+			if (modelType === ollama || modelType === GPT4All) {
 				const params: ChatParams = {
 					prompt: this.prompt,
 					messages: messagesForParams,
@@ -228,7 +230,7 @@ export class ChatContainer {
 			assistantId,
 			modelName,
 		} = getViewInfo(this.plugin, this.viewType);
-		let shouldHaveAPIKey = modelType !== GPT4All && modelEndpoint !== claudeCodeEndpoint;
+		let shouldHaveAPIKey = modelType !== GPT4All && modelType !== ollama && modelEndpoint !== claudeCodeEndpoint;
 		const messagesForParams = this.getMessages();
 		// TODO - fix this logic to actually do an API key check against the current view model.
 		if (shouldHaveAPIKey) {
@@ -477,6 +479,53 @@ export class ChatContainer {
 			this.historyPush(message_context, this.currentVaultContext);
 			return true;
 		}
+		// Ollama handling (local, OpenAI-compatible with streaming)
+		if (modelType === ollama) {
+			this.setDiv(true);
+			this.showThinkingAnimation();
+
+			const stream = await ollamaMessage(
+				params as ChatParams,
+				this.plugin.settings.ollamaHost
+			);
+
+			let firstChunk = true;
+			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
+				if (firstChunk) {
+					this.streamingDiv.empty();
+					firstChunk = false;
+				}
+				this.previewText += chunk.choices[0]?.delta?.content || "";
+				this.streamingDiv.textContent = this.previewText;
+				this.historyMessages.scroll(0, 9999);
+			}
+			this.streamingDiv.empty();
+			MarkdownRenderer.render(
+				this.plugin.app,
+				this.previewText,
+				this.streamingDiv,
+				"",
+				this.plugin
+			);
+			const copyButton = this.streamingDiv.querySelectorAll(
+				".copy-code-button"
+			) as NodeListOf<HTMLElement>;
+			copyButton.forEach((item) => {
+				item.setAttribute("style", "display: none");
+			});
+			this.messageStore.addMessage({
+				role: assistant,
+				content: this.previewText,
+			});
+			const message_context = {
+				...(params as ChatParams),
+				messages: this.getMessages(),
+				modelName,
+			} as ChatHistoryItem;
+			this.historyPush(message_context, this.currentVaultContext);
+			return true;
+		}
+
 		// NOTE -> modelEndpoint === chat while modelType === GPT4All, so the ordering
 		// of these two if statements is important.
 		if (modelType === GPT4All) {

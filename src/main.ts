@@ -16,6 +16,7 @@ import { TAB_VIEW_TYPE, WidgetView } from "Plugin/Widget/Widget";
 import SettingsView from "Settings/SettingsView";
 import { Assistant } from "openai/resources/beta/assistants";
 import { generateAssistantsList, getApiKeyValidity } from "utils/utils";
+import { models, modelNames, buildOllamaModels } from "utils/models";
 import {
 	chat,
 	claudeSonnetJuneModel,
@@ -62,8 +63,11 @@ export interface LLMPluginSettings {
 	openAIAPIKey: string;
 	GPT4AllStreaming: boolean;
 	showFAB: boolean;
+	showRibbonIcon: boolean;
 	enableFileContext: boolean;
 	defaultModel: string;
+	ollamaHost: string;
+	ollamaModels: string[];
 }
 
 const defaultSettings = {
@@ -125,8 +129,11 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	GPT4AllStreaming: false,
 	//this setting determines whether or not fab is shown by default
 	showFAB: false,
+	showRibbonIcon: true,
 	enableFileContext: false,
 	defaultModel: "",
+	ollamaHost: "http://localhost:11434",
+	ollamaModels: [],
 };
 
 export default class LLMPlugin extends Plugin {
@@ -137,6 +144,7 @@ export default class LLMPlugin extends Plugin {
 	history: History;
 	fab: FAB;
 	messageStore: MessageStore;
+	ribbonIconEl: HTMLElement | null = null;
 
 	async onload() {
 		this.fileSystem = Platform.isDesktop
@@ -146,6 +154,7 @@ export default class LLMPlugin extends Plugin {
 			? new DesktopOperatingSystem()
 			: new MobileOperatingSystem();
 		await this.loadSettings();
+		this.registerOllamaModels();
 		await this.checkForAPIKeyBasedModel();
 		this.registerRibbonIcons();
 		this.registerCommands();
@@ -203,10 +212,20 @@ export default class LLMPlugin extends Plugin {
 		});
 	}
 
+	private registerOllamaModels() {
+		if (this.settings.ollamaModels.length > 0) {
+			const built = buildOllamaModels(this.settings.ollamaModels);
+			Object.assign(models, built.models);
+			Object.assign(modelNames, built.names);
+		}
+	}
+
 	private registerRibbonIcons() {
-		this.addRibbonIcon("bot", "Ask a question", (evt: MouseEvent) => {
-			new ChatModal2(this).open();
-		});
+		if (this.settings.showRibbonIcon) {
+			this.ribbonIconEl = this.addRibbonIcon("bot", "Ask a question", (evt: MouseEvent) => {
+				new ChatModal2(this).open();
+			});
+		}
 	}
 
 	async activateTab() {

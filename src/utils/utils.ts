@@ -59,6 +59,18 @@ async function retryWithBackoff<T>(
 				await new Promise((r) => setTimeout(r, delay + jitter));
 				continue;
 			}
+			if (status === 429) {
+				const retryAfter =
+					error?.headers?.get?.("retry-after") ??
+					error?.headers?.["retry-after"] ??
+					error?.errorDetails?.[0]?.metadata?.retry_delay;
+				const retryMsg = retryAfter
+					? `Rate limit exceeded — retry after ${retryAfter} seconds.`
+					: "Rate limit exceeded — please wait a moment and try again.";
+				const rateLimitError = new Error(retryMsg);
+				(rateLimitError as any).status = 429;
+				throw rateLimitError;
+			}
 			throw error;
 		}
 	}

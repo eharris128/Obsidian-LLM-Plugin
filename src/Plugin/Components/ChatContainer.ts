@@ -674,7 +674,7 @@ export class ChatContainer {
 		// Build and inject vault context (only if the feature is enabled)
 		const settingType = getSettingType(this.viewType);
 		const contextSettings = this.plugin.settings[settingType].contextSettings;
-		const maxTokens = this.plugin.settings[settingType].chatSettings.maxTokens;
+		const maxTokens = this.plugin.settings[settingType].chatSettings.maxTokens || 16384;
 		const contextTokenBudget = this.contextBuilder.calculateContextTokenBudget(
 			maxTokens,
 			contextSettings.maxContextTokensPercent

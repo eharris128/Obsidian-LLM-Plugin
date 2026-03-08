@@ -14,6 +14,48 @@ export const openAIModels: Record<string, Model> = {
 		endpoint: chat,
 		url: "/chat/completions",
 	},
+	"GPT-4o-mini": {
+		model: "gpt-4o-mini",
+		type: "openAI",
+		endpoint: chat,
+		url: "/chat/completions",
+	},
+	"GPT-4.1": {
+		model: "gpt-4.1",
+		type: "openAI",
+		endpoint: chat,
+		url: "/chat/completions",
+	},
+	"GPT-4.1-mini": {
+		model: "gpt-4.1-mini",
+		type: "openAI",
+		endpoint: chat,
+		url: "/chat/completions",
+	},
+	"GPT-4.1-nano": {
+		model: "gpt-4.1-nano",
+		type: "openAI",
+		endpoint: chat,
+		url: "/chat/completions",
+	},
+	"o3": {
+		model: "o3",
+		type: "openAI",
+		endpoint: chat,
+		url: "/chat/completions",
+	},
+	"o3-mini": {
+		model: "o3-mini",
+		type: "openAI",
+		endpoint: chat,
+		url: "/chat/completions",
+	},
+	"o4-mini": {
+		model: "o4-mini",
+		type: "openAI",
+		endpoint: chat,
+		url: "/chat/completions",
+	},
 }
 
 export const models: Record<string, Model> = {
@@ -251,6 +293,13 @@ export const modelNames: Record<string, string> = {
 	"em_german_mistral_v01.Q4_0.gguf": "EM German Mistral",
 	"gpt-3.5-turbo": "ChatGPT-3.5 turbo",
 	"gpt-4o": "GPT-4o",
+	"gpt-4o-mini": "GPT-4o-mini",
+	"gpt-4.1": "GPT-4.1",
+	"gpt-4.1-mini": "GPT-4.1-mini",
+	"gpt-4.1-nano": "GPT-4.1-nano",
+	"o3": "o3",
+	"o3-mini": "o3-mini",
+	"o4-mini": "o4-mini",
 	"claude-3-5-sonnet-20240620": "Claude-3-5-Sonnet-20240620",
 	"gemini-1.5-flash": "Gemini-1.5-flash",
 	"gemini-3-pro-preview": "Gemini-3-Pro-Preview",

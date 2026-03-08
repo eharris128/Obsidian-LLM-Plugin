@@ -424,6 +424,7 @@ export async function openAIMessage(
 			quality,
 			size,
 			numberOfImages,
+			response_format,
 		} = params as ImageParams;
 		const validQualities: string[] = ["low", "medium", "high", "auto"];
 		const normalizedQuality = validQualities.includes(quality ?? "")
@@ -438,10 +439,15 @@ export async function openAIMessage(
 				| "auto",
 			quality: normalizedQuality,
 			n: numberOfImages,
+			response_format: response_format ?? "url",
 		});
 		let imageURLs: string[] = [];
 		image.data?.map((image) => {
-			return imageURLs.push(image.url!);
+			if (image.b64_json) {
+				imageURLs.push(`data:image/png;base64,${image.b64_json}`);
+			} else {
+				imageURLs.push(image.url!);
+			}
 		});
 		return imageURLs;
 	}

@@ -425,6 +425,12 @@ export async function openAIMessage(
 			size,
 			numberOfImages,
 		} = params as ImageParams;
+		// gpt-image-1 only accepts low/medium/high/auto — map legacy DALL-E values
+		const validQualities = ["low", "medium", "high", "auto"];
+		const rawQuality = quality as string | undefined;
+		const normalizedQuality = validQualities.includes(rawQuality ?? "")
+			? rawQuality as "low" | "medium" | "high"
+			: rawQuality === "hd" ? "high" : "medium";
 		const image = await openai.images.generate({
 			model,
 			prompt,
@@ -433,7 +439,7 @@ export async function openAIMessage(
 				| "1536x1024"
 				| "1024x1536"
 				| "auto",
-			quality,
+			quality: normalizedQuality,
 			n: numberOfImages,
 		});
 		let imageURLs: string[] = [];

@@ -36,4 +36,8 @@ export function errorMessages(error: Error, params: any) {
     if(error.message.includes("SDK installation failed")) {
         new Notice("Claude Code requires a one-time download of the runtime SDK (~69 MB). Please ensure npm is installed and you have an internet connection, then try again.")
     }
+
+    if ((error as any).status === 429 || error.message.includes("Rate limit exceeded")) {
+        new Notice(error.message, 8000);
+    }
 }

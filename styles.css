@@ -60,7 +60,11 @@
 }
 
 .llm-model-name {
-	font-size: 8pt;
+	font-size: 11pt;
+	font-weight: bold;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-wrap: nowrap;
 }
 
 .llm-left-buttons-div {

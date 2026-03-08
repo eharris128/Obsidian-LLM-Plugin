@@ -9,7 +9,7 @@ import {
 	chat,
 	claudeSonnetJuneModel,
 	gemini,
-	geminiModel,
+	gemini2FlashStableModel,
 	ollama,
 } from "utils/constants";
 import { query as claudeCodeQuery } from "@anthropic-ai/claude-agent-sdk";
@@ -190,7 +190,7 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 			const client = new GoogleGenAI({ apiKey: key });
 			await retryWithBackoff(() =>
 				client.models.generateContent({
-					model: geminiModel,
+					model: gemini2FlashStableModel,
 					contents: "Reply 'a'",
 					config: {
 						candidateCount: 1,

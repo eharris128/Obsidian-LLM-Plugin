@@ -1,5 +1,5 @@
 import { Model } from "Types/types";
-import { claude, claudeCode, claudeCodeEndpoint, chat, gemini, geminiModel, gemini2FlashModel, gemini2FlashThinkingModel, gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel, gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel, geminiFlashLatestModel, geminiFlashLiteLatestModel, GPT4All, messages, ollama, mistral, claudeSonnet46Model, claudeOpus46Model, claudeHaiku45Model } from "utils/constants"
+import { claude, claudeCode, claudeCodeEndpoint, chat, gemini, gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel, gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel, geminiFlashLatestModel, geminiFlashLiteLatestModel, GPT4All, messages, ollama, mistral, claudeSonnet46Model, claudeOpus46Model, claudeHaiku45Model } from "utils/constants"
 
 export const openAIModels: Record<string, Model> = {
 	"ChatGPT-3.5 turbo": {
@@ -139,13 +139,6 @@ export const models: Record<string, Model> = {
 		url: "/v1/chat/completions",
 	},
 	// Claude Models
-	"Claude-3-5-Sonnet-20240620": {
-		model: "claude-3-5-sonnet-20240620",
-		type: claude,
-		endpoint: messages,
-		// We will not consume these so can we remove them?
-		url: "/v1/messages",
-	},
 	"Claude Sonnet 4.6": {
 		model: claudeSonnet46Model,
 		type: claude,
@@ -165,12 +158,6 @@ export const models: Record<string, Model> = {
 		url: "/v1/messages",
 	},
 	// Gemini Models
-	"Gemini-1.5-flash": {
-		model: geminiModel,
-		type: gemini,
-		endpoint: "gemini",
-		url: "gemini",
-	},
 	"Gemini-3-Pro-Preview": {
 		model: gemini3ProPreviewModel,
 		type: gemini,
@@ -215,18 +202,6 @@ export const models: Record<string, Model> = {
 	},
 	"Gemini-2.0-Flash-Lite": {
 		model: gemini2FlashLiteModel,
-		type: gemini,
-		endpoint: "gemini",
-		url: "gemini",
-	},
-	"Gemini-2.0-flash-exp": {
-		model: gemini2FlashModel,
-		type: gemini,
-		endpoint: "gemini",
-		url: "gemini",
-	},
-	"Gemini-2.0-flash-thinking-exp": {
-		model: gemini2FlashThinkingModel,
 		type: gemini,
 		endpoint: "gemini",
 		url: "gemini",
@@ -318,11 +293,9 @@ export const modelNames: Record<string, string> = {
 	"o3": "o3",
 	"o3-mini": "o3-mini",
 	"o4-mini": "o4-mini",
-	"claude-3-5-sonnet-20240620": "Claude-3-5-Sonnet-20240620",
 	"claude-sonnet-4-6": "Claude Sonnet 4.6",
 	"claude-opus-4-6": "Claude Opus 4.6",
 	"claude-haiku-4-5-20251001": "Claude Haiku 4.5",
-	"gemini-1.5-flash": "Gemini-1.5-flash",
 	"gemini-3-pro-preview": "Gemini-3-Pro-Preview",
 	"gemini-2.5-pro": "Gemini-2.5-Pro",
 	"gemini-flash-latest": "Gemini-Flash-Latest",
@@ -331,8 +304,6 @@ export const modelNames: Record<string, string> = {
 	"gemini-2.5-flash-lite": "Gemini-2.5-Flash-Lite",
 	"gemini-2.0-flash": "Gemini-2.0-Flash",
 	"gemini-2.0-flash-lite": "Gemini-2.0-Flash-Lite",
-	"gemini-2.0-flash-exp": "Gemini-2.0-flash-exp",
-	"gemini-2.0-flash-thinking-exp-1219": "Gemini-2.0-flash-thinking-exp",
 	"claude-code": "Claude Code",
 	// "text-embedding-3-small": "Text Embedding 3 (Small)",
 	"gpt-image-1": "GPT Image 1",

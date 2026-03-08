@@ -18,13 +18,9 @@ import { generateAssistantsList, getApiKeyValidity } from "utils/utils";
 import { models, modelNames, buildOllamaModels } from "utils/models";
 import {
 	chat,
-	claudeSonnetJuneModel,
 	claudeSonnet46Model,
 	claudeOpus46Model,
 	claudeHaiku45Model,
-	geminiModel,
-	gemini2FlashModel,
-	gemini2FlashThinkingModel,
 	gemini2FlashStableModel,
 	gemini2FlashLiteModel,
 	gemini25ProModel,
@@ -312,15 +308,11 @@ export default class LLMPlugin extends Plugin {
 				case "claude-code":
 					// Claude Code uses OAuth token, not an API key — skip API validation
 					break;
-				case claudeSonnetJuneModel:
 				case claudeSonnet46Model:
 				case claudeOpus46Model:
 				case claudeHaiku45Model:
 					activeClaudeModel = true;
 					break;
-				case geminiModel:
-				case gemini2FlashModel:
-				case gemini2FlashThinkingModel:
 				case gemini2FlashStableModel:
 				case gemini2FlashLiteModel:
 				case gemini25ProModel:
@@ -381,9 +373,6 @@ export default class LLMPlugin extends Plugin {
 
 	async checkForAPIKeyBasedModel() {
 		const isGeminiModel = (model: string) => [
-			geminiModel,
-			gemini2FlashModel,
-			gemini2FlashThinkingModel,
 			gemini2FlashStableModel,
 			gemini2FlashLiteModel,
 			gemini25ProModel,
@@ -395,7 +384,6 @@ export default class LLMPlugin extends Plugin {
 		].includes(model);
 
 		const isClaudeModel = (model: string) => [
-			claudeSonnetJuneModel,
 			claudeSonnet46Model,
 			claudeOpus46Model,
 			claudeHaiku45Model,

@@ -8,14 +8,10 @@ export const mistral = "mistral"
 
 export const claudeCodeEndpoint = "claudeCodeAgent"
 
-export const claudeSonnetJuneModel = "claude-3-5-sonnet-20240620"
 export const claudeSonnet46Model = "claude-sonnet-4-6"
 export const claudeOpus46Model = "claude-opus-4-6"
 export const claudeHaiku45Model = "claude-haiku-4-5-20251001"
 export const claudeValidationModel = claudeSonnet46Model
-export const geminiModel = "gemini-1.5-flash"
-export const gemini2FlashModel = "gemini-2.0-flash-exp"
-export const gemini2FlashThinkingModel = "gemini-2.0-flash-thinking-exp-1219"
 export const gemini2FlashStableModel = "gemini-2.0-flash"
 export const gemini2FlashLiteModel = "gemini-2.0-flash-lite"
 export const gemini25ProModel = "gemini-2.5-pro"

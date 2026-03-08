@@ -25,9 +25,6 @@ import {
 	chat,
 	claudeCodeEndpoint,
 	gemini,
-	geminiModel,
-	gemini2FlashModel,
-	gemini2FlashThinkingModel,
 	gemini2FlashStableModel,
 	gemini2FlashLiteModel,
 	gemini25ProModel,
@@ -383,9 +380,6 @@ export class ChatContainer {
 
 		// Check if the model is any Gemini model
 		const isGeminiModel = [
-			geminiModel,
-			gemini2FlashModel,
-			gemini2FlashThinkingModel,
 			gemini2FlashStableModel,
 			gemini2FlashLiteModel,
 			gemini25ProModel,

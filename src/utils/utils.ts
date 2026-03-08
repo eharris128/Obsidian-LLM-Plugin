@@ -425,6 +425,9 @@ export async function openAIMessage(
 			size,
 			numberOfImages,
 		} = params as ImageParams;
+		const validQualities: string[] = ["low", "medium", "high", "auto"];
+		const normalizedQuality = validQualities.includes(quality ?? "")
+			? quality : "auto";
 		const image = await openai.images.generate({
 			model,
 			prompt,
@@ -433,7 +436,7 @@ export async function openAIMessage(
 				| "1536x1024"
 				| "1024x1536"
 				| "auto",
-			quality,
+			quality: normalizedQuality,
 			n: numberOfImages,
 		});
 		let imageURLs: string[] = [];

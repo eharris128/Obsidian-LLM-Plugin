@@ -1,5 +1,5 @@
 import { Model } from "Types/types";
-import { claude, claudeCode, claudeCodeEndpoint, chat, gemini, geminiModel, gemini2FlashModel, gemini2FlashThinkingModel, gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel, gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel, geminiFlashLatestModel, geminiFlashLiteLatestModel, GPT4All, messages, ollama, mistral } from "utils/constants"
+import { claude, claudeCode, claudeCodeEndpoint, chat, gemini, geminiModel, gemini2FlashModel, gemini2FlashThinkingModel, gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel, gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel, geminiFlashLatestModel, geminiFlashLiteLatestModel, GPT4All, messages, ollama, mistral, claudeSonnet46Model, claudeOpus46Model, claudeHaiku45Model } from "utils/constants"
 
 export const openAIModels: Record<string, Model> = {
 	"ChatGPT-3.5 turbo": {
@@ -144,6 +144,24 @@ export const models: Record<string, Model> = {
 		type: claude,
 		endpoint: messages,
 		// We will not consume these so can we remove them?
+		url: "/v1/messages",
+	},
+	"Claude Sonnet 4.6": {
+		model: claudeSonnet46Model,
+		type: claude,
+		endpoint: messages,
+		url: "/v1/messages",
+	},
+	"Claude Opus 4.6": {
+		model: claudeOpus46Model,
+		type: claude,
+		endpoint: messages,
+		url: "/v1/messages",
+	},
+	"Claude Haiku 4.5": {
+		model: claudeHaiku45Model,
+		type: claude,
+		endpoint: messages,
 		url: "/v1/messages",
 	},
 	// Gemini Models
@@ -301,6 +319,9 @@ export const modelNames: Record<string, string> = {
 	"o3-mini": "o3-mini",
 	"o4-mini": "o4-mini",
 	"claude-3-5-sonnet-20240620": "Claude-3-5-Sonnet-20240620",
+	"claude-sonnet-4-6": "Claude Sonnet 4.6",
+	"claude-opus-4-6": "Claude Opus 4.6",
+	"claude-haiku-4-5-20251001": "Claude Haiku 4.5",
 	"gemini-1.5-flash": "Gemini-1.5-flash",
 	"gemini-3-pro-preview": "Gemini-3-Pro-Preview",
 	"gemini-2.5-pro": "Gemini-2.5-Pro",

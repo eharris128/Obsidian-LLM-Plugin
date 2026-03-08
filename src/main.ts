@@ -19,6 +19,9 @@ import { models, modelNames, buildOllamaModels } from "utils/models";
 import {
 	chat,
 	claudeSonnetJuneModel,
+	claudeSonnet46Model,
+	claudeOpus46Model,
+	claudeHaiku45Model,
 	geminiModel,
 	gemini2FlashModel,
 	gemini2FlashThinkingModel,
@@ -288,7 +291,10 @@ export default class LLMPlugin extends Plugin {
 					// Claude Code uses OAuth token, not an API key — skip API validation
 					break;
 				case claudeSonnetJuneModel:
-					activeClaudeModel = model === claudeSonnetJuneModel;
+				case claudeSonnet46Model:
+				case claudeOpus46Model:
+				case claudeHaiku45Model:
+					activeClaudeModel = true;
 					break;
 				case geminiModel:
 				case gemini2FlashModel:
@@ -366,21 +372,28 @@ export default class LLMPlugin extends Plugin {
 			geminiFlashLiteLatestModel
 		].includes(model);
 
+		const isClaudeModel = (model: string) => [
+			claudeSonnetJuneModel,
+			claudeSonnet46Model,
+			claudeOpus46Model,
+			claudeHaiku45Model,
+		].includes(model);
+
 		const fabModelRequiresKey =
 			this.settings.fabSettings.model === openAIModel ||
-			this.settings.fabSettings.model === claudeSonnetJuneModel ||
+			isClaudeModel(this.settings.fabSettings.model) ||
 			this.settings.fabSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.fabSettings.model);
 
 		const widgetModelRequresKey =
 			this.settings.widgetSettings.model === openAIModel ||
-			this.settings.widgetSettings.model === claudeSonnetJuneModel ||
+			isClaudeModel(this.settings.widgetSettings.model) ||
 			this.settings.widgetSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.widgetSettings.model);
 
 		const modalModelRequresKey =
 			this.settings.modalSettings.model === openAIModel ||
-			this.settings.modalSettings.model === claudeSonnetJuneModel ||
+			isClaudeModel(this.settings.modalSettings.model) ||
 			this.settings.modalSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.modalSettings.model);
 

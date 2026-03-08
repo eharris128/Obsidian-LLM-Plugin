@@ -7,7 +7,7 @@ import {
 	openAI,
 	claude,
 	chat,
-	claudeSonnetJuneModel,
+	claudeValidationModel,
 	gemini,
 	gemini2FlashStableModel,
 	ollama,
@@ -194,7 +194,7 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 				dangerouslyAllowBrowser: true,
 			});
 			await client.messages.create({
-				model: claudeSonnetJuneModel,
+				model: claudeValidationModel,
 				max_tokens: 1,
 				messages: [{ role: "user", content: "Reply 'a'" }],
 			});

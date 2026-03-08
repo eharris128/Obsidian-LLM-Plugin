@@ -732,8 +732,13 @@ export class ChatContainer {
 					this.streamingDiv.empty();
 					let content = "";
 					response.map((url) => {
-						content += `![created with prompt ${this.prompt}](${url})`;
+						if (!url.startsWith("data:")) {
+							content += `![created with prompt ${this.prompt}](${url})`;
+						}
 					});
+					if (!content) {
+						content = `[Image generated with prompt: ${this.prompt}]`;
+					}
 					this.messageStore.addMessage({
 						role: assistant,
 						content,

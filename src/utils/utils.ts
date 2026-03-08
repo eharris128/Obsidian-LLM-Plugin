@@ -9,7 +9,7 @@ import {
 	chat,
 	claudeSonnetJuneModel,
 	gemini,
-	geminiModel,
+	gemini2FlashStableModel,
 	ollama,
 } from "utils/constants";
 import { query as claudeCodeQuery } from "@anthropic-ai/claude-agent-sdk";
@@ -59,6 +59,18 @@ async function retryWithBackoff<T>(
 				await new Promise((r) => setTimeout(r, delay + jitter));
 				continue;
 			}
+			if (status === 429) {
+				const retryAfter =
+					error?.headers?.get?.("retry-after") ??
+					error?.headers?.["retry-after"] ??
+					error?.errorDetails?.[0]?.metadata?.retry_delay;
+				const retryMsg = retryAfter
+					? `Rate limit exceeded — retry after ${retryAfter} seconds.`
+					: "Rate limit exceeded — please wait a moment and try again.";
+				const rateLimitError = new Error(retryMsg);
+				(rateLimitError as any).status = 429;
+				throw rateLimitError;
+			}
 			throw error;
 		}
 	}
@@ -84,15 +96,16 @@ export function upperCaseFirst(input: string): string {
 }
 
 export async function messageGPT4AllServer(params: ChatParams, url: string) {
+	const body: Record<string, any> = {
+		model: params.model,
+		messages: params.messages,
+		temperature: params.temperature,
+	};
+	if (params.tokens) body.max_tokens = params.tokens;
 	const request = {
 		url: `http://localhost:4891${url}`,
 		method: "POST",
-		body: JSON.stringify({
-			model: params.model,
-			messages: params.messages,
-			max_tokens: params.tokens,
-			temperature: params.temperature,
-		}),
+		body: JSON.stringify(body),
 	} as RequestUrlParam;
 	const response = await requestUrl(request).then((res) => res.json);
 	return response.choices[0].message;
@@ -118,7 +131,7 @@ export async function ollamaMessage(params: ChatParams, host: string) {
 	const stream = await openai.chat.completions.create({
 		model,
 		messages,
-		max_tokens: tokens,
+		...(tokens ? { max_tokens: tokens } : {}),
 		temperature,
 		stream: true,
 	});
@@ -157,7 +170,7 @@ export async function mistralMessage(params: ChatParams, mistralAPIKey: string) 
 	const stream = await openai.chat.completions.create({
 		model,
 		messages,
-		max_tokens: tokens,
+		...(tokens ? { max_tokens: tokens } : {}),
 		temperature,
 		stream: true,
 	});
@@ -190,7 +203,7 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 			const client = new GoogleGenAI({ apiKey: key });
 			await retryWithBackoff(() =>
 				client.models.generateContent({
-					model: geminiModel,
+					model: gemini2FlashStableModel,
 					contents: "Reply 'a'",
 					config: {
 						candidateCount: 1,
@@ -238,7 +251,7 @@ export async function geminiMessage(
 			contents,
 			config: {
 				candidateCount: 1,
-				maxOutputTokens: tokens,
+				...(tokens ? { maxOutputTokens: tokens } : {}),
 				temperature,
 				topP: topP ?? undefined,
 			},
@@ -365,10 +378,11 @@ export async function claudeMessage(
 	const { model, messages, tokens, temperature } = params as ChatParams;
 
 	// Anthropic SDK Docs - https://github.com/anthropics/anthropic-sdk-typescript/blob/HEAD/helpers.md#messagestream-api
+	// Claude API requires max_tokens; default to 4096 when user hasn't set it
 	const stream = client.messages.stream({
 		model,
 		messages,
-		max_tokens: tokens,
+		max_tokens: tokens || 4096,
 		temperature,
 		stream: true,
 	});
@@ -393,7 +407,7 @@ export async function openAIMessage(
 			{
 				model,
 				messages,
-				max_tokens: tokens,
+				...(tokens ? { max_tokens: tokens } : {}),
 				temperature,
 				stream: true,
 			},

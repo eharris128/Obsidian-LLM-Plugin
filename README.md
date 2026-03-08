@@ -6,7 +6,7 @@
 
 # Interact with LLMs in Obsidian
 
-The Large Language Models (LLMs) Plugin gives Obsidian users access to LLMs through cloud providers (OpenAI, Anthropic, and Google) and locally via GPT4All. Models can be interacted with in the sidebar, main window, and a newly added, floating action button popup window.
+The Large Language Models (LLMs) Plugin gives Obsidian users access to LLMs through cloud providers (OpenAI, Anthropic, Google, and Mistral) and locally via GPT4All and Ollama. Models can be interacted with in the sidebar, main window, and a newly added, floating action button popup window.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/ba44ccf6-ece5-4dbc-a102-d6fd09888b66">
@@ -22,11 +22,17 @@ Download the plugin via the community plugin browser.
 1. In the plugin settings menu, enter an API key from one of the supported model providers
 2. To interact with models, open one of the chat views using the newly added commands (see Commands section below) 
 
-**Using models locally:**
-1. Download GPT4all
-2. Download a model through GPT4alls model browser
-3. In the setting menu of GPT4all, toggle on the "Enable Local Server" setting
-4. Models downloaded via GPT4all will be selectable via the model switcher in each chat view
+**Using models locally (GPT4All):**
+1. Download GPT4All
+2. Download a model through GPT4All's model browser
+3. In the setting menu of GPT4All, toggle on the "Enable Local Server" setting
+4. Models downloaded via GPT4All will be selectable via the model switcher in each chat view
+
+**Using models locally (Ollama):**
+1. Install [Ollama](https://ollama.com) and pull the models you want to use
+2. In the plugin settings, configure the Ollama host (default: `http://localhost:11434`)
+3. Click "Discover Models" to detect your locally available models
+4. Select an Ollama model from the model switcher in any chat view
 
 # Commands
 | Command  | Description |
@@ -45,13 +51,13 @@ Download the plugin via the community plugin browser.
 | OpenAI  | Supported  |
 | Anthropic  | Supported  |
 | Google | Supported |
+| Mistral | Supported |
 
 **Local:**
 | Model provider  | Status |
 | ------------- | ------------- |
 | GPT4All  | Supported  |
-| Jan  | Planned  |
-| Ollama | Not supported |
+| Ollama | Supported |
 
 # Credits
 - Johnny ✨

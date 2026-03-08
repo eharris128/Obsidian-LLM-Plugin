@@ -14,7 +14,7 @@ Output is bundled to `main.js` in the root directory.
 
 ## Architecture Overview
 
-This is an Obsidian plugin that provides LLM chat interfaces with support for OpenAI, Anthropic Claude, Google Gemini, and local GPT4All.
+This is an Obsidian plugin that provides LLM chat interfaces with support for OpenAI, Anthropic Claude, Google Gemini, Mistral AI, local Ollama, and local GPT4All.
 
 ### Entry Point and Plugin Lifecycle
 
@@ -50,7 +50,7 @@ Each view composes these shared components from `src/Plugin/Components/`:
 
 1. User input in `ChatContainer` triggers `handleGenerateClick()`
 2. Message added to MessageStore, which notifies all subscribers
-3. API call made based on selected provider (OpenAI/Claude/Gemini/GPT4All)
+3. API call made based on selected provider (OpenAI/Claude/Gemini/Mistral/Ollama/GPT4All)
 4. Streaming response updates UI in real-time
 5. Conversation saved to History
 
@@ -63,9 +63,11 @@ Each view composes these shared components from `src/Plugin/Components/`:
 ### API Integration
 
 Provider SDKs used:
-- `openai` - Chat, images, assistants
-- `@anthropic-ai/sdk` - Claude models
+- `openai` - Chat, images (gpt-image-1), assistants
+- `@anthropic-ai/sdk` - Claude models + Claude Code (agent SDK)
 - `@google/generative-ai` - Gemini models
+- Mistral — uses `openai` SDK with custom baseURL (`https://api.mistral.ai/v1`)
+- Ollama — uses `openai` SDK with custom baseURL (default `http://localhost:11434/v1`); models discovered dynamically
 - GPT4All connects to local server on port 4891
 
 ### Key Files

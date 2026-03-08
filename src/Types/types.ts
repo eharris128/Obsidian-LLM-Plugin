@@ -30,7 +30,7 @@ type InitialParams = {
 
 export type ChatParams = InitialParams & {
 	temperature: number;
-	tokens: number;
+	tokens?: number;
 	frequencyPenalty?: number | null;
 	logProbs?: boolean | null;
 	topLogProbs?: number | null;

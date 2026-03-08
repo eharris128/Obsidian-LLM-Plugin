@@ -229,7 +229,7 @@ export class SettingsContainer {
 
 		new Setting(parentContainer)
 			.setName("Tokens")
-			.setDesc("Maximum number of tokens in the response. Higher values allow longer responses. Recommended: 4096-8192 for Gemini models.")
+			.setDesc("Maximum number of tokens in the response. Set to 0 to use the model's default. Higher values allow longer responses.")
 			.addText((text) => {
 				text.setValue(`${viewSettings.chatSettings.maxTokens}`);
 				text.inputEl.type = "number";

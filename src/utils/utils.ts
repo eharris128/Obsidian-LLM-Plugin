@@ -84,15 +84,16 @@ export function upperCaseFirst(input: string): string {
 }
 
 export async function messageGPT4AllServer(params: ChatParams, url: string) {
+	const body: Record<string, any> = {
+		model: params.model,
+		messages: params.messages,
+		temperature: params.temperature,
+	};
+	if (params.tokens) body.max_tokens = params.tokens;
 	const request = {
 		url: `http://localhost:4891${url}`,
 		method: "POST",
-		body: JSON.stringify({
-			model: params.model,
-			messages: params.messages,
-			max_tokens: params.tokens,
-			temperature: params.temperature,
-		}),
+		body: JSON.stringify(body),
 	} as RequestUrlParam;
 	const response = await requestUrl(request).then((res) => res.json);
 	return response.choices[0].message;
@@ -118,7 +119,7 @@ export async function ollamaMessage(params: ChatParams, host: string) {
 	const stream = await openai.chat.completions.create({
 		model,
 		messages,
-		max_tokens: tokens,
+		...(tokens ? { max_tokens: tokens } : {}),
 		temperature,
 		stream: true,
 	});
@@ -157,7 +158,7 @@ export async function mistralMessage(params: ChatParams, mistralAPIKey: string) 
 	const stream = await openai.chat.completions.create({
 		model,
 		messages,
-		max_tokens: tokens,
+		...(tokens ? { max_tokens: tokens } : {}),
 		temperature,
 		stream: true,
 	});
@@ -238,7 +239,7 @@ export async function geminiMessage(
 			contents,
 			config: {
 				candidateCount: 1,
-				maxOutputTokens: tokens,
+				...(tokens ? { maxOutputTokens: tokens } : {}),
 				temperature,
 				topP: topP ?? undefined,
 			},
@@ -365,10 +366,11 @@ export async function claudeMessage(
 	const { model, messages, tokens, temperature } = params as ChatParams;
 
 	// Anthropic SDK Docs - https://github.com/anthropics/anthropic-sdk-typescript/blob/HEAD/helpers.md#messagestream-api
+	// Claude API requires max_tokens; default to 4096 when user hasn't set it
 	const stream = client.messages.stream({
 		model,
 		messages,
-		max_tokens: tokens,
+		max_tokens: tokens || 4096,
 		temperature,
 		stream: true,
 	});
@@ -393,7 +395,7 @@ export async function openAIMessage(
 			{
 				model,
 				messages,
-				max_tokens: tokens,
+				...(tokens ? { max_tokens: tokens } : {}),
 				temperature,
 				stream: true,
 			},

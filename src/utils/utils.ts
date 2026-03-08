@@ -133,10 +133,19 @@ export async function mistralMessage(params: ChatParams, mistralAPIKey: string) 
 		dangerouslyAllowBrowser: true,
 		fetch: (url: RequestInfo, init?: RequestInit) => {
 			if (init?.headers) {
-				const headers = init.headers as Record<string, string>;
-				for (const key of Object.keys(headers)) {
-					if (key.startsWith("x-stainless-")) {
-						delete headers[key];
+				if (init.headers instanceof Headers) {
+					const keysToDelete: string[] = [];
+					init.headers.forEach((_v, k) => {
+						if (k.toLowerCase().startsWith("x-stainless-")) {
+							keysToDelete.push(k);
+						}
+					});
+					keysToDelete.forEach(k => (init.headers as Headers).delete(k));
+				} else if (typeof init.headers === "object") {
+					for (const key of Object.keys(init.headers)) {
+						if (key.toLowerCase().startsWith("x-stainless-")) {
+							delete (init.headers as Record<string, string>)[key];
+						}
 					}
 				}
 			}

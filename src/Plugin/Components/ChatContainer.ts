@@ -668,7 +668,7 @@ export class ChatContainer {
 		refreshButton?.remove();
 
 		if (this.historyMessages.children.length < 1) {
-			header.setHeader(modelName, this.prompt);
+			header.setHeader(modelName);
 		}
 
 		// Build and inject vault context (only if the feature is enabled)
@@ -1132,7 +1132,7 @@ export class ChatContainer {
 	removeMessage(header: Header, modelName: string) {
 		this.removeLastMessageAndHistoryMessage();
 		if (this.historyMessages.children.length < 1) {
-			header.setHeader(modelName, "LLM plugin");
+			header.setHeader(modelName);
 		}
 	}
 

@@ -102,7 +102,6 @@ export class HistoryContainer {
 			containerToShow.querySelector(".messages-div")?.scroll(0, 9999);
 			const index = this.historyIndex;
 			this.plugin.settings.currentIndex = index;
-			const header = this.plugin.settings.promptHistory[index].prompt;
 			const modelName =
 				this.plugin.settings.promptHistory[index].modelName;
 			const model = this.plugin.settings.promptHistory[index].model;
@@ -126,7 +125,7 @@ export class HistoryContainer {
 				this.plugin.settings[settingType].endpointURL = "";
 			}
 			this.plugin.saveSettings();
-			Header.setHeader(modelName, header);
+			Header.setHeader(modelName);
 			Header.resetHistoryButton();
 		};
 
@@ -232,7 +231,7 @@ export class HistoryContainer {
 				);
 				chat.resetChat();
 				chat.resetMessages();
-				Header.setHeader(this.modelName, "Local LLM plugin");
+				Header.setHeader(this.modelName);
 				this.plugin.settings[settingType].historyIndex =
 					DEFAULT_SETTINGS[settingType].historyIndex;
 				this.plugin.saveSettings();

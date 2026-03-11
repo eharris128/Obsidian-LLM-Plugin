@@ -255,6 +255,28 @@ export default class LLMPlugin extends Plugin {
 		const dataJSON = await this.loadData();
 		if (dataJSON) {
 			this.settings = Object.assign({}, DEFAULT_SETTINGS, dataJSON);
+
+			// Deep-merge view settings so nested defaults (e.g. contextSettings) are preserved
+			const viewKeys = ["modalSettings", "widgetSettings", "fabSettings"] as const;
+			for (const key of viewKeys) {
+				this.settings[key] = {
+					...defaultSettings,
+					...dataJSON[key],
+					contextSettings: {
+						...defaultSettings.contextSettings,
+						...(dataJSON[key]?.contextSettings),
+					},
+					chatSettings: {
+						...defaultSettings.chatSettings,
+						...(dataJSON[key]?.chatSettings),
+					},
+					imageSettings: {
+						...defaultSettings.imageSettings,
+						...(dataJSON[key]?.imageSettings),
+					},
+				};
+			}
+
 			this.settings.fabSettings.historyIndex = -1;
 			this.settings.widgetSettings.historyIndex = -1;
 

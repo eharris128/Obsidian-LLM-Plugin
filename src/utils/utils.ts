@@ -125,6 +125,7 @@ export async function ollamaMessage(params: ChatParams, host: string) {
 		apiKey: "ollama",
 		baseURL: `${host}/v1`,
 		dangerouslyAllowBrowser: true,
+		timeout: 30000,
 	});
 
 	const { model, messages, tokens, temperature } = params;

@@ -7,14 +7,12 @@ import {
 	ViewSettings,
 } from "./Types/types";
 
-import { Assistants } from "Assistants/AssistantHandler";
 import { History } from "History/HistoryHandler";
 import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
 import { TAB_VIEW_TYPE, WidgetView } from "Plugin/Widget/Widget";
 import SettingsView from "Settings/SettingsView";
-import { Assistant } from "openai/resources/beta/assistants";
-import { generateAssistantsList, getApiKeyValidity } from "utils/utils";
+import { getApiKeyValidity } from "utils/utils";
 import { models, modelNames, buildOllamaModels } from "utils/models";
 import {
 	chat,
@@ -53,7 +51,6 @@ export interface LLMPluginSettings {
 	widgetSettings: ViewSettings;
 	fabSettings: ViewSettings;
 	promptHistory: HistoryItem[];
-	assistants: Assistant[];
 	claudeAPIKey: string;
 	claudeCodeOAuthToken: string;
 	linearWorkspaces: Array<{ name: string; apiKey: string }>;
@@ -71,8 +68,6 @@ export interface LLMPluginSettings {
 }
 
 const defaultSettings = {
-	assistant: false,
-	assistantId: "",
 	model: "gpt-3.5-turbo",
 	modelName: "ChatGPT-3.5 turbo",
 	modelType: "openAI",
@@ -119,7 +114,6 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		...defaultSettings,
 	},
 	promptHistory: [],
-	assistants: [],
 	openAIAPIKey: "",
 	claudeAPIKey: "",
 	mistralAPIKey: "",
@@ -141,7 +135,6 @@ export default class LLMPlugin extends Plugin {
 	fileSystem: FileSystem;
 	os: OperatingSystem;
 	settings: LLMPluginSettings;
-	assistants: Assistants;
 	history: History;
 	fab: FAB;
 	messageStore: MessageStore;
@@ -175,7 +168,6 @@ export default class LLMPlugin extends Plugin {
 			}, 500);
 		}
 		this.history = new History(this);
-		this.assistants = new Assistants(this);
 	}
 
 	onunload() {
@@ -360,15 +352,7 @@ export default class LLMPlugin extends Plugin {
 			return result;
 		});
 
-		const results = await Promise.all(promises);
-		const hasValidOpenAIAPIKey: boolean = results.some((result) => {
-			if (result) {
-				return result.valid && result.provider === openAI;
-			}
-		});
-
-		// If the model is OpenAI and the key is valid -> generate the assistant list
-		if (hasValidOpenAIAPIKey) await generateAssistantsList(this.settings);
+		await Promise.all(promises);
 	}
 
 	async checkForAPIKeyBasedModel() {

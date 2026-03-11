@@ -9,8 +9,6 @@ import { ChatCompletionChunk } from "openai/resources";
 import { Stream } from "openai/streaming";
 import { errorMessages } from "Plugin/Errors/errors";
 import {
-	AssistantHistoryItem,
-	AssistantParams,
 	ChatHistoryItem,
 	ChatParams,
 	HistoryItem,
@@ -38,9 +36,9 @@ import {
 	ollama,
 	mistral,
 } from "utils/constants";
+
 import assistantLogo from "Plugin/Components/AssistantLogo";
 import {
-	assistantsMessage,
 	claudeCodeMessage,
 	getSettingType,
 	getViewInfo,
@@ -154,14 +152,6 @@ export class ChatContainer {
 			};
 			return params;
 		}
-		if (modelType === assistant) {
-			const params: AssistantParams = {
-				prompt: this.prompt,
-				messages: messagesForParams,
-				model,
-			};
-			return params;
-		}
 		if (endpoint === "images") {
 			const params: ImageParams = {
 				prompt: this.prompt,
@@ -237,7 +227,6 @@ export class ChatContainer {
 			endpointURL,
 			modelEndpoint,
 			modelType,
-			assistantId,
 			modelName,
 		} = getViewInfo(this.plugin, this.viewType);
 		let shouldHaveAPIKey = modelType !== GPT4All && modelType !== ollama && modelType !== mistral && modelEndpoint !== claudeCodeEndpoint;
@@ -335,48 +324,6 @@ export class ChatContainer {
 			return true;
 		}
 		// End Claude Code handling
-
-		// Start assistant handling
-		if (modelEndpoint === assistant) {
-			const stream = await assistantsMessage(
-				this.plugin.settings.openAIAPIKey,
-				messagesForParams,
-				assistantId
-			);
-			stream.on("textCreated", () => this.setDiv(true));
-			stream.on("textDelta", (textDelta, snapshot) => {
-				if (textDelta.value?.includes("【")) return;
-				this.previewText += textDelta.value;
-				this.streamingDiv.textContent = this.previewText;
-				this.historyMessages.scroll(0, 9999);
-			});
-			return new Promise((resolve) => {
-				stream.on("end", () => {
-					this.streamingDiv.empty();
-					MarkdownRenderer.render(
-						this.plugin.app,
-						this.previewText,
-						this.streamingDiv,
-						"",
-						this.plugin
-					);
-					this.historyMessages.scroll(0, 9999);
-					this.messageStore.addMessage({
-						role: assistant,
-						content: this.previewText,
-					});
-					const message_context = {
-						...params,
-						messages: this.getMessages(),
-					assistant_id: assistantId,
-					modelName,
-				} as AssistantHistoryItem;
-				this.historyPush(message_context, this.currentVaultContext);
-				resolve(true);
-				});
-			});
-		}
-		// End assistant handling
 
 		// Check if the model is any Gemini model
 		const isGeminiModel = [
@@ -648,6 +595,7 @@ export class ChatContainer {
 			modelEndpoint,
 			historyIndex,
 		} = getViewInfo(this.plugin, this.viewType);
+
 		if (historyIndex > -1) {
 			const messages =
 				this.plugin.settings.promptHistory[historyIndex].messages;
@@ -768,7 +716,7 @@ export class ChatContainer {
 	}
 
 	historyPush(params: HistoryItem, vaultContext?: any) {
-		const { modelName, historyIndex, modelEndpoint, assistantId } =
+		const { modelName, historyIndex, modelEndpoint } =
 			getViewInfo(this.plugin, this.viewType);
 		if (historyIndex > -1) {
 			this.plugin.history.overwriteHistory(
@@ -798,13 +746,6 @@ export class ChatContainer {
 			this.plugin.history.push({
 				...(params as ImageHistoryItem),
 				modelName,
-			});
-		}
-		if (modelEndpoint === assistant) {
-			this.plugin.history.push({
-				...(params as AssistantHistoryItem),
-				modelName,
-				assistant_id: assistantId,
 			});
 		}
 		const length = this.plugin.settings.promptHistory.length;

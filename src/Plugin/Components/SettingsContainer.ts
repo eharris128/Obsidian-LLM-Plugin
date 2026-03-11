@@ -1,15 +1,13 @@
 import { ImageSize, ViewType } from "Types/types";
 import LLMPlugin from "main";
 import { DropdownComponent, Setting } from "obsidian";
-import { Assistant } from "openai/resources/beta/assistants";
 import { modelNames, models } from "utils/models";
 import {
-	getAssistant,
 	getSettingType,
 	getViewInfo,
 	getGpt4AllPath
 } from "utils/utils";
-import { assistant as ASSISTANT, chat, claudeCodeEndpoint, GPT4All, messages, openAI } from "utils/constants"
+import { chat, claudeCodeEndpoint, GPT4All, messages, openAI } from "utils/constants"
 import { Header } from "./Header";
 import { FileSelector } from "./FileSelector";
 
@@ -34,11 +32,6 @@ export class SettingsContainer {
 			.setName("Models")
 			.setDesc("The model you want to use to generate a chat response.")
 			.addDropdown((dropdown: DropdownComponent) => {
-				dropdown.addOption("", "---Select assistant---");
-				const assistants = this.plugin.settings.assistants;
-				assistants.map((assistant: Assistant) => {
-					dropdown.addOption(`${assistant.id}`, `${assistant.name}`);
-				});
 				dropdown.addOption("", "---Select model---");
 				let keys = Object.keys(models);
 				for (let model of keys) {
@@ -59,52 +52,21 @@ export class SettingsContainer {
 						this.viewType
 					);
 					const index = historyIndex;
-					if (change.includes("asst")) {
-						viewSettings.assistant = true;
-						this.plugin.saveSettings();
-					} else {
-						viewSettings.assistant = false;
-						viewSettings.assistantId = "";
-						this.plugin.saveSettings();
+					const modelName = modelNames[change];
+					viewSettings.model = change;
+					viewSettings.modelName = modelName;
+					viewSettings.modelType = models[modelName].type;
+					viewSettings.endpointURL = models[modelName].url;
+					viewSettings.modelEndpoint = models[modelName].endpoint;
+					if (index > -1) {
+						this.plugin.settings.promptHistory[index].model =
+							change;
+						this.plugin.settings.promptHistory[
+							index
+						].modelName = modelName;
 					}
-					if (!viewSettings.assistant) {
-						const modelName = modelNames[change];
-						viewSettings.model = change;
-						viewSettings.modelName = modelName;
-						viewSettings.modelType = models[modelName].type;
-						viewSettings.endpointURL = models[modelName].url;
-						viewSettings.modelEndpoint = models[modelName].endpoint;
-						if (index > -1) {
-							this.plugin.settings.promptHistory[index].model =
-								change;
-							this.plugin.settings.promptHistory[
-								index
-							].modelName = modelName;
-						}
-						this.plugin.saveSettings();
-						Header.setHeader(modelName);
-					}
-					if (viewSettings.assistant) {
-						viewSettings.assistantId = change;
-						const assistant = getAssistant(
-							this.plugin,
-							viewSettings.assistantId
-						);
-						viewSettings.model = assistant!.id;
-						viewSettings.modelName = assistant!.name as string;
-						viewSettings.modelType = assistant!.modelType;
-						viewSettings.endpointURL = "";
-						viewSettings.modelEndpoint = ASSISTANT;
-						if (index > -1) {
-							this.plugin.settings.promptHistory[index].model =
-								assistant!.model;
-							this.plugin.settings.promptHistory[
-								index
-							].modelName = modelNames[assistant!.model];
-						}
-						this.plugin.saveSettings();
-						Header.setHeader(assistant.name as string);
-					}
+					this.plugin.saveSettings();
+					Header.setHeader(modelName);
 					this.generateSettingsContainer(parentContainer, Header);
 				});
 				dropdown.setValue(viewSettings.model);

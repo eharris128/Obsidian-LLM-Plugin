@@ -7,24 +7,18 @@ import {
 	ViewSettings,
 } from "./Types/types";
 
-import { Assistants } from "Assistants/AssistantHandler";
 import { History } from "History/HistoryHandler";
 import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
 import { TAB_VIEW_TYPE, WidgetView } from "Plugin/Widget/Widget";
 import SettingsView from "Settings/SettingsView";
-import { Assistant } from "openai/resources/beta/assistants";
-import { generateAssistantsList, getApiKeyValidity } from "utils/utils";
+import { getApiKeyValidity } from "utils/utils";
 import { models, modelNames, buildOllamaModels } from "utils/models";
 import {
 	chat,
-	claudeSonnetJuneModel,
 	claudeSonnet46Model,
 	claudeOpus46Model,
 	claudeHaiku45Model,
-	geminiModel,
-	gemini2FlashModel,
-	gemini2FlashThinkingModel,
 	gemini2FlashStableModel,
 	gemini2FlashLiteModel,
 	gemini25ProModel,
@@ -57,7 +51,6 @@ export interface LLMPluginSettings {
 	widgetSettings: ViewSettings;
 	fabSettings: ViewSettings;
 	promptHistory: HistoryItem[];
-	assistants: Assistant[];
 	claudeAPIKey: string;
 	claudeCodeOAuthToken: string;
 	linearWorkspaces: Array<{ name: string; apiKey: string }>;
@@ -75,8 +68,6 @@ export interface LLMPluginSettings {
 }
 
 const defaultSettings = {
-	assistant: false,
-	assistantId: "",
 	model: "gpt-3.5-turbo",
 	modelName: "ChatGPT-3.5 turbo",
 	modelType: "openAI",
@@ -123,7 +114,6 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		...defaultSettings,
 	},
 	promptHistory: [],
-	assistants: [],
 	openAIAPIKey: "",
 	claudeAPIKey: "",
 	mistralAPIKey: "",
@@ -145,7 +135,6 @@ export default class LLMPlugin extends Plugin {
 	fileSystem: FileSystem;
 	os: OperatingSystem;
 	settings: LLMPluginSettings;
-	assistants: Assistants;
 	history: History;
 	fab: FAB;
 	messageStore: MessageStore;
@@ -179,7 +168,6 @@ export default class LLMPlugin extends Plugin {
 			}, 500);
 		}
 		this.history = new History(this);
-		this.assistants = new Assistants(this);
 	}
 
 	onunload() {
@@ -255,6 +243,28 @@ export default class LLMPlugin extends Plugin {
 		const dataJSON = await this.loadData();
 		if (dataJSON) {
 			this.settings = Object.assign({}, DEFAULT_SETTINGS, dataJSON);
+
+			// Deep-merge view settings so nested defaults (e.g. contextSettings) are preserved
+			const viewKeys = ["modalSettings", "widgetSettings", "fabSettings"] as const;
+			for (const key of viewKeys) {
+				this.settings[key] = {
+					...defaultSettings,
+					...dataJSON[key],
+					contextSettings: {
+						...defaultSettings.contextSettings,
+						...(dataJSON[key]?.contextSettings),
+					},
+					chatSettings: {
+						...defaultSettings.chatSettings,
+						...(dataJSON[key]?.chatSettings),
+					},
+					imageSettings: {
+						...defaultSettings.imageSettings,
+						...(dataJSON[key]?.imageSettings),
+					},
+				};
+			}
+
 			this.settings.fabSettings.historyIndex = -1;
 			this.settings.widgetSettings.historyIndex = -1;
 
@@ -290,15 +300,11 @@ export default class LLMPlugin extends Plugin {
 				case "claude-code":
 					// Claude Code uses OAuth token, not an API key — skip API validation
 					break;
-				case claudeSonnetJuneModel:
 				case claudeSonnet46Model:
 				case claudeOpus46Model:
 				case claudeHaiku45Model:
 					activeClaudeModel = true;
 					break;
-				case geminiModel:
-				case gemini2FlashModel:
-				case gemini2FlashThinkingModel:
 				case gemini2FlashStableModel:
 				case gemini2FlashLiteModel:
 				case gemini25ProModel:
@@ -346,22 +352,11 @@ export default class LLMPlugin extends Plugin {
 			return result;
 		});
 
-		const results = await Promise.all(promises);
-		const hasValidOpenAIAPIKey: boolean = results.some((result) => {
-			if (result) {
-				return result.valid && result.provider === openAI;
-			}
-		});
-
-		// If the model is OpenAI and the key is valid -> generate the assistant list
-		if (hasValidOpenAIAPIKey) await generateAssistantsList(this.settings);
+		await Promise.all(promises);
 	}
 
 	async checkForAPIKeyBasedModel() {
 		const isGeminiModel = (model: string) => [
-			geminiModel,
-			gemini2FlashModel,
-			gemini2FlashThinkingModel,
 			gemini2FlashStableModel,
 			gemini2FlashLiteModel,
 			gemini25ProModel,
@@ -373,7 +368,6 @@ export default class LLMPlugin extends Plugin {
 		].includes(model);
 
 		const isClaudeModel = (model: string) => [
-			claudeSonnetJuneModel,
 			claudeSonnet46Model,
 			claudeOpus46Model,
 			claudeHaiku45Model,

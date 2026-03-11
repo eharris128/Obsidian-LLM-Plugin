@@ -1,7 +1,6 @@
 import LLMPlugin, { LLMPluginSettings } from "main";
-import { FileSystem } from "services/FileSystem";
 import { Editor, requestUrl, RequestUrlParam } from "obsidian";
-import OpenAI, { toFile } from "openai";
+import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import {
 	openAI,
@@ -40,7 +39,6 @@ import {
 	ViewType,
 } from "Types/types";
 import { SingletonNotice } from "Plugin/Components/SingletonNotice";
-import { Assistant } from "openai/resources/beta/assistants";
 import { GoogleGenAI } from "@google/genai";
 
 async function retryWithBackoff<T>(
@@ -125,6 +123,7 @@ export async function ollamaMessage(params: ChatParams, host: string) {
 		apiKey: "ollama",
 		baseURL: `${host}/v1`,
 		dangerouslyAllowBrowser: true,
+		timeout: 30000,
 	});
 
 	const { model, messages, tokens, temperature } = params;
@@ -453,27 +452,6 @@ export async function openAIMessage(
 	}
 }
 
-export async function assistantsMessage(
-	OpenAI_API_Key: string,
-	messages: Message[],
-	assistant_id: string
-) {
-	const openai = new OpenAI({
-		apiKey: OpenAI_API_Key,
-		dangerouslyAllowBrowser: true,
-	});
-
-	const thread = await openai.beta.threads.create({
-		messages,
-	});
-
-	const stream = openai.beta.threads.runs.stream(thread.id, {
-		assistant_id,
-	});
-
-	return stream;
-}
-
 export function processReplacementTokens(prompt: string) {
 	const tokenRegex = /\{\{(.*?)\}\}/g;
 	const matches = [...prompt.matchAll(tokenRegex)];
@@ -493,8 +471,6 @@ export function getViewInfo(
 ): ViewSettings {
 	if (viewType === "modal") {
 		return {
-			assistant: plugin.settings.modalSettings.assistant,
-			assistantId: plugin.settings.modalSettings.assistantId,
 			imageSettings: plugin.settings.modalSettings.imageSettings,
 			chatSettings: plugin.settings.modalSettings.chatSettings,
 			model: plugin.settings.modalSettings.model,
@@ -509,8 +485,6 @@ export function getViewInfo(
 
 	if (viewType === "widget") {
 		return {
-			assistant: plugin.settings.widgetSettings.assistant,
-			assistantId: plugin.settings.widgetSettings.assistantId,
 			imageSettings: plugin.settings.widgetSettings.imageSettings,
 			chatSettings: plugin.settings.widgetSettings.chatSettings,
 			model: plugin.settings.widgetSettings.model,
@@ -525,8 +499,6 @@ export function getViewInfo(
 
 	if (viewType === "floating-action-button") {
 		return {
-			assistant: plugin.settings.fabSettings.assistant,
-			assistantId: plugin.settings.fabSettings.assistantId,
 			imageSettings: plugin.settings.fabSettings.imageSettings,
 			chatSettings: plugin.settings.fabSettings.chatSettings,
 			model: plugin.settings.fabSettings.model,
@@ -540,8 +512,6 @@ export function getViewInfo(
 	}
 
 	return {
-		assistant: false,
-		assistantId: "",
 		imageSettings: {
 			numberOfImages: 0,
 			response_format: "url",
@@ -652,123 +622,3 @@ export function getSettingType(viewType: ViewType) {
 	return settingType;
 }
 
-export async function createAssistant(
-	assistantObj: any,
-	OpenAI_API_Key: string
-) {
-	const openai = new OpenAI({
-		apiKey: OpenAI_API_Key,
-		dangerouslyAllowBrowser: true,
-	});
-
-	const assistant = await openai.beta.assistants.create(assistantObj);
-	return assistant;
-}
-
-export function getAssistant(plugin: LLMPlugin, assistant_id: string) {
-	return plugin.settings.assistants.find(
-		(assistant) => assistant.id === assistant_id
-	) as Assistant & { modelType: string };
-}
-
-export async function listAssistants(OpenAI_API_Key: string) {
-	const openai = new OpenAI({
-		apiKey: OpenAI_API_Key,
-		dangerouslyAllowBrowser: true,
-	});
-
-	const myAssistants = await openai.beta.assistants.list();
-
-	return myAssistants.data;
-}
-
-export async function generateAssistantsList(settings: LLMPluginSettings) {
-	const assisitantsFromOpenAI = await listAssistants(settings.openAIAPIKey);
-	const processedAssisitants = assisitantsFromOpenAI.map(
-		(assistant: Assistant & { modelType: string }) => ({
-			...assistant,
-			modelType: assistant,
-		})
-	);
-	settings.assistants = processedAssisitants;
-}
-
-export async function deleteAssistant(
-	OpenAI_API_Key: string,
-	assistant_id: string
-) {
-	const openai = new OpenAI({
-		apiKey: OpenAI_API_Key,
-		dangerouslyAllowBrowser: true,
-	});
-
-	await openai.beta.assistants.delete(assistant_id);
-}
-
-export async function listVectors(OpenAI_API_Key: string) {
-	const openai = new OpenAI({
-		apiKey: OpenAI_API_Key,
-		dangerouslyAllowBrowser: true,
-	});
-
-	const vectorStores = await openai.vectorStores.list();
-	return vectorStores.data;
-}
-
-export async function deleteVector(OpenAI_API_Key: string, vector_id: string) {
-	const openai = new OpenAI({
-		apiKey: OpenAI_API_Key,
-		dangerouslyAllowBrowser: true,
-	});
-
-	await openai.vectorStores.delete(vector_id);
-}
-
-export async function createVectorAndUpdate(
-	files: string[],
-	assistant: Assistant,
-	OpenAI_API_Key: string,
-	fileSystem: FileSystem
-) {
-	const openai = new OpenAI({
-		apiKey: OpenAI_API_Key,
-		dangerouslyAllowBrowser: true,
-	});
-
-	const file_ids = await Promise.all(
-		files.map(async (filePath) => {
-			const stream = await fileSystem.createReadStream(filePath);
-			const reader = stream.getReader();
-			const chunks = [];
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				chunks.push(value);
-			}
-			const fileContent = new Uint8Array(chunks.flat());
-			const fileToUpload = await toFile(
-				new Blob([fileContent]),
-				filePath
-			); // Pass filename to preserve extension
-			const file = await openai.files.create({
-				file: fileToUpload,
-				purpose: "assistants",
-			});
-			return file.id;
-		})
-	);
-
-	let vectorStore = await openai.vectorStores.create({
-		name: "Assistant Files",
-	});
-
-	await openai.vectorStores.fileBatches.create(vectorStore.id, {
-		file_ids,
-	});
-
-	await openai.beta.assistants.update(assistant.id, {
-		tool_resources: { file_search: { vector_store_ids: [vectorStore.id] } },
-	});
-
-	return vectorStore.id;
-}

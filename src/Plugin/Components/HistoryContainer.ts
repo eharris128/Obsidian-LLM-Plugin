@@ -4,7 +4,6 @@ import { ButtonComponent, Notice } from "obsidian";
 import { ChatContainer } from "./ChatContainer";
 import { Header } from "./Header";
 import { models } from "utils/models";
-import { assistant } from "utils/constants";
 import { getSettingType } from "utils/utils";
 import logo from "assets/LLMgal.svg";
 
@@ -102,31 +101,20 @@ export class HistoryContainer {
 			containerToShow.querySelector(".messages-div")?.scroll(0, 9999);
 			const index = this.historyIndex;
 			this.plugin.settings.currentIndex = index;
-			const header = this.plugin.settings.promptHistory[index].prompt;
 			const modelName =
 				this.plugin.settings.promptHistory[index].modelName;
 			const model = this.plugin.settings.promptHistory[index].model;
 			this.plugin.settings[settingType].modelName = modelName;
-			if (!model.includes("asst")) {
-				this.plugin.settings[settingType].model =
-					models[modelName].model;
-				this.plugin.settings[settingType].modelType =
-					models[modelName].type;
-				this.plugin.settings[settingType].modelEndpoint =
-					models[modelName].endpoint;
-				this.plugin.settings[settingType].endpointURL =
-					models[modelName].url;
-			} else {
-				this.plugin.settings[settingType].model =
-					this.plugin.settings.promptHistory[index].model;
-				this.plugin.settings[settingType].modelName =
-					this.plugin.settings.promptHistory[index].modelName;
-				this.plugin.settings[settingType].modelType = assistant;
-				this.plugin.settings[settingType].modelEndpoint = assistant;
-				this.plugin.settings[settingType].endpointURL = "";
-			}
+			this.plugin.settings[settingType].model =
+				models[modelName].model;
+			this.plugin.settings[settingType].modelType =
+				models[modelName].type;
+			this.plugin.settings[settingType].modelEndpoint =
+				models[modelName].endpoint;
+			this.plugin.settings[settingType].endpointURL =
+				models[modelName].url;
 			this.plugin.saveSettings();
-			Header.setHeader(modelName, header);
+			Header.setHeader(modelName);
 			Header.resetHistoryButton();
 		};
 
@@ -232,7 +220,7 @@ export class HistoryContainer {
 				);
 				chat.resetChat();
 				chat.resetMessages();
-				Header.setHeader(this.modelName, "Local LLM plugin");
+				Header.setHeader(this.modelName);
 				this.plugin.settings[settingType].historyIndex =
 					DEFAULT_SETTINGS[settingType].historyIndex;
 				this.plugin.saveSettings();

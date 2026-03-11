@@ -234,6 +234,10 @@ export default class SettingsView extends PluginSettingTab {
 							this.plugin.settings.ollamaHost
 						);
 						this.plugin.settings.ollamaModels = foundModels;
+						// Register in global models/modelNames so FAB/Modal/Widget dropdowns see them
+						const built = buildOllamaModels(foundModels);
+						Object.assign(models, built.models);
+						Object.assign(modelNames, built.names);
 						await this.plugin.saveSettings();
 						// Refresh the settings display
 						this.display();

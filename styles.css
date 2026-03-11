@@ -50,7 +50,8 @@
 
 .llm-title-div {
 	text-align: center;
-	padding-bottom: 20px;
+	border-bottom: var(--tab-outline-width) solid var(--tab-outline-color);
+	padding: var(--size-4-2) 0;
 }
 
 .llm-modal-title-border {
@@ -60,7 +61,10 @@
 }
 
 .llm-model-name {
-	font-size: 8pt;
+	font-size: var(--font-ui-small);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .llm-left-buttons-div {
@@ -76,25 +80,6 @@
 	flex: 1;
 }
 
-.floating-action-button-llm-title,
-.modal-llm-title,
-.widget-llm-title {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	text-wrap: nowrap;
-}
-
-.floating-action-button-llm-title {
-	max-width: 106px;
-}
-
-.modal-llm-title {
-	max-width: 351px;
-}
-
-.widget-llm-title {
-	max-width: 170px;
-}
 
 /*MODAL VIEW*/
 .llm-modal-chat-history-container {

@@ -1,4 +1,3 @@
-import { Assistant } from "openai/resources/beta/assistants";
 import { assistant } from "utils/constants";
 
 export type ContextSettings = {
@@ -46,15 +45,6 @@ export type ImageParams = InitialParams & {
 	quality?: "low" | "medium" | "high";
 };
 
-export type AIAssistant = Assistant & {
-	modelType: string;
-};
-export type AssistantParams = InitialParams;
-
-export type AssistantHistoryItem = InitialParams & {
-	assistant_id: string;
-	modelName: string;
-};
 export type ChatHistoryItem = InitialParams &
 	ChatParams & {
 		modelName: string;
@@ -73,8 +63,7 @@ export type ImageHistoryItem = InitialParams &
 
 export type HistoryItem =
 	| ChatHistoryItem
-	| ImageHistoryItem
-	| AssistantHistoryItem;
+	| ImageHistoryItem;
 
 export type TokenParams = {
 	prefix: string[];
@@ -96,8 +85,6 @@ export type Model = {
 export type ViewType = "modal" | "widget" | "floating-action-button";
 
 export type ViewSettings = {
-	assistant: boolean;
-	assistantId: string
 	model: string;
 	modelName: string;
 	modelType: string;

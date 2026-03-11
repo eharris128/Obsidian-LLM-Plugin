@@ -5,7 +5,6 @@ import { HistoryContainer } from "./HistoryContainer";
 import { ViewType } from "Types/types";
 import { getViewInfo, setHistoryIndex } from "utils/utils";
 import { SettingsContainer } from "./SettingsContainer";
-import { AssistantsContainer } from "./AssistantsContainer";
 
 export class Header {
 	viewType: ViewType;
@@ -13,16 +12,11 @@ export class Header {
 		this.viewType = viewType;
 	}
 	modelEl: HTMLElement;
-	titleEl?: HTMLElement;
 	chatHistoryButton: ButtonComponent;
 	newChatButton: ButtonComponent;
 	settingsButton: ButtonComponent;
-	assistantsButton: ButtonComponent;
 
-	setHeader(modelName: string, title?: string) {
-		if (title) {
-			this.titleEl!.textContent = title;
-		}
+	setHeader(modelName: string) {
 		this.modelEl.textContent = modelName;
 	}
 
@@ -47,14 +41,12 @@ export class Header {
 		this.chatHistoryButton.setDisabled(true);
 		this.newChatButton.setDisabled(true);
 		this.settingsButton.setDisabled(true);
-		this.assistantsButton.setDisabled(true);
 	}
 
 	enableButtons() {
 		this.chatHistoryButton.setDisabled(false);
 		this.newChatButton.setDisabled(false);
 		this.settingsButton.setDisabled(false);
-		this.assistantsButton.setDisabled(false);
 	}
 
 	generateHeader(
@@ -62,22 +54,17 @@ export class Header {
 		chatContainerDiv: HTMLElement,
 		chatHistoryContainerDiv: HTMLElement,
 		settingsContainerDiv: HTMLElement,
-		assistantContainerDiv: HTMLElement,
 		chatContainer: ChatContainer,
 		historyContainer: HistoryContainer,
-		settingsContainer: SettingsContainer,
-		assistantsContainer: AssistantsContainer
+		settingsContainer: SettingsContainer
 	) {
 		const { modelName } = getViewInfo(this.plugin, this.viewType);
 		const titleDiv = createDiv();
 		const leftButtonDiv = titleDiv.createDiv();
 		const titleContainer = titleDiv.createDiv();
-		this.titleEl = titleContainer.createDiv();
-		this.titleEl.addClass(`${this.viewType}-llm-title`);
 		const rightButtonsDiv = titleDiv.createDiv();
 
 		titleDiv.addClass("llm-title-div", "llm-flex");
-		this.titleEl.textContent = "LLM";
 		this.modelEl = titleContainer.createDiv();
 		this.modelEl.addClass("llm-model-name");
 		this.modelEl.textContent = modelName;
@@ -95,35 +82,14 @@ export class Header {
 			);
 			this.clickHandler(this.chatHistoryButton, [
 				this.settingsButton,
-				this.assistantsButton,
 			]);
 			if (!chatHistoryContainerDiv.isShown()) {
 				chatHistoryContainerDiv.show();
 				settingsContainerDiv.hide();
 				chatContainerDiv.hide();
-				assistantContainerDiv.hide();
 			} else {
 				chatContainerDiv.show();
 				chatHistoryContainerDiv.hide();
-			}
-		});
-
-		this.assistantsButton = new ButtonComponent(rightButtonsDiv);
-		this.assistantsButton.setTooltip("Assistants");
-		assistantsContainer.generateAssistantsContainer(assistantContainerDiv);
-		this.assistantsButton.onClick(() => {
-			this.clickHandler(this.assistantsButton, [
-				this.settingsButton,
-				this.chatHistoryButton,
-			]);
-			if (!assistantContainerDiv.isShown()) {
-				assistantContainerDiv.show();
-				settingsContainerDiv.hide();
-				chatContainerDiv.hide();
-				chatHistoryContainerDiv.hide();
-			} else {
-				chatContainerDiv.show();
-				assistantContainerDiv.hide();
 			}
 		});
 
@@ -132,7 +98,7 @@ export class Header {
 			this.settingsButton = new ButtonComponent(rightButtonsDiv);
 		} else {
 			this.newChatButton = new ButtonComponent(rightButtonsDiv);
-			this.settingsButton = new ButtonComponent(leftButtonDiv);
+			this.settingsButton = new ButtonComponent(rightButtonsDiv);
 		}
 
 		this.settingsButton.setTooltip("Chat settings");
@@ -144,13 +110,11 @@ export class Header {
 			);
 			this.clickHandler(this.settingsButton, [
 				this.chatHistoryButton,
-				this.assistantsButton,
 			]);
 			if (!settingsContainerDiv.isShown()) {
 				settingsContainerDiv.show();
 				chatContainerDiv.hide();
 				chatHistoryContainerDiv.hide();
-				assistantContainerDiv.hide();
 			} else {
 				chatContainerDiv.show();
 				settingsContainerDiv.hide();
@@ -163,13 +127,11 @@ export class Header {
 			this.clickHandler(this.newChatButton, [
 				this.settingsButton,
 				this.chatHistoryButton,
-				this.assistantsButton,
 			]);
-			this.setHeader(modelName, "New chat");
+			this.setHeader(modelName);
 			chatContainerDiv.show();
 			settingsContainerDiv.hide();
 			chatHistoryContainerDiv.hide();
-			assistantContainerDiv.hide();
 			chatContainer.newChat();
 			chatContainer.resetMessages();
 			setHistoryIndex(this.plugin, this.viewType);
@@ -190,11 +152,9 @@ export class Header {
 			"clickable-icon",
 			"new-chat-button"
 		);
-		this.assistantsButton.buttonEl.addClass("clickable-icon", "assistants");
 		this.chatHistoryButton.setIcon("menu");
 		this.settingsButton.setIcon("sliders-horizontal");
 		this.newChatButton.setIcon("plus");
-		this.assistantsButton.setIcon("bot");
 
 		parentElement.prepend(titleDiv);
 	}

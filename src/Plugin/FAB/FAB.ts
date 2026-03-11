@@ -1,4 +1,3 @@
-import { AssistantsContainer } from "Plugin/Components/AssistantsContainer";
 import { ChatContainer } from "Plugin/Components/ChatContainer";
 import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
@@ -46,33 +45,24 @@ export class FAB {
 			this.plugin,
 			"floating-action-button"
 		);
-		const assistantsContainer = new AssistantsContainer(
-			this.plugin,
-			"floating-action-button"
-		);
 
 		const lineBreak = viewArea.createDiv();
 		const chatContainerDiv = viewArea.createDiv();
 		const chatHistoryContainer = viewArea.createDiv();
 		const settingsContainerDiv = viewArea.createDiv();
-		const assistantsContainerDiv = viewArea.createDiv();
 		header.generateHeader(
 			viewArea,
 			chatContainerDiv,
 			chatHistoryContainer,
 			settingsContainerDiv,
-			assistantsContainerDiv,
 			chatContainer,
 			historyContainer,
-			settingsContainer,
-			assistantsContainer
+			settingsContainer
 		);
 		let history = this.plugin.settings.promptHistory;
 
 		settingsContainerDiv.setAttr("style", "display: none");
 		settingsContainerDiv.addClass("fab-settings-container", "llm-flex");
-		assistantsContainerDiv.setAttr("style", "display: none");
-		assistantsContainerDiv.addClass("fab-assistants-container", "llm-flex");
 		chatHistoryContainer.setAttr("style", "display: none");
 		chatHistoryContainer.addClass("fab-chat-history-container", "llm-flex");
 		lineBreak.className =

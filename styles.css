@@ -42,16 +42,65 @@
 .llm-title {
 	flex-direction: column;
 	font-weight: bold;
-	margin-top: -5px;
 	align-items: center;
-	max-width: 75%;
-	flex: 4;
+	justify-content: center;
+	flex: 1;
+	min-width: 0; /* allow text to shrink inside flex */
 }
 
 .llm-title-div {
-	text-align: center;
-	border-bottom: var(--tab-outline-width) solid var(--tab-outline-color);
-	padding: var(--size-4-2) 0;
+	/* Match .pdf-toolbar exactly */
+	align-items: stretch;
+	background-color: var(--background-primary);
+	border-bottom: 1px solid var(--background-modifier-border);
+	display: flex;
+	justify-content: space-between;
+	overflow: auto;
+	padding: var(--size-4-1) var(--size-4-3);
+	position: relative;
+	box-sizing: border-box;
+	width: 100%;
+}
+
+/* Widget sidebar: bleed out of .view-content's 16 px padding so the toolbar
+   spans edge-to-edge, matching the pdf-toolbar appearance */
+.workspace-leaf-content[data-type="tab-view"] .llm-title-div {
+	margin-left: calc(-1 * var(--size-4-4));
+	margin-right: calc(-1 * var(--size-4-4));
+	margin-top: calc(-1 * var(--size-4-4));
+	padding-left: var(--size-4-4);
+	padding-right: var(--size-4-4);
+	width: calc(100% + 2 * var(--size-4-4));
+}
+
+/* llm-title-div already has border-bottom — hide the redundant lineBreak divs */
+.workspace-leaf-content[data-type="tab-view"] .llm-widget-title-border,
+.modal-content .llm-modal-title-border {
+	display: none;
+}
+
+/* Modal: same bleed as widget — contentEl has var(--size-4-4) padding on all sides */
+.modal-content .llm-title-div {
+	margin-left: calc(-1 * var(--size-4-4));
+	margin-right: calc(-1 * var(--size-4-4));
+	margin-top: calc(-1 * var(--size-4-4));
+	padding-left: var(--size-4-4);
+	padding-right: var(--size-4-4);
+	width: calc(100% + 2 * var(--size-4-4));
+}
+
+/* FAB popover: bleed out of fab-view-area's 16 px padding.
+   Rounded top corners match the card so the background stays seamless.
+   Background matches the card body so the bar blends in. */
+.fab-content-area .llm-title-div {
+	background-color: var(--background-secondary);
+	border-radius: var(--radius-m) var(--radius-m) 0 0;
+	margin-top: calc(-1 * var(--size-4-4));
+	margin-left: calc(-1 * var(--size-4-4));
+	margin-right: calc(-1 * var(--size-4-4));
+	padding-left: var(--size-4-4);
+	padding-right: var(--size-4-4);
+	width: calc(100% + 2 * var(--size-4-4));
 }
 
 .llm-modal-title-border {
@@ -89,9 +138,8 @@
 
 .llm-modal-chat-container,
 .llm-modal-settings-container,
-.llm-widget-chat-container,
 .llm-modal-assistants-container {
-	margin-top: 20px;
+	margin-top: var(--size-4-2);
 }
 
 .llm-modal-chat-container,
@@ -193,37 +241,93 @@
 	right: 9px;
 }
 
-.fab-send-button,
+.fab-send-button {
+	position: absolute;
+	bottom: 14px;
+	right: 9px;
+	height: auto;
+}
+
 .llm-widget-send-button {
-	position: relative;
-	height: 32px;
-	aspect-ratio: 1;
+	position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+	right: 9px;
+	height: auto;
 }
 
 /* IM LIKE MESSAGE*/
-.llm-modal-messages-div > .im-like-message-container,
-.fab-messages-div > .im-like-message-container,
-.llm-widget-messages-div > .im-like-message-container {
-	/* We do not want to set min width on assistant messages */
-	/* only on user messages. */
+
+/*
+ * CLASS NAMING NOTE — llm-flex-start vs llm-flex-end
+ * These class names describe flex alignment direction, NOT message role.
+ * Counterintuitively, the mapping is:
+ *   llm-flex-start → USER messages   (even indices in the messages array: 0, 2, 4…)
+ *   llm-flex-end   → LLM responses   (odd indices in the messages array: 1, 3, 5…)
+ * If you're refactoring, consider renaming to llm-message-user / llm-message-assistant.
+ */
+
+/* Outer alignment wrapper — one per message row, stacks bubble + actions vertically */
+.llm-message-wrapper {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	margin-bottom: 6px;
+}
+
+/* Override the row-direction that llm-flex-start/llm-flex-end normally apply */
+.llm-message-wrapper.llm-flex-start,
+.llm-message-wrapper.llm-flex-end {
+	flex-direction: column;
+	justify-content: flex-start;
+	flex: unset;
+}
+
+/* User messages (llm-flex-start): right-align bubble and actions */
+.llm-message-wrapper.llm-flex-start {
+	align-items: flex-end;
+}
+
+.llm-modal-messages-div > .llm-message-wrapper,
+.fab-messages-div > .llm-message-wrapper,
+.llm-widget-messages-div > .llm-message-wrapper {
 	min-width: 100%;
 }
 
+/* The bubble itself */
 .im-like-message-container {
 	width: fit-content;
-	padding-top: 5px;
-	padding-bottom: 5px;
-	margin-bottom: 10px;
-	border-radius: 5px;
+	border-radius: var(--radius-s);
 }
 
-.im-like-message-container:nth-child(2n) {
-	padding-left: 5px;
-	border-radius: 8px;
-	border: 1px solid var(--background-modifier-border);
-	.im-like-message {
-		text-align: left;
-	}
+/* LLM responses fill the full row width */
+.llm-message-wrapper.llm-flex-end .im-like-message-container {
+	width: 100%;
+}
+
+/* Strip background/shadow from every element inside a completed LLM response */
+.llm-message-wrapper.llm-flex-end,
+.llm-message-wrapper.llm-flex-end .im-like-message-container,
+.llm-message-wrapper.llm-flex-end .im-like-message,
+.llm-message-wrapper.llm-flex-end .markdown-rendered,
+.llm-message-wrapper.llm-flex-end .markdown-preview-view,
+.llm-message-wrapper.llm-flex-end .markdown-preview-section,
+.llm-message-wrapper.llm-flex-end .markdown-preview-sizer {
+	background-color: transparent !important;
+	box-shadow: none !important;
+	border: none !important;
+}
+
+/* User messages get a visible bubble */
+.llm-message-wrapper.llm-flex-start .im-like-message-container {
+	padding: var(--size-4-2) var(--size-4-3);
+	border-radius: var(--radius-m);
+	background-color: var(--background-modifier-hover);
+	width: fit-content;
+}
+
+.llm-message-wrapper.llm-flex-start .im-like-message {
+	text-align: left;
 }
 
 .llm-assistant-logo + .im-like-message-container {
@@ -231,23 +335,39 @@
 	flex-flow: column;
 }
 
-.llm-assistant-buttons {
-	width: 85px;
+/* Actions bar — sits below the bubble */
+.llm-message-actions {
 	display: flex;
-	justify-content: space-between;
 	align-items: center;
-	padding: 0 10px;
-	margin-bottom: 8px;
+	gap: var(--size-2-1);
+	padding: 2px var(--size-4-1);
+	visibility: hidden;
+	opacity: 0;
+	transition: opacity 0.1s ease;
 }
 
-.llm-modal-messages-div .llm-assistant-logo + .im-like-message-container,
-.llm-widget-messages-div .llm-assistant-logo + .im-like-message-container {
-	background-color: var(--background-secondary);
+.llm-message-actions .clickable-icon {
+	--icon-size: var(--icon-xs);
 }
 
-.mod-sidedock .llm-assistant-logo + .im-like-message-container,
-.fab-messages-div .llm-assistant-logo + .im-like-message-container {
-	background-color: var(--background-primary);
+/* Reveal on hover of message wrapper (history messages) */
+.llm-message-wrapper:hover .llm-message-actions {
+	visibility: visible;
+	opacity: 1;
+}
+
+/* Always visible for the active streaming response */
+.llm-message-actions.llm-actions-visible {
+	visibility: visible;
+	opacity: 1;
+}
+
+/* LLM streaming responses are plain — no background, no border (on container and all children) */
+.llm-assistant-logo + .im-like-message-container,
+.llm-assistant-logo + .im-like-message-container * {
+	background-color: transparent !important;
+	box-shadow: none !important;
+	border: none !important;
 }
 
 .llm-assistant-logo {
@@ -260,14 +380,6 @@
 	margin-right: var(--size-4-2);
 }
 
-.llm-add-text,
-.llm-refresh-output {
-	margin-top: auto;
-}
-
-.llm-refresh-output {
-	margin-right: 4px;
-}
 
 .im-like-message {
 	padding: 5px 10px;
@@ -284,12 +396,8 @@ div.im-like-message.llm-widget-chat-message > p {
 	margin-bottom: auto;
 }
 
-/*
-FAB MESSAGE ICON CSS
-*/
-
 .im-like-message {
-	width: calc(100% - 40px);
+	width: 100%;
 }
 
 .llm-hide {
@@ -300,7 +408,7 @@ FAB MESSAGE ICON CSS
 .llm-history-item {
 	justify-content: space-between;
 	padding-left: 10px;
-	border-radius: 5px;
+	border-radius: var(--radius-s);
 }
 
 .llm-history-item:first-child {
@@ -339,21 +447,28 @@ FAB MESSAGE ICON CSS
 /* WIDGET*/
 
 .llm-widget-chat-container {
+	padding-top: 4px;
 	padding-bottom: var(--size-4-4);
 }
 
 .llm-widget-messages-div {
+	flex: 1;
+	min-height: 0;
 	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
+	align-items: stretch;
 }
 
 .llm-widget-chat-prompt-text-area {
-	margin-right: -40px;
 	margin-top: 5px;
 }
 
 .llm-widget-prompt-container {
 	display: flex;
 	margin-top: auto;
+	position: relative;
 }
 
 .llm-widget-title-border {
@@ -373,25 +488,28 @@ FAB MESSAGE ICON CSS
 	height: calc(100% - 70px);
 }
 
-.llm-widget-send-button,
-.fab-send-button {
-	margin-top: auto;
-	top: -8px;
-}
 
 /* FAB VIEW CSS */
 
 .fab-view-area {
 	padding: var(--size-4-4);
-	min-width: 260px;
-	max-width: 260px;
-	max-height: 500px;
+	width: 400px;
+	min-width: 400px;
+	max-width: calc(-12px + 100vw);
+	max-height: calc(-36px + 100vh);
+	min-height: 360px;
 	background-color: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border-focus);
+	border: var(--border-width) solid var(--background-modifier-border-focus);
 	border-radius: var(--radius-m);
 	margin-bottom: var(--size-4-2);
 	margin-right: 3px;
 	box-shadow: var(--shadow-s);
+	display: flex;
+	flex-direction: column;
+	/* overflow intentionally omitted — overflow:hidden lives on .fab-content-area
+	   so the resize handle can extend above the top border with a negative offset. */
+	box-sizing: border-box;
+	position: relative;
 }
 
 #_floating-action-button {
@@ -414,10 +532,10 @@ FAB MESSAGE ICON CSS
 	padding: 5px 6px;
 	box-shadow: var(--input-shadow);
 	margin-left: 3px;
-	border-radius: 3px;
+	border-radius: var(--radius-s);
 	font-size: initial !important;
 	background-color: var(--background-primary-alt);
-	border: 1px solid var(--background-modifier-border);
+	border: var(--border-width) solid var(--background-modifier-border);
 }
 
 #_floating-action-button button.buttonItem:hover {
@@ -425,9 +543,14 @@ FAB MESSAGE ICON CSS
 }
 
 .fab-chat-prompt-text-area {
-	height: 50px;
-	margin-right: -40px;
-	max-width: 100%;
+	flex: 1;
+	min-width: 0;
+	min-height: 50px;
+	resize: none;
+}
+
+.fab-prompt-container {
+	position: relative;
 }
 
 .fab-prompt-container > input[type="text"] {
@@ -435,17 +558,71 @@ FAB MESSAGE ICON CSS
 }
 
 .fab-settings-container,
-.fab-chat-container,
 .fab-assistants-container,
 .fab-chat-history-container {
 	overflow-y: auto;
-	max-height: 300px;
-	min-height: 300px;
+	flex: 1 1 0;
+	min-height: 0;
+}
+
+.fab-chat-container {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 0;
+	min-height: 0;
+	overflow: hidden;
 }
 
 .fab-messages-div {
 	overflow-y: auto;
-	max-height: 240px;
+	flex: 1 1 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	justify-content: flex-start;
+	align-items: stretch;
+}
+
+/* Empty-state: center the avatar SVG both axes within the available space.
+   The llm-justify-content-center class is toggled by displayNoChatView(). */
+.fab-messages-div.llm-justify-content-center,
+.llm-widget-messages-div.llm-justify-content-center {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+}
+
+/* Absolutely positioned over the top padding zone — out of flex flow so
+   it works regardless of whether the parent is display:flex or display:block.
+   Uses the same border-highlight + --interactive-accent pattern as
+   Obsidian's workspace-leaf-resize-handle. */
+/* Inner content wrapper carries overflow:hidden so the resize handle (a sibling,
+   not a child) can extend above the card's top border without being clipped. */
+.fab-content-area {
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 0;
+	min-height: 0;
+	/* overflow:hidden removed — each inner container handles its own overflow,
+	   and removing it allows the title bar to bleed to the card edges */
+}
+
+/* Straddling the top border: top:-8px centres the 14px handle on the 1px border
+   line, giving the user a comfortable grab target right where they expect it. */
+.fab-resize-handle {
+	position: absolute;
+	top: -8px;
+	left: 0;
+	right: 0;
+	height: 14px;
+	cursor: ns-resize;
+	z-index: 10;
+}
+
+.fab-view-area:has(.fab-resize-handle:hover),
+.fab-view-area.is-resizing {
+	border-top-color: var(--interactive-accent);
 }
 
 .fab-settings-container,
@@ -486,7 +663,7 @@ FAB MESSAGE ICON CSS
 }
 
 .llm-font-size-medium {
-	font-size: 12px;
+	font-size: var(--font-ui-small);
 }
 
 .llm-justify-content-center {
@@ -505,7 +682,7 @@ FAB MESSAGE ICON CSS
 }
 
 .fab-chat-message {
-	font-size: 8pt;
+	font-size: var(--font-ui-medium);
 }
 
 .floating-action-button {
@@ -634,14 +811,14 @@ FAB MESSAGE ICON CSS
 	align-items: flex-start;
 	width: fit-content;
 	background: var(--background-modifier-form-field);
-	border-radius: 5px;
+	border-radius: var(--radius-m);
 	max-width: 213px;
 	min-width: 213px;
 	gap: unset;
 }
 
 .llm-vector-file {
-	border-radius: 5px;
+	border-radius: var(--radius-m);
 	padding: 6px;
 	width: 100%;
 	text-align: start;

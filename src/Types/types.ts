@@ -30,6 +30,7 @@ type InitialParams = {
 export type ChatParams = InitialParams & {
 	temperature: number;
 	tokens?: number;
+	systemContext?: string;
 	frequencyPenalty?: number | null;
 	logProbs?: boolean | null;
 	topLogProbs?: number | null;
@@ -71,7 +72,7 @@ export type TokenParams = {
 };
 
 export type Message = {
-	role: "user" | typeof assistant;
+	role: "user" | "system" | typeof assistant;
 	content: string;
 };
 

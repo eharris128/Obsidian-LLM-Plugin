@@ -30,3 +30,4 @@ data.json
 .logs/
 __pycache__/
 .beads/
+data-backup.json

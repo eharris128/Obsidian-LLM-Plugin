@@ -231,7 +231,7 @@ export async function geminiMessage(
 	params: ChatParams,
 	Gemini_API_KEY: string
 ) {
-	const { model, topP, messages, tokens, temperature } = params as ChatParams;
+	const { model, topP, messages, tokens, temperature, systemContext } = params as ChatParams;
 	const client = new GoogleGenAI({ apiKey: Gemini_API_KEY });
 
 	const contents = messages.map((message) => {
@@ -253,6 +253,7 @@ export async function geminiMessage(
 				...(tokens ? { maxOutputTokens: tokens } : {}),
 				temperature,
 				topP: topP ?? undefined,
+				...(systemContext ? { systemInstruction: systemContext } : {}),
 			},
 		})
 	);
@@ -374,16 +375,20 @@ export async function claudeMessage(
 		dangerouslyAllowBrowser: true,
 	});
 
-	const { model, messages, tokens, temperature } = params as ChatParams;
+	const { model, messages, tokens, temperature, systemContext } = params as ChatParams;
 
 	// Anthropic SDK Docs - https://github.com/anthropics/anthropic-sdk-typescript/blob/HEAD/helpers.md#messagestream-api
 	// Claude API requires max_tokens; default to 4096 when user hasn't set it
+	// Claude only accepts "user" | "assistant" in its messages array;
+	// system context is passed via the separate `system` parameter.
+	type ClaudeMessage = { role: "user" | "assistant"; content: string };
 	const stream = client.messages.stream({
 		model,
-		messages,
+		messages: messages.filter(m => m.role !== "system") as ClaudeMessage[],
 		max_tokens: tokens || 4096,
 		temperature,
 		stream: true,
+		...(systemContext ? { system: systemContext } : {}),
 	});
 	return stream;
 }

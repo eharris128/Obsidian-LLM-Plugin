@@ -31,7 +31,7 @@
 
 .llm-update-settings {
 	padding-top: 0.75em;
-	border-top: 1px solid var(--background-modifier-border);
+	border-top: var(--border-width) solid var(--background-modifier-border);
 }
 
 .mt-auto {
@@ -52,7 +52,7 @@
 	/* Match .pdf-toolbar exactly */
 	align-items: stretch;
 	background-color: var(--background-primary);
-	border-bottom: 1px solid var(--background-modifier-border);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
 	display: flex;
 	justify-content: space-between;
 	overflow: auto;
@@ -104,9 +104,9 @@
 }
 
 .llm-modal-title-border {
-	border-bottom: 1px solid var(--background-modifier-border);
-	margin-left: -16px;
-	width: calc(100% + 32px);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+	margin-left: calc(-1 * var(--size-4-4));
+	width: calc(100% + 2 * var(--size-4-4));
 }
 
 .llm-model-name {
@@ -132,8 +132,8 @@
 
 /*MODAL VIEW*/
 .llm-modal-chat-history-container {
-	margin-top: 10px;
-	margin-bottom: 10px;
+	margin-top: var(--size-4-2);
+	margin-bottom: var(--size-4-2);
 }
 
 .llm-modal-chat-container,
@@ -169,8 +169,8 @@
 .fab-chat-history-container,
 .fab-assistants-container {
 	flex-direction: column;
-	width: calc(100% - 4px);
-	padding: 0 2px 0 2px;
+	width: calc(100% - var(--size-4-1));
+	padding: 0 var(--size-2-1);
 	overflow: auto;
 }
 
@@ -178,7 +178,7 @@
 .llm-widget-chat-container,
 .fab-chat-container {
 	justify-content: space-between;
-	padding: 2px;
+	padding: 0 var(--size-2-1) var(--size-2-1);
 	width: 100%;
 }
 
@@ -186,7 +186,7 @@
 	min-height: 10rem;
 	max-height: 40vh;
 	overflow-y: auto;
-	margin-bottom: 15px;
+	margin-bottom: var(--size-4-4);
 }
 
 .llm-flex-end {
@@ -207,7 +207,7 @@
 
 #chat-prompt-text-area {
 	padding: 10px 45px 10px 10px;
-	font-size: 16px;
+	font-size: var(--font-text-size);
 	resize: none;
 }
 
@@ -228,7 +228,7 @@
 	justify-content: center;
 	cursor: var(--cursor);
 	padding: var(--size-4-2);
-	border-bottom: 1px solid var(--background-modifier-border);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
 	color: var(--llm-text-muted);
 	background-color: var(--interactive-normal);
 	--icon-size: var(--icon-s);
@@ -272,7 +272,7 @@
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
-	margin-bottom: 6px;
+	margin-bottom: var(--size-4-1);
 }
 
 /* Override the row-direction that llm-flex-start/llm-flex-end normally apply */
@@ -340,7 +340,7 @@
 	display: flex;
 	align-items: center;
 	gap: var(--size-2-1);
-	padding: 2px var(--size-4-1);
+	padding: var(--size-2-1) var(--size-4-1);
 	visibility: hidden;
 	opacity: 0;
 	transition: opacity 0.1s ease;
@@ -382,7 +382,7 @@
 
 
 .im-like-message {
-	padding: 5px 10px;
+	padding: var(--size-4-1) var(--size-4-2);
 	p {
 		margin: 0;
 	}
@@ -407,12 +407,12 @@ div.im-like-message.llm-widget-chat-message > p {
 /* HISTORY CONTAINER */
 .llm-history-item {
 	justify-content: space-between;
-	padding-left: 10px;
+	padding-left: var(--size-4-2);
 	border-radius: var(--radius-s);
 }
 
 .llm-history-item:first-child {
-	padding-top: 10px;
+	padding-top: var(--size-4-2);
 }
 
 .llm-history-item > p {
@@ -433,7 +433,7 @@ div.im-like-message.llm-widget-chat-message > p {
 }
 
 .llm-delete-history-button {
-	margin: 0 10px;
+	margin: 0 var(--size-4-2);
 }
 
 .edit-prompt-button,
@@ -441,13 +441,13 @@ div.im-like-message.llm-widget-chat-message > p {
 .llm-add-text,
 .llm-refresh-output,
 #llm-delete-history-button {
-	padding: 4px;
+	padding: var(--size-4-1);
 }
 
 /* WIDGET*/
 
 .llm-widget-chat-container {
-	padding-top: 4px;
+	padding-top: var(--size-4-1);
 	padding-bottom: var(--size-4-4);
 }
 
@@ -462,7 +462,7 @@ div.im-like-message.llm-widget-chat-message > p {
 }
 
 .llm-widget-chat-prompt-text-area {
-	margin-top: 5px;
+	margin-top: var(--size-4-1);
 }
 
 .llm-widget-prompt-container {
@@ -472,7 +472,7 @@ div.im-like-message.llm-widget-chat-message > p {
 }
 
 .llm-widget-title-border {
-	border-bottom: 1px solid var(--background-modifier-border);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
 	width: 100%;
 }
 
@@ -495,14 +495,14 @@ div.im-like-message.llm-widget-chat-message > p {
 	padding: var(--size-4-4);
 	width: 400px;
 	min-width: 400px;
-	max-width: calc(-12px + 100vw);
+	max-width: calc(100vw - var(--size-4-3));
 	max-height: calc(-36px + 100vh);
 	min-height: 360px;
 	background-color: var(--background-secondary);
 	border: var(--border-width) solid var(--background-modifier-border-focus);
 	border-radius: var(--radius-m);
 	margin-bottom: var(--size-4-2);
-	margin-right: 3px;
+	margin-right: var(--size-2-1);
 	box-shadow: var(--shadow-s);
 	display: flex;
 	flex-direction: column;
@@ -515,7 +515,7 @@ div.im-like-message.llm-widget-chat-message > p {
 #_floating-action-button {
 	height: auto;
 	width: auto;
-	padding: 3px;
+	padding: var(--size-2-1);
 }
 
 #_floating-action-button > .buttonItem > svg.svg-icon {
@@ -527,11 +527,11 @@ div.im-like-message.llm-widget-chat-message > p {
 	height: 32px;
 	width: 32px;
 	float: right;
-	margin: 2px;
+	margin: var(--size-2-1);
 	cursor: pointer;
-	padding: 5px 6px;
+	padding: var(--size-4-1);
 	box-shadow: var(--input-shadow);
-	margin-left: 3px;
+	margin-left: var(--size-2-1);
 	border-radius: var(--radius-s);
 	font-size: initial !important;
 	background-color: var(--background-primary-alt);
@@ -563,6 +563,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	overflow-y: auto;
 	flex: 1 1 0;
 	min-height: 0;
+	padding-top: var(--size-4-1);
 }
 
 .fab-chat-container {
@@ -581,6 +582,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	flex-direction: column;
 	justify-content: flex-start;
 	align-items: stretch;
+	padding-top: var(--size-4-1);
 }
 
 /* Empty-state: center the avatar SVG both axes within the available space.
@@ -678,7 +680,7 @@ div.im-like-message.llm-widget-chat-message > p {
 }
 
 .llm-empty-history-button {
-	margin-top: 17px;
+	margin-top: var(--size-4-4);
 }
 
 .fab-chat-message {
@@ -696,7 +698,7 @@ div.im-like-message.llm-widget-chat-message > p {
 /* LOADING ANIMATION TO USE BEFORE WE GET STREAMING UP */
 .streaming-dot {
 	color: var(--interactive-accent);
-	font-size: 18pt;
+	font-size: var(--font-ui-large);
 	display: inline-block;
 	animation-name: bouncing;
 	animation-duration: 700ms;
@@ -734,7 +736,7 @@ div.im-like-message.llm-widget-chat-message > p {
 }
 
 .llm-thinking-text {
-	font-size: 10pt;
+	font-size: var(--font-ui-small);
 	font-style: italic;
 	opacity: 0.8;
 	animation: pulse 1.5s ease-in-out infinite;
@@ -785,23 +787,23 @@ div.im-like-message.llm-widget-chat-message > p {
 
 #llm-hero-credits {
 	font-weight: bold;
-	font-size: 15px;
-	margin: 12px 0 0 0 !important;
+	font-size: var(--font-ui-medium);
+	margin: var(--size-4-3) 0 0 0 !important;
 }
 
 .llm-hero-names {
-	font-size: 14px;
+	font-size: var(--font-ui-small);
 	margin: 0px;
 }
 
 .llm-text-muted,
 .version {
 	color: var(--llm-text-muted);
-	font-size: 12px;
+	font-size: var(--font-ui-smaller);
 }
 
 #llm-settings-credits > p {
-	font-size: 10pt;
+	font-size: var(--font-ui-small);
 	margin: 0;
 }
 

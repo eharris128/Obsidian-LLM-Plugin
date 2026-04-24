@@ -65,6 +65,7 @@ export interface LLMPluginSettings {
 	ollamaHost: string;
 	ollamaModels: string[];
 	emptyChatAvatar: string;
+	fabViewHeight?: number;
 }
 
 const defaultSettings = {

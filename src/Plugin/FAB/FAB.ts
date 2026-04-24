@@ -30,7 +30,15 @@ export class FAB {
 		fabContainer.setAttribute("id", "_floating-action-button");
 		const viewArea = fabContainer.createDiv();
 		viewArea.addClass("fab-view-area");
-		viewArea.setAttr("style", "display: none");
+
+		// Set properties independently so they never clobber each other.
+		// setAttr("style", ...) is intentionally avoided — it writes the whole
+		// attribute string atomically and then changing one property (display)
+		// later can race with or lose the other (height).
+		const savedHeight = this.plugin.settings.fabViewHeight ?? 600;
+		viewArea.style.display = "none";
+		viewArea.style.height = `${savedHeight}px`;
+
 		const header = new Header(this.plugin, "floating-action-button");
 		const chatContainer = new ChatContainer(
 			this.plugin,
@@ -46,12 +54,24 @@ export class FAB {
 			"floating-action-button"
 		);
 
-		const lineBreak = viewArea.createDiv();
-		const chatContainerDiv = viewArea.createDiv();
-		const chatHistoryContainer = viewArea.createDiv();
-		const settingsContainerDiv = viewArea.createDiv();
+		// Resize handle lives directly on viewArea (outside contentArea) so it
+		// can straddle the top border with a negative top offset. overflow:hidden
+		// is on contentArea instead, keeping it off viewArea so the handle isn't
+		// clipped.
+		const resizeHandle = viewArea.createDiv();
+		resizeHandle.addClass("fab-resize-handle");
+
+		// All scrollable/clipped content goes in contentArea, which carries
+		// overflow:hidden so the resize handle is unaffected.
+		const contentArea = viewArea.createDiv();
+		contentArea.addClass("fab-content-area");
+
+		const lineBreak = contentArea.createDiv();
+		const chatContainerDiv = contentArea.createDiv();
+		const chatHistoryContainer = contentArea.createDiv();
+		const settingsContainerDiv = contentArea.createDiv();
 		header.generateHeader(
-			viewArea,
+			contentArea,
 			chatContainerDiv,
 			chatHistoryContainer,
 			settingsContainerDiv,
@@ -59,6 +79,51 @@ export class FAB {
 			historyContainer,
 			settingsContainer
 		);
+
+		resizeHandle.addEventListener("pointerdown", (e: PointerEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
+			// setPointerCapture routes all future pointer events to this element
+			// even when the cursor leaves it — no global listeners needed.
+			resizeHandle.setPointerCapture(e.pointerId);
+			viewArea.addClass("is-resizing");
+
+			const startY = e.clientY;
+			const startHeight = viewArea.offsetHeight;
+			const minHeight = 360;
+			// Compute the position-aware max height: the card grows upward from
+			// a fixed bottom anchor, so bottom - 36px keeps the drag handle
+			// at least 36px from the top of the viewport and always reachable.
+			const maxHeight = Math.max(
+				minHeight,
+				viewArea.getBoundingClientRect().bottom - 36
+			);
+
+			const onPointerMove = (moveEvent: PointerEvent) => {
+				// Dragging up (negative delta) increases height since the FAB
+				// is anchored to the bottom-right corner.
+				const delta = startY - moveEvent.clientY;
+				const newHeight = Math.min(
+					maxHeight,
+					Math.max(minHeight, startHeight + delta)
+				);
+				viewArea.style.height = `${newHeight}px`;
+			};
+
+			const onPointerUp = () => {
+				resizeHandle.releasePointerCapture(e.pointerId);
+				viewArea.removeClass("is-resizing");
+				resizeHandle.removeEventListener("pointermove", onPointerMove);
+				resizeHandle.removeEventListener("pointerup", onPointerUp);
+				// Persist the new height
+				this.plugin.settings.fabViewHeight = viewArea.offsetHeight;
+				this.plugin.saveSettings();
+			};
+
+			resizeHandle.addEventListener("pointermove", onPointerMove);
+			resizeHandle.addEventListener("pointerup", onPointerUp);
+		});
+
 		let history = this.plugin.settings.promptHistory;
 
 		settingsContainerDiv.setAttr("style", "display: none");
@@ -87,10 +152,23 @@ export class FAB {
 			.setIcon("bot-message-square")
 			.setClass("buttonItem")
 			.onClick(() => {
-				if (!viewArea.isShown()) {
-					viewArea.setAttr("style", "display: block");
+				if (viewArea.style.display === "none") {
+					viewArea.style.display = "flex";
+					// Clamp any persisted oversized height after the element is
+					// visible and laid out so getBoundingClientRect() is accurate.
+					requestAnimationFrame(() => {
+						const safeMax = Math.max(
+							360,
+							viewArea.getBoundingClientRect().bottom - 36
+						);
+						if (viewArea.offsetHeight > safeMax) {
+							viewArea.style.height = `${safeMax}px`;
+							this.plugin.settings.fabViewHeight = safeMax;
+							this.plugin.saveSettings();
+						}
+					});
 				} else {
-					viewArea.hide();
+					viewArea.style.display = "none";
 				}
 			});
 

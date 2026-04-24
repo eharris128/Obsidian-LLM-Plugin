@@ -78,6 +78,7 @@ export class ChatContainer {
 	messageStore: MessageStore;
 	contextBuilder: ContextBuilder;
 	currentVaultContext: any = null; // Store context for current generation
+	pendingContextString: string | null = null; // Context string to inject into API call (not shown in UI)
 	claudeCodeSessionId: string | null = null;
 	constructor(
 		private plugin: LLMPlugin,
@@ -135,7 +136,21 @@ export class ChatContainer {
 
 	getParams(endpoint: string, model: string, modelType: string) {
 		const settingType = getSettingType(this.viewType);
-		const messagesForParams = this.getMessages();
+		const storedMessages = this.getMessages();
+
+		// For OpenAI-compatible providers, inject context as a system message so it
+		// stays separate from the user's message. Claude and Gemini handle system
+		// context via their own dedicated parameters (set on the params object below).
+		const isOpenAICompatible =
+			modelType === ollama ||
+			modelType === mistral ||
+			modelType === GPT4All ||
+			endpoint === chat;
+
+		const messagesForParams =
+			this.pendingContextString && isOpenAICompatible
+				? [{ role: "system" as const, content: this.pendingContextString }, ...storedMessages]
+				: storedMessages;
 
 		if (modelType === gemini) {
 			const params: ChatParams = {
@@ -148,6 +163,7 @@ export class ChatContainer {
 					this.plugin.settings[settingType].chatSettings.temperature,
 				tokens: this.plugin.settings[settingType].chatSettings
 					.maxTokens,
+				...(this.pendingContextString ? { systemContext: this.pendingContextString } : {}),
 				...this.plugin.settings[settingType].chatSettings.gemini,
 			};
 			return params;
@@ -204,6 +220,7 @@ export class ChatContainer {
 					this.plugin.settings[settingType].chatSettings.temperature,
 				tokens: this.plugin.settings[settingType].chatSettings
 					.maxTokens,
+				...(this.pendingContextString ? { systemContext: this.pendingContextString } : {}),
 			};
 			return params;
 		}
@@ -636,12 +653,8 @@ export class ChatContainer {
 					vaultContext = await this.contextBuilder.buildContext(contextSettings);
 					// Store for use in historyPush
 					this.currentVaultContext = vaultContext;
-					// Inject context as first user message
-					const contextMessage = {
-						role: "user" as const,
-						content: contextString,
-					};
-					this.messageStore.addMessage(contextMessage);
+					// Store context string to be injected into API params (not rendered in UI)
+					this.pendingContextString = contextString;
 				}
 			} catch (error) {
 				console.error("Error building vault context:", error);
@@ -662,6 +675,7 @@ export class ChatContainer {
 				await this.handleGenerate();
 				// Clear context after generation
 				this.currentVaultContext = null;
+				this.pendingContextString = null;
 			}
 			if (modelEndpoint === "images") {
 				this.setDiv(false);
@@ -941,94 +955,58 @@ export class ChatContainer {
 		finalMessage: Boolean,
 		assistant: Boolean = false
 	) {
-		const imLikeMessageContainer = this.historyMessages.createDiv();
-		const imLikeMessage = imLikeMessageContainer.createDiv();
-		const copyToClipboardButton = new ButtonComponent(
-			imLikeMessageContainer
-		);
+		// Outer wrapper carries the alignment class so CSS selectors like
+		// .llm-message-wrapper.llm-flex-start (bubble background) fire correctly.
+		const messageWrapper = this.historyMessages.createDiv();
+		messageWrapper.addClass("llm-message-wrapper");
+		// llm-flex-start = user messages (right-aligned bubble)
+		// llm-flex-end   = assistant messages (full-width transparent)
+		messageWrapper.addClass(assistant ? "llm-flex-end" : "llm-flex-start");
 
-		copyToClipboardButton.setIcon("files");
+		const imLikeMessageContainer = messageWrapper.createDiv();
+		imLikeMessageContainer.addClass("im-like-message-container");
 
 		if (assistant) {
-			const parent = imLikeMessage.createDiv();
-			parent.addClass("llm-flex-reverse");
-			const assistantMessage = parent.createDiv();
-			assistantMessage.addClass("llm-flex-column");
-			imLikeMessage.addClass("llm-flex");
-			const assistant = parent.createEl("div", {
-				cls: "llm-assistant-logo",
+			// Logo sits to the left of the content as a sibling inside the container
+			imLikeMessageContainer.addClass("llm-flex");
+			const logoEl = imLikeMessageContainer.createEl("div", { cls: "llm-assistant-logo" });
+			logoEl.appendChild(assistantLogo());
+
+			const contentWrap = imLikeMessageContainer.createDiv();
+			contentWrap.addClass("llm-flex-column");
+			const imLikeMessage = contentWrap.createDiv();
+			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
+			MarkdownRenderer.render(this.plugin.app, content, imLikeMessage, "", this.plugin);
+			imLikeMessage.querySelectorAll(".copy-code-button").forEach((item: Element) => {
+				(item as HTMLElement).setAttribute("style", "display: none");
 			});
-			assistant.appendChild(assistantLogo());
-			MarkdownRenderer.render(
-				this.plugin.app,
-				content,
-				assistantMessage,
-				"",
-				this.plugin
-			);
 		} else {
-			MarkdownRenderer.render(
-				this.plugin.app,
-				content,
-				imLikeMessage,
-				"",
-				this.plugin
-			);
-		}
-		const copyButton = imLikeMessage.querySelectorAll(
-			".copy-code-button"
-		) as NodeListOf<HTMLElement>;
-		copyButton.forEach((item) => {
-			item.setAttribute("style", "display: none");
-		});
-		imLikeMessageContainer.addClass(
-			"im-like-message-container",
-			"llm-flex"
-		);
-		copyToClipboardButton.buttonEl.addClass(
-			"add-text",
-			"llm-hide",
-			"mt-auto"
-		);
-
-		imLikeMessage.addClass(
-			"im-like-message",
-			classNames[this.viewType]["chat-message"]
-		);
-		if (index % 2 === 0) {
-			imLikeMessageContainer.addClass("llm-flex-start", "llm-flex");
-		} else {
-			imLikeMessageContainer.addClass("llm-flex-end", "llm-flex");
+			const imLikeMessage = imLikeMessageContainer.createDiv();
+			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
+			MarkdownRenderer.render(this.plugin.app, content, imLikeMessage, "", this.plugin);
+			imLikeMessage.querySelectorAll(".copy-code-button").forEach((item: Element) => {
+				(item as HTMLElement).setAttribute("style", "display: none");
+			});
 		}
 
-		imLikeMessageContainer.addEventListener("mouseenter", () => {
-			copyToClipboardButton.buttonEl.removeClass("llm-hide");
-		});
+		// Actions bar — revealed on hover of messageWrapper via CSS
+		const actionsBar = messageWrapper.createDiv({ cls: "llm-message-actions" });
 
-		imLikeMessageContainer.addEventListener("mouseleave", () => {
-			copyToClipboardButton.buttonEl.addClass("llm-hide");
-		});
-
-		copyToClipboardButton.setTooltip("Copy to clipboard");
-		copyToClipboardButton.onClick(async () => {
+		const copyBtn = new ButtonComponent(actionsBar);
+		copyBtn.setIcon("files");
+		copyBtn.setTooltip("Copy to clipboard");
+		copyBtn.buttonEl.addClass("clickable-icon");
+		copyBtn.onClick(async () => {
 			await navigator.clipboard.writeText(content);
 			new Notice("Text copied to clipboard");
 		});
 
 		if (finalMessage) {
-			const refreshButton = new ButtonComponent(imLikeMessageContainer);
-
-			refreshButton.setIcon("refresh-cw");
-			refreshButton.buttonEl.addClass("llm-refresh-output", "llm-hide");
-
-			imLikeMessageContainer.addEventListener("mouseenter", () => {
-				refreshButton.buttonEl.removeClass("llm-hide");
-			});
-
-			imLikeMessageContainer.addEventListener("mouseleave", () => {
-				refreshButton.buttonEl.addClass("llm-hide");
-			});
-			refreshButton.onClick(async () => {
+			const refreshBtn = new ButtonComponent(actionsBar);
+			refreshBtn.setIcon("refresh-cw");
+			refreshBtn.setTooltip("Regenerate response");
+			refreshBtn.buttonEl.addClass("clickable-icon", "llm-refresh-output");
+			refreshBtn.onClick(async () => {
 				new Notice("Regenerating response...");
 				this.regenerateOutput();
 			});
@@ -1074,6 +1052,7 @@ export class ChatContainer {
 	resetChat() {
 		this.historyMessages.empty();
 		this.historyMessages.removeClass("center-llmgal");
+		this.historyMessages.removeClass("llm-justify-content-center");
 	}
 	newChat() {
 		this.historyMessages.empty();

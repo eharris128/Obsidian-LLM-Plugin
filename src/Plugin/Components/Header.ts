@@ -135,6 +135,8 @@ export class Header {
 			chatContainer.newChat();
 			chatContainer.resetMessages();
 			setHistoryIndex(this.plugin, this.viewType);
+			this.plugin.settings.currentIndex = -1;
+			this.plugin.saveSettings();
 		});
 
 		leftButtonDiv.addClass("llm-left-buttons-div", "llm-flex");

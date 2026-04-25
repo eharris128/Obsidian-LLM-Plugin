@@ -1020,31 +1020,41 @@ export class ChatContainer {
 
 		promptField.setPlaceholder("Send a message...");
 
+		// Helper to sync send button enabled/disabled state with input content
+		const updateSendButton = (value: string) => {
+			const isEmpty = value.trim().length === 0;
+			sendButton.setDisabled(isEmpty);
+			sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
+		};
+
 		// Disable send button initially (empty input)
-		sendButton.setDisabled(true);
-		sendButton.buttonEl.addClass("llm-send-button-disabled");
+		updateSendButton("");
 
 		promptField.onChange((change: string) => {
 			this.prompt = change;
 			promptField.setValue(change);
-			const isEmpty = change.trim().length === 0;
-			sendButton.setDisabled(isEmpty);
-			sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
+			updateSendButton(change);
 		});
+
+		const clearPromptField = () => {
+			promptField.inputEl.setText("");
+			promptField.setValue("");
+			this.prompt = "";
+			updateSendButton("");
+		};
+
 		promptField.inputEl.addEventListener("keydown", (event) => {
 			if (sendButton.disabled === true) return;
 
 			if (event.code == "Enter") {
 				event.preventDefault();
 				this.handleGenerateClick(header, sendButton);
-				promptField.inputEl.setText("");
-				promptField.setValue("");
+				clearPromptField();
 			}
 		});
 		sendButton.onClick(() => {
 			this.handleGenerateClick(header, sendButton);
-			promptField.inputEl.setText("");
-			promptField.setValue("");
+			clearPromptField();
 		});
 
 		// Auto-focus the input field when the container is created

@@ -254,7 +254,7 @@
 	min-height: 3rem;
 }
 
-.llm-send-button {
+button.llm-send-button {
 	border-radius: var(--button-radius);
 	box-shadow: none;
 	height: auto;
@@ -264,17 +264,22 @@
 	justify-content: center;
 	cursor: var(--cursor);
 	padding: var(--size-4-2);
-	color: var(--llm-text-muted);
-	background-color: var(--interactive-normal);
+	color: var(--text-on-accent);
+	background-color: var(--interactive-accent);
 	--icon-size: var(--icon-s);
 	--icon-stroke: var(--icon-s-stroke-width);
 	flex-shrink: 0;
 	transition: opacity 0.15s ease, background-color 0.15s ease;
 }
 
-.llm-send-button.llm-send-button-disabled,
-.llm-send-button:disabled {
-	opacity: 0.4;
+button.llm-send-button:not(.llm-send-button-disabled):hover {
+	background-color: var(--interactive-accent-hover);
+	color: var(--text-on-accent);
+}
+
+button.llm-send-button.llm-send-button-disabled,
+button.llm-send-button:disabled {
+	opacity: 0.35;
 	cursor: not-allowed;
 	pointer-events: none;
 }

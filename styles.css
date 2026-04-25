@@ -132,11 +132,9 @@
 
 /*MODAL VIEW*/
 .llm-modal-chat-history-container {
-	margin-bottom: var(--size-4-2);
 }
 
 .llm-modal-assistants-container {
-	margin-top: var(--size-4-2);
 }
 
 .llm-modal-settings-container {
@@ -175,10 +173,19 @@
 	overflow: auto;
 }
 
-/* Modal history container overrides — must come after the shared padding rule */
+/* Modal container overrides — must come after the shared padding rule */
 .llm-modal-chat-history-container {
 	padding-top: var(--size-4-4);
+	padding-bottom: var(--size-4-2);
 	gap: var(--size-4-2);
+}
+
+.llm-modal-assistants-container {
+	padding-top: var(--size-4-2);
+}
+
+.llm-modal-settings-container.llm-flex {
+	padding-top: 16px;
 }
 
 .modal:not(.mod-settings) .llm-modal-chat-history-container .setting-item.llm-history-item {

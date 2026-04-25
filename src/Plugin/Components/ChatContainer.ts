@@ -794,12 +794,15 @@ export class ChatContainer {
 	}
 
 	auto_height(elem: TextAreaComponent, parentElement: Element) {
-		elem.inputEl.setAttribute("style", "height: 50px");
-		const height = elem.inputEl.scrollHeight - 5;
-		if (!(height > parseInt(window.getComputedStyle(elem.inputEl).height)))
-			return;
-		elem.inputEl.setAttribute("style", `height: ${height}px`);
-		elem.inputEl.setAttribute("style", `overflow: hidden`);
+		const MAX_HEIGHT = 140; // ~5 lines before scrolling
+		// Collapse to 1px so scrollHeight accurately reflects content height
+		elem.inputEl.setAttribute("style", "height: 1px");
+		const contentHeight = elem.inputEl.scrollHeight;
+		if (contentHeight <= MAX_HEIGHT) {
+			elem.inputEl.setAttribute("style", `height: ${contentHeight}px; overflow-y: hidden`);
+		} else {
+			elem.inputEl.setAttribute("style", `height: ${MAX_HEIGHT}px; overflow-y: auto`);
+		}
 		parentElement.scrollTo(0, 9999);
 	}
 

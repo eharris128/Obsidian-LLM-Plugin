@@ -201,6 +201,7 @@
 	justify-content: space-between;
 	padding: 0 var(--size-2-1) var(--size-2-1);
 	width: 100%;
+	position: relative; /* anchor for absolutely-positioned empty state */
 }
 
 .llm-modal-messages-div {
@@ -232,7 +233,7 @@
 }
 
 #chat-prompt-text-area {
-	padding: var(--size-4-3);
+	padding: var(--size-4-2) var(--size-4-2) var(--size-2-1) var(--size-4-2);
 	font-size: var(--font-text-size);
 	resize: none;
 	border: none;
@@ -289,7 +290,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	padding: var(--size-4-1) var(--size-4-2);
+	padding: var(--size-2-1) var(--size-4-2) var(--size-4-2) var(--size-4-2);
 	gap: var(--size-4-2);
 }
 
@@ -303,8 +304,7 @@
 	cursor: pointer;
 	padding: var(--size-4-1) var(--size-4-1);
 	border-radius: var(--radius-s);
-	flex: 1;
-	min-width: 0;
+	width: fit-content;
 	max-width: 200px;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -855,6 +855,23 @@ div.im-like-message.llm-widget-chat-message > p {
 	fill: var(--text-faint);
 }
 
+/* Empty-state avatar: taken out of flex flow and anchored to the stable
+   chat container so the prompt area's height never affects its position.
+   --llm-prompt-height approximates the default prompt container height
+   (textarea 50px + toolbar ~40px). The icon is shifted up by half that
+   value so it visually lands in the centre of the messages area above
+   the prompt, without moving when a context chip expands the prompt. */
+.fab-chat-container .llm-icon-new-chat,
+.llm-modal-chat-container .llm-icon-new-chat,
+.llm-widget-chat-container .llm-icon-new-chat {
+	--llm-prompt-height: 90px;
+	position: absolute;
+	top: calc(50% - var(--llm-prompt-height) / 2);
+	left: 50%;
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
 #llm-settings-credits {
 	text-align: center;
 }
@@ -978,14 +995,15 @@ div.im-like-message.llm-widget-chat-message > p {
 .llm-input-toolbar-right {
 	display: flex;
 	align-items: center;
-	gap: var(--size-2-1);
+	gap: var(--size-4-1);
 	flex-shrink: 0;
 }
 
-/* Scan button */
-.llm-scan-button {
+/* Scan button — inactive state (button prefix beats app.css specificity) */
+button.llm-scan-button {
 	border-radius: var(--button-radius);
 	box-shadow: none;
+	border: none;
 	height: auto;
 	line-height: 1;
 	padding: var(--size-4-2);
@@ -995,17 +1013,24 @@ div.im-like-message.llm-widget-chat-message > p {
 	--icon-stroke: var(--icon-s-stroke-width);
 	flex-shrink: 0;
 	cursor: var(--cursor);
+	transition: background-color 100ms ease, color 100ms ease;
 }
 
-.llm-scan-button:hover {
+button.llm-scan-button:hover {
 	background-color: var(--background-modifier-hover);
 	color: var(--text-normal);
 	box-shadow: none;
 }
 
-/* Active state: accent colour to show file context is on */
-.llm-scan-button.is-active {
-	color: var(--interactive-accent);
+/* Active state */
+button.llm-scan-button.is-active {
+	color: var(--icon-color);
 	background-color: var(--background-modifier-hover);
+	box-shadow: none;
+}
+
+button.llm-scan-button.is-active:hover {
+	background-color: var(--background-modifier-hover);
+	color: var(--icon-color);
 	box-shadow: none;
 }

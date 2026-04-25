@@ -1018,6 +1018,9 @@ export class ChatContainer {
 		setTimeout(() => {
 			promptField.inputEl.focus();
 		}, 100);
+
+		// Restore any chips that were persisted in settings before this session
+		this.syncChips();
 	}
 
 	setMessages(replaceChatHistory: boolean = false) {

@@ -62,6 +62,11 @@
 	width: 100%;
 }
 
+/* Widget sidebar: clip horizontal overflow caused by the bleed technique below */
+.workspace-leaf-content[data-type="tab-view"] > .view-content {
+	overflow-x: hidden;
+}
+
 /* Widget sidebar: bleed out of .view-content's 16 px padding so the toolbar
    spans edge-to-edge, matching the pdf-toolbar appearance */
 .workspace-leaf-content[data-type="tab-view"] .llm-title-div {
@@ -945,7 +950,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	flex-wrap: nowrap;
 	overflow-x: auto;
 	gap: var(--size-2-1);
-	padding: var(--size-4-2) var(--size-4-3) 0;
+	padding: var(--size-4-2) var(--size-4-2) 0;
 	/* Hide scrollbar while keeping scroll behaviour */
 	scrollbar-width: none; /* Firefox */
 	-ms-overflow-style: none; /* IE/Edge */

@@ -102,41 +102,18 @@ export class ChatContainer {
 
 	private updateMessages(message: Message[]) {
 		const currentIndex = this.plugin.settings.currentIndex;
-		const fabIndex = this.plugin.settings.fabSettings.historyIndex;
-		const widgetIndex = this.plugin.settings.widgetSettings.historyIndex;
 
 		if (currentIndex > -1) {
 			message = this.plugin.settings.promptHistory[currentIndex].messages;
 		}
 
-		// Always update the current view
-		if (this.viewType === this.plugin.settings.currentView) {
-			this.resetChat();
-			this.generateIMLikeMessages(message);
-			return;
-		}
-
-		// Update FAB view if it's showing the same history item
-		if (
-			this.viewType === "floating-action-button" &&
-			fabIndex === currentIndex &&
-			currentIndex > -1
-		) {
-			this.resetChat();
-			this.generateIMLikeMessages(message);
-			return;
-		}
-
-		// Update Widget view if it's showing the same history item
-		if (
-			this.viewType === "widget" &&
-			widgetIndex === currentIndex &&
-			currentIndex > -1
-		) {
-			this.resetChat();
-			this.generateIMLikeMessages(message);
-			return;
-		}
+		// Every mounted view always re-renders when the MessageStore changes.
+		// Previously this was gated on plugin.settings.currentView, but that flag
+		// goes stale when multiple views (e.g. modal + widget) are open at the
+		// same time — whichever view last called setView() "won", leaving the
+		// other view stuck and not updating.
+		this.resetChat();
+		this.generateIMLikeMessages(message);
 	}
 
 	getMessages() {
@@ -434,6 +411,12 @@ export class ChatContainer {
 				this.historyMessages.scroll(0, 9999);
 			});
 
+			// Wait for the stream to finish before post-processing.
+			// Without this await, execution falls through immediately while text
+			// events are still firing, so previewText is "" when
+			// MarkdownRenderer.render and messageStore.addMessage are called.
+			await stream.finalMessage();
+
 			this.streamingDiv.empty();
 			MarkdownRenderer.render(
 				this.plugin.app,
@@ -692,11 +675,6 @@ export class ChatContainer {
 
 		const userMessage = { role: "user" as const, content: this.prompt };
 		this.messageStore.addMessage(userMessage);
-		// Only manually append if subscription won't handle rendering
-		// (i.e., when this view is not the current active view)
-		if (this.viewType !== this.plugin.settings.currentView) {
-			this.appendNewMessage(userMessage);
-		}
 		const params = this.getParams(modelEndpoint, model, modelType);
 		try {
 			this.previewText = "";
@@ -1037,9 +1015,11 @@ export class ChatContainer {
 		});
 
 		const clearPromptField = () => {
-			promptField.inputEl.setText("");
+			// Only clear the visible textarea; this.prompt intentionally stays
+			// set so that handleGenerateClick (which is not awaited) can still
+			// read it after clearPromptField fires. historyPush (success) and
+			// the catch block (error) both clear this.prompt when the call ends.
 			promptField.setValue("");
-			this.prompt = "";
 			updateSendButton("");
 		};
 
@@ -1056,11 +1036,6 @@ export class ChatContainer {
 			this.handleGenerateClick(header, sendButton);
 			clearPromptField();
 		});
-
-		// Auto-focus the input field when the container is created
-		setTimeout(() => {
-			promptField.inputEl.focus();
-		}, 100);
 
 		// Restore any chips that were persisted in settings before this session
 		this.syncChips();

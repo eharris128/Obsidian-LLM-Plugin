@@ -4,6 +4,7 @@ import {
 	DropdownComponent,
 	MarkdownRenderer,
 	Notice,
+	setIcon,
 	TextAreaComponent,
 } from "obsidian";
 import { ChatCompletionChunk } from "openai/resources";
@@ -83,6 +84,7 @@ export class ChatContainer {
 	currentVaultContext: any = null; // Store context for current generation
 	pendingContextString: string | null = null; // Context string to inject into API call (not shown in UI)
 	claudeCodeSessionId: string | null = null;
+	useActiveFileContext: boolean = false;
 	constructor(
 		private plugin: LLMPlugin,
 		viewType: ViewType,
@@ -664,6 +666,26 @@ export class ChatContainer {
 			}
 		}
 
+		// Active file context toggle (explicit user action via scan button, FAB/Modal only)
+		if (this.useActiveFileContext && this.viewType !== "widget" && modelEndpoint !== "images") {
+			try {
+				const activeFile = this.plugin.app.workspace.getActiveFile();
+				if (activeFile) {
+					const content = await this.plugin.app.vault.read(activeFile);
+					const activeFileContextString =
+						`# Active File: ${activeFile.name}\nPath: \`${activeFile.path}\`\n\n\`\`\`\n${content}\n\`\`\`\n`;
+					// Override any previously built context string — explicit toggle wins
+					this.pendingContextString = activeFileContextString;
+					this.currentVaultContext = {
+						activeFile: { path: activeFile.path, name: activeFile.name, content },
+						additionalFiles: [],
+					};
+				}
+			} catch (error) {
+				console.error("Error reading active file for context:", error);
+			}
+		}
+
 		const userMessage = { role: "user" as const, content: this.prompt };
 		this.messageStore.addMessage(userMessage);
 		// Only manually append if subscription won't handle rendering
@@ -815,6 +837,14 @@ export class ChatContainer {
 		const promptContainer = parentElement.createDiv();
 		promptContainer.addClass(classNames[this.viewType]["prompt-container"]);
 
+		// Active file context chip (FAB and Modal only — Widget is the active file)
+		let chipContainer: HTMLElement | null = null;
+		if (this.viewType !== "widget") {
+			chipContainer = promptContainer.createDiv();
+			chipContainer.addClass("llm-context-chip-container");
+			chipContainer.style.display = "none";
+		}
+
 		// Top section: textarea
 		const inputSection = promptContainer.createDiv();
 		inputSection.addClass("llm-input-section");
@@ -859,8 +889,64 @@ export class ChatContainer {
 			header.setHeader(modelName);
 		});
 
+		// Right-side group: scan button (FAB/Modal only) + send button
+		const toolbarRight = toolbarSection.createDiv();
+		toolbarRight.addClass("llm-input-toolbar-right");
+
+		// Scan / use-file-as-context button (FAB and Modal only)
+		let scanButton: ButtonComponent | null = null;
+		if (this.viewType !== "widget" && chipContainer) {
+			scanButton = new ButtonComponent(toolbarRight);
+			scanButton.setIcon("scan");
+			scanButton.setTooltip("Use file as context");
+			scanButton.buttonEl.addClass("llm-scan-button");
+
+			scanButton.onClick(() => {
+				this.useActiveFileContext = !this.useActiveFileContext;
+
+				if (this.useActiveFileContext) {
+					const activeFile = this.plugin.app.workspace.getActiveFile();
+					if (activeFile) {
+						// Build and show chip
+						chipContainer!.empty();
+						chipContainer!.style.display = "flex";
+
+						const chip = chipContainer!.createDiv();
+						chip.addClass("llm-context-chip");
+
+						const fileIcon = chip.createEl("span", { cls: "llm-context-chip-icon" });
+						setIcon(fileIcon, "file-text");
+
+						chip.createEl("span", { text: activeFile.name, cls: "llm-context-chip-name" });
+
+						const removeBtn = chip.createEl("span", {
+							text: "×",
+							cls: "llm-context-chip-remove",
+						});
+						removeBtn.addEventListener("click", (e) => {
+							e.stopPropagation();
+							this.useActiveFileContext = false;
+							chipContainer!.style.display = "none";
+							chipContainer!.empty();
+							scanButton?.buttonEl.removeClass("is-active");
+						});
+
+						scanButton!.buttonEl.addClass("is-active");
+					} else {
+						// No active file — revert toggle
+						this.useActiveFileContext = false;
+						new Notice("No active file to use as context");
+					}
+				} else {
+					chipContainer!.style.display = "none";
+					chipContainer!.empty();
+					scanButton!.buttonEl.removeClass("is-active");
+				}
+			});
+		}
+
 		// Send button
-		const sendButton = new ButtonComponent(toolbarSection);
+		const sendButton = new ButtonComponent(toolbarRight);
 		sendButton.buttonEl.addClass(
 			classNames[this.viewType].button,
 			"llm-send-button"

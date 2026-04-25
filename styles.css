@@ -920,3 +920,93 @@ div.im-like-message.llm-widget-chat-message > p {
 .llm-file-added {
 	background-color: var(--icon-color-active);
 }
+
+/* ACTIVE FILE CONTEXT — chip + scan button */
+
+/* Container inside the prompt card, above the textarea */
+.llm-context-chip-container {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-1);
+	padding: var(--size-4-2) var(--size-4-3) 0;
+}
+
+/* Individual chip pill */
+.llm-context-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	padding: var(--size-2-1) var(--size-4-2);
+	background-color: var(--background-modifier-hover);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	max-width: 220px;
+}
+
+.llm-context-chip-icon {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	--icon-size: 12px;
+	--icon-stroke: 1.5;
+	color: var(--text-faint);
+}
+
+.llm-context-chip-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+
+.llm-context-chip-remove {
+	flex-shrink: 0;
+	cursor: pointer;
+	color: var(--text-faint);
+	font-size: var(--font-ui-small);
+	line-height: 1;
+	user-select: none;
+	padding: 0 2px;
+}
+
+.llm-context-chip-remove:hover {
+	color: var(--text-muted);
+}
+
+/* Right-side toolbar group (scan + send) */
+.llm-input-toolbar-right {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	flex-shrink: 0;
+}
+
+/* Scan button */
+.llm-scan-button {
+	border-radius: var(--button-radius);
+	box-shadow: none;
+	height: auto;
+	line-height: 1;
+	padding: var(--size-4-2);
+	color: var(--text-muted);
+	background: transparent;
+	--icon-size: var(--icon-s);
+	--icon-stroke: var(--icon-s-stroke-width);
+	flex-shrink: 0;
+	cursor: var(--cursor);
+}
+
+.llm-scan-button:hover {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+	box-shadow: none;
+}
+
+/* Active state: accent colour to show file context is on */
+.llm-scan-button.is-active {
+	color: var(--interactive-accent);
+	background-color: var(--background-modifier-hover);
+	box-shadow: none;
+}

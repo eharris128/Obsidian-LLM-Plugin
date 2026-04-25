@@ -223,14 +223,22 @@
 }
 
 .llm-modal-prompt-container {
-	position: relative;
 	width: 100%;
+	display: flex;
+	flex-direction: column;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	overflow: hidden;
 }
 
 #chat-prompt-text-area {
-	padding: 10px 45px 10px 10px;
+	padding: var(--size-4-3);
 	font-size: var(--font-text-size);
 	resize: none;
+	border: none;
+	box-shadow: none;
+	background: transparent;
+	border-radius: 0;
 }
 
 .llm-modal-chat-prompt-text-area,
@@ -250,32 +258,68 @@
 	justify-content: center;
 	cursor: var(--cursor);
 	padding: var(--size-4-2);
-	border-bottom: var(--border-width) solid var(--background-modifier-border);
 	color: var(--llm-text-muted);
 	background-color: var(--interactive-normal);
 	--icon-size: var(--icon-s);
 	--icon-stroke: var(--icon-s-stroke-width);
+	flex-shrink: 0;
 }
 
-.llm-modal-send-button {
-	position: absolute;
-	bottom: 14px;
-	right: 9px;
-}
-
-.fab-send-button {
-	position: absolute;
-	bottom: 14px;
-	right: 9px;
-	height: auto;
-}
-
+.llm-modal-send-button,
+.fab-send-button,
 .llm-widget-send-button {
-	position: absolute;
-	top: 50%;
-	transform: translateY(-50%);
-	right: 9px;
-	height: auto;
+	/* Previously absolutely positioned; now flows in the toolbar row */
+	position: static;
+	transform: none;
+	top: auto;
+	right: auto;
+	bottom: auto;
+}
+
+/* Chat input two-section layout */
+.llm-input-section {
+	display: flex;
+}
+
+.llm-input-section textarea {
+	flex: 1;
+}
+
+.llm-input-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--size-4-1) var(--size-4-2);
+	border-top: var(--border-width) solid var(--background-modifier-border);
+	gap: var(--size-4-2);
+}
+
+/* Compact model selector in the chat toolbar */
+.llm-model-select {
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+	padding: var(--size-4-1) var(--size-4-1);
+	border-radius: var(--radius-s);
+	flex: 1;
+	min-width: 0;
+	max-width: 200px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	appearance: auto;
+}
+
+.llm-model-select:hover {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.llm-model-select:focus {
+	outline: none;
+	box-shadow: none;
 }
 
 /* IM LIKE MESSAGE*/
@@ -484,13 +528,17 @@ div.im-like-message.llm-widget-chat-message > p {
 }
 
 .llm-widget-chat-prompt-text-area {
-	margin-top: var(--size-4-1);
+	/* margin-top removed — textarea lives inside llm-input-section now */
 }
 
 .llm-widget-prompt-container {
 	display: flex;
+	flex-direction: column;
 	margin-top: auto;
-	position: relative;
+	margin-bottom: var(--size-4-2);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	overflow: hidden;
 }
 
 .llm-widget-title-border {
@@ -570,14 +618,18 @@ div.im-like-message.llm-widget-chat-message > p {
 }
 
 .fab-chat-prompt-text-area {
-	flex: 1;
-	min-width: 0;
+	width: 100%;
 	min-height: 50px;
 	resize: none;
 }
 
 .fab-prompt-container {
-	position: relative;
+	display: flex;
+	flex-direction: column;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	overflow: hidden;
+	background-color: var(--background-primary);
 }
 
 .fab-prompt-container > input[type="text"] {

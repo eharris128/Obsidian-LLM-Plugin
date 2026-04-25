@@ -1,6 +1,7 @@
 import LLMPlugin from "main";
 import {
 	ButtonComponent,
+	DropdownComponent,
 	MarkdownRenderer,
 	Notice,
 	TextAreaComponent,
@@ -40,6 +41,7 @@ import {
 import assistantLogo from "Plugin/Components/AssistantLogo";
 import {
 	claudeCodeMessage,
+	getGpt4AllPath,
 	getSettingType,
 	getViewInfo,
 	messageGPT4AllServer,
@@ -50,6 +52,7 @@ import {
 	openAIMessage,
 	setHistoryIndex,
 } from "utils/utils";
+import { models, modelNames } from "utils/models";
 import { Header } from "./Header";
 import { MessageStore } from "./MessageStore";
 import defaultLogo from "assets/LLMgal.svg";
@@ -807,19 +810,57 @@ export class ChatContainer {
 		if (this.getMessages().length === 0) {
 			this.displayNoChatView(this.historyMessages);
 		}
+
+		// Outer prompt container — a flex-column card with border
 		const promptContainer = parentElement.createDiv();
-		const promptField = new TextAreaComponent(promptContainer);
-		const sendButton = new ButtonComponent(promptContainer);
-		if (this.viewType === "floating-action-button") {
-			promptContainer.addClass("llm-flex");
-		}
 		promptContainer.addClass(classNames[this.viewType]["prompt-container"]);
+
+		// Top section: textarea
+		const inputSection = promptContainer.createDiv();
+		inputSection.addClass("llm-input-section");
+		const promptField = new TextAreaComponent(inputSection);
 		promptField.inputEl.className = classNames[this.viewType]["text-area"];
 		promptField.inputEl.id = "chat-prompt-text-area";
 		promptField.inputEl.tabIndex = 0;
 		promptContainer.addEventListener("input", () => {
 			this.auto_height(promptField, parentElement);
 		});
+
+		// Bottom toolbar: model selector (left) + send button (right)
+		const toolbarSection = promptContainer.createDiv();
+		toolbarSection.addClass("llm-input-toolbar");
+
+		// Model dropdown
+		const settingType = getSettingType(this.viewType);
+		const viewSettings = this.plugin.settings[settingType];
+		const modelDropdown = new DropdownComponent(toolbarSection);
+		modelDropdown.selectEl.addClass("llm-model-select");
+		for (const modelDisplayName of Object.keys(models)) {
+			if (models[modelDisplayName].type === GPT4All) {
+				const gpt4AllPath = getGpt4AllPath(this.plugin);
+				const fullPath = `${gpt4AllPath}/${models[modelDisplayName].model}`;
+				if (this.plugin.fileSystem.existsSync(fullPath)) {
+					modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+				}
+			} else {
+				modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+			}
+		}
+		modelDropdown.setValue(viewSettings.model);
+		modelDropdown.onChange((change) => {
+			const modelName = modelNames[change];
+			if (!modelName || !models[modelName]) return;
+			viewSettings.model = change;
+			viewSettings.modelName = modelName;
+			viewSettings.modelType = models[modelName].type;
+			viewSettings.endpointURL = models[modelName].url;
+			viewSettings.modelEndpoint = models[modelName].endpoint;
+			this.plugin.saveSettings();
+			header.setHeader(modelName);
+		});
+
+		// Send button
+		const sendButton = new ButtonComponent(toolbarSection);
 		sendButton.buttonEl.addClass(
 			classNames[this.viewType].button,
 			"llm-send-button"

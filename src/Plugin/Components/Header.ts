@@ -11,13 +11,13 @@ export class Header {
 	constructor(private plugin: LLMPlugin, viewType: ViewType) {
 		this.viewType = viewType;
 	}
-	modelEl: HTMLElement;
+	modelEl?: HTMLElement;
 	chatHistoryButton: ButtonComponent;
 	newChatButton: ButtonComponent;
 	settingsButton: ButtonComponent;
 
-	setHeader(modelName: string) {
-		this.modelEl.textContent = modelName;
+	setHeader(_modelName: string) {
+		// Model name is now shown in the chat input toolbar dropdown
 	}
 
 	resetHistoryButton() {
@@ -58,16 +58,11 @@ export class Header {
 		historyContainer: HistoryContainer,
 		settingsContainer: SettingsContainer
 	) {
-		const { modelName } = getViewInfo(this.plugin, this.viewType);
 		const titleDiv = createDiv();
 		const leftButtonDiv = titleDiv.createDiv();
-		const titleContainer = titleDiv.createDiv();
 		const rightButtonsDiv = titleDiv.createDiv();
 
 		titleDiv.addClass("llm-title-div", "llm-flex");
-		this.modelEl = titleContainer.createDiv();
-		this.modelEl.addClass("llm-model-name");
-		this.modelEl.textContent = modelName;
 
 		this.chatHistoryButton = new ButtonComponent(leftButtonDiv);
 		this.chatHistoryButton.setTooltip("Chats");
@@ -141,7 +136,6 @@ export class Header {
 
 		leftButtonDiv.addClass("llm-left-buttons-div", "llm-flex");
 		rightButtonsDiv.addClass("llm-right-buttons-div", "llm-flex");
-		titleContainer.addClass("llm-title", "llm-flex");
 		this.chatHistoryButton.buttonEl.addClass(
 			"clickable-icon",
 			"chat-history"

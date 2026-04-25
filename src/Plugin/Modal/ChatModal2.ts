@@ -5,6 +5,7 @@ import { ChatContainer } from "../Components/ChatContainer";
 import { Header } from "../Components/Header";
 import { HistoryContainer } from "../Components/HistoryContainer";
 import { SettingsContainer } from "../Components/SettingsContainer";
+import { setHistoryIndex, setView } from "utils/utils";
 
 export class ChatModal2 extends Modal {
 	constructor(private plugin: LLMPlugin) {
@@ -12,6 +13,10 @@ export class ChatModal2 extends Modal {
 	}
 
 	onOpen() {
+		setView(this.plugin, "modal");
+		setHistoryIndex(this.plugin, "modal");
+		this.plugin.settings.currentIndex = -1;
+		this.plugin.saveSettings();
 		this.modalEl
 			.getElementsByClassName("modal-close-button")[0]
 			.setAttr("style", "display: none");

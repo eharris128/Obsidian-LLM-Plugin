@@ -132,14 +132,15 @@
 
 /*MODAL VIEW*/
 .llm-modal-chat-history-container {
-	margin-top: var(--size-4-2);
 	margin-bottom: var(--size-4-2);
 }
 
-.llm-modal-chat-container,
-.llm-modal-settings-container,
 .llm-modal-assistants-container {
 	margin-top: var(--size-4-2);
+}
+
+.llm-modal-settings-container {
+	padding-top: var(--size-4-4);
 }
 
 .llm-modal-chat-container,
@@ -174,6 +175,19 @@
 	overflow: auto;
 }
 
+/* Modal history container overrides — must come after the shared padding rule */
+.llm-modal-chat-history-container {
+	padding-top: var(--size-4-4);
+	gap: var(--size-4-2);
+}
+
+.modal:not(.mod-settings) .llm-modal-chat-history-container .setting-item.llm-history-item {
+	background-color: var(--setting-items-background);
+	border: none;
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2);
+}
+
 .llm-modal-chat-container,
 .llm-widget-chat-container,
 .fab-chat-container {
@@ -186,6 +200,7 @@
 	min-height: 10rem;
 	max-height: 40vh;
 	overflow-y: auto;
+	padding-top: var(--size-4-4);
 	margin-bottom: var(--size-4-4);
 }
 
@@ -447,7 +462,6 @@ div.im-like-message.llm-widget-chat-message > p {
 /* WIDGET*/
 
 .llm-widget-chat-container {
-	padding-top: var(--size-4-1);
 	padding-bottom: var(--size-4-4);
 }
 
@@ -459,6 +473,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	flex-direction: column;
 	justify-content: flex-start;
 	align-items: stretch;
+	padding-top: var(--size-4-4);
 }
 
 .llm-widget-chat-prompt-text-area {
@@ -486,6 +501,11 @@ div.im-like-message.llm-widget-chat-message > p {
 .llm-widget-chat-history-container,
 .llm-widget-settings-container {
 	height: calc(100% - 70px);
+}
+
+.llm-widget-chat-history-container,
+.llm-widget-settings-container {
+	padding-top: var(--size-4-4);
 }
 
 
@@ -563,7 +583,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	overflow-y: auto;
 	flex: 1 1 0;
 	min-height: 0;
-	padding-top: var(--size-4-1);
+	padding-top: var(--size-4-4);
 }
 
 .fab-chat-container {
@@ -582,7 +602,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	flex-direction: column;
 	justify-content: flex-start;
 	align-items: stretch;
-	padding-top: var(--size-4-1);
+	padding-top: var(--size-4-4);
 }
 
 /* Empty-state: center the avatar SVG both axes within the available space.

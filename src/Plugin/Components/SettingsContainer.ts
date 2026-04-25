@@ -13,15 +13,25 @@ import { FileSelector } from "./FileSelector";
 
 export class SettingsContainer {
 	viewType: ViewType;
+	private onAdditionalFilesChange?: () => void;
 
 	constructor(private plugin: LLMPlugin, viewType: ViewType) {
 		this.viewType = viewType;
 	}
 
-	async generateSettingsContainer(parentContainer: HTMLElement, Header: Header) {
+	async generateSettingsContainer(
+		parentContainer: HTMLElement,
+		Header: Header,
+		onAdditionalFilesChange?: () => void
+	) {
+		// Persist the callback so re-renders triggered by the Header button or
+		// model dropdown change continue to wire it up correctly.
+		if (onAdditionalFilesChange) {
+			this.onAdditionalFilesChange = onAdditionalFilesChange;
+		}
 		this.resetSettings(parentContainer);
 		this.generateModels(parentContainer, Header);
-		this.generateModelSettings(parentContainer);
+		this.generateModelSettings(parentContainer, this.onAdditionalFilesChange);
 	}
 
 	generateModels(parentContainer: HTMLElement, Header: Header) {
@@ -77,7 +87,7 @@ export class SettingsContainer {
 		parentContainer.empty();
 	}
 
-	generateModelSettings(parentContainer: HTMLElement) {
+	generateModelSettings(parentContainer: HTMLElement, onAdditionalFilesChange?: () => void) {
 		const settingType = getSettingType(this.viewType);
 		const viewSettings = this.plugin.settings[settingType];
 		const endpoint = viewSettings.modelEndpoint;
@@ -95,7 +105,7 @@ export class SettingsContainer {
 		}
 		if (endpoint === chat || messages) {
 			this.generateChatSettings(parentContainer, modelType);
-			this.generateContextSettings(parentContainer);
+			this.generateContextSettings(parentContainer, onAdditionalFilesChange);
 		}
 	}
 
@@ -298,7 +308,7 @@ export class SettingsContainer {
 		}
 	}
 
-	generateContextSettings(parentContainer: HTMLElement) {
+	generateContextSettings(parentContainer: HTMLElement, onAdditionalFilesChange?: () => void) {
 		const settingType = getSettingType(this.viewType);
 		const viewSettings = this.plugin.settings[settingType];
 		const contextSettings = viewSettings.contextSettings;
@@ -378,8 +388,10 @@ export class SettingsContainer {
 							this.plugin.saveSettings();
 							this.updateSelectedFilesDisplay(
 								parentContainer,
-								selectFilesSetting.settingEl
+								selectFilesSetting.settingEl,
+								onAdditionalFilesChange
 							);
+							onAdditionalFilesChange?.();
 						}
 					);
 					modal.open();
@@ -387,12 +399,13 @@ export class SettingsContainer {
 			});
 
 		// Display selected files
-		this.updateSelectedFilesDisplay(parentContainer, selectFilesSetting.settingEl);
+		this.updateSelectedFilesDisplay(parentContainer, selectFilesSetting.settingEl, onAdditionalFilesChange);
 	}
 
 	updateSelectedFilesDisplay(
 		parentContainer: HTMLElement,
-		selectFilesSetting: HTMLElement
+		selectFilesSetting: HTMLElement,
+		onAdditionalFilesChange?: () => void
 	) {
 		const settingType = getSettingType(this.viewType);
 		const contextSettings = this.plugin.settings[settingType].contextSettings;
@@ -446,8 +459,10 @@ export class SettingsContainer {
 					this.plugin.saveSettings();
 					this.updateSelectedFilesDisplay(
 						parentContainer,
-						selectFilesSetting
+						selectFilesSetting,
+						onAdditionalFilesChange
 					);
+					onAdditionalFilesChange?.();
 				});
 			}
 

@@ -85,6 +85,9 @@ export class ChatContainer {
 	pendingContextString: string | null = null; // Context string to inject into API call (not shown in UI)
 	claudeCodeSessionId: string | null = null;
 	useActiveFileContext: boolean = false;
+	chipContainer: HTMLElement | null = null;
+	scanButton: ButtonComponent | null = null;
+	activeFileForChip: { name: string } | null = null;
 	constructor(
 		private plugin: LLMPlugin,
 		viewType: ViewType,
@@ -823,6 +826,65 @@ export class ChatContainer {
 		llmGal.appendChild(svgElement);
 	}
 
+	/** Rebuild the chip strip from current state (active file + additional files). */
+	syncChips() {
+		if (!this.chipContainer) return;
+		const settingType = getSettingType(this.viewType);
+		const contextSettings = this.plugin.settings[settingType].contextSettings;
+
+		this.chipContainer.empty();
+
+		const hasActiveFile = this.useActiveFileContext && this.activeFileForChip;
+		const hasAdditional = contextSettings.selectedFiles.length > 0;
+
+		if (!hasActiveFile && !hasAdditional) {
+			this.chipContainer.style.display = "none";
+			return;
+		}
+
+		this.chipContainer.style.display = "flex";
+
+		if (hasActiveFile) {
+			this.buildChip(this.chipContainer, this.activeFileForChip!.name, () => {
+				this.useActiveFileContext = false;
+				this.activeFileForChip = null;
+				this.scanButton?.buttonEl.removeClass("is-active");
+				this.syncChips();
+			});
+		}
+
+		for (const filePath of [...contextSettings.selectedFiles]) {
+			const fileName = filePath.split("/").pop() || filePath;
+			this.buildChip(this.chipContainer, fileName, () => {
+				contextSettings.selectedFiles = contextSettings.selectedFiles.filter(
+					(f) => f !== filePath
+				);
+				this.plugin.saveSettings();
+				this.syncChips();
+			});
+		}
+	}
+
+	private buildChip(
+		container: HTMLElement,
+		name: string,
+		onRemove: () => void
+	): HTMLElement {
+		const chip = container.createDiv({ cls: "llm-context-chip" });
+		const fileIcon = chip.createEl("span", { cls: "llm-context-chip-icon" });
+		setIcon(fileIcon, "file-text");
+		chip.createEl("span", { text: name, cls: "llm-context-chip-name" });
+		const removeBtn = chip.createEl("span", {
+			text: "×",
+			cls: "llm-context-chip-remove",
+		});
+		removeBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			onRemove();
+		});
+		return chip;
+	}
+
 	async generateChatContainer(parentElement: Element, header: Header) {
 		// If we are working with assistants, then we need a valid openAi API key.
 		// If we are working with claude, then we need a valid claude key.
@@ -840,13 +902,10 @@ export class ChatContainer {
 		const promptContainer = parentElement.createDiv();
 		promptContainer.addClass(classNames[this.viewType]["prompt-container"]);
 
-		// Active file context chip (FAB and Modal only — Widget is the active file)
-		let chipContainer: HTMLElement | null = null;
-		if (this.viewType !== "widget") {
-			chipContainer = promptContainer.createDiv();
-			chipContainer.addClass("llm-context-chip-container");
-			chipContainer.style.display = "none";
-		}
+		// Chip strip — shown for all view types; scan button only for FAB/Modal
+		this.chipContainer = promptContainer.createDiv();
+		this.chipContainer.addClass("llm-context-chip-container");
+		this.chipContainer.style.display = "none";
 
 		// Top section: textarea
 		const inputSection = promptContainer.createDiv();
@@ -897,53 +956,29 @@ export class ChatContainer {
 		toolbarRight.addClass("llm-input-toolbar-right");
 
 		// Scan / use-file-as-context button (FAB and Modal only)
-		let scanButton: ButtonComponent | null = null;
-		if (this.viewType !== "widget" && chipContainer) {
-			scanButton = new ButtonComponent(toolbarRight);
-			scanButton.setIcon("scan");
-			scanButton.setTooltip("Use file as context");
-			scanButton.buttonEl.addClass("llm-scan-button");
+		if (this.viewType !== "widget") {
+			this.scanButton = new ButtonComponent(toolbarRight);
+			this.scanButton.setIcon("scan");
+			this.scanButton.setTooltip("Use file as context");
+			this.scanButton.buttonEl.addClass("llm-scan-button");
 
-			scanButton.onClick(() => {
+			this.scanButton.onClick(() => {
 				this.useActiveFileContext = !this.useActiveFileContext;
 
 				if (this.useActiveFileContext) {
 					const activeFile = this.plugin.app.workspace.getActiveFile();
 					if (activeFile) {
-						// Build and show chip
-						chipContainer!.empty();
-						chipContainer!.style.display = "flex";
-
-						const chip = chipContainer!.createDiv();
-						chip.addClass("llm-context-chip");
-
-						const fileIcon = chip.createEl("span", { cls: "llm-context-chip-icon" });
-						setIcon(fileIcon, "file-text");
-
-						chip.createEl("span", { text: activeFile.name, cls: "llm-context-chip-name" });
-
-						const removeBtn = chip.createEl("span", {
-							text: "×",
-							cls: "llm-context-chip-remove",
-						});
-						removeBtn.addEventListener("click", (e) => {
-							e.stopPropagation();
-							this.useActiveFileContext = false;
-							chipContainer!.style.display = "none";
-							chipContainer!.empty();
-							scanButton?.buttonEl.removeClass("is-active");
-						});
-
-						scanButton!.buttonEl.addClass("is-active");
+						this.activeFileForChip = { name: activeFile.name };
+						this.scanButton!.buttonEl.addClass("is-active");
+						this.syncChips();
 					} else {
-						// No active file — revert toggle
 						this.useActiveFileContext = false;
 						new Notice("No active file to use as context");
 					}
 				} else {
-					chipContainer!.style.display = "none";
-					chipContainer!.empty();
-					scanButton!.buttonEl.removeClass("is-active");
+					this.activeFileForChip = null;
+					this.scanButton!.buttonEl.removeClass("is-active");
+					this.syncChips();
 				}
 			});
 		}

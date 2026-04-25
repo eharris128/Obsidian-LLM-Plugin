@@ -84,7 +84,8 @@ export class WidgetView extends ItemView {
 		);
 		settingsContainer.generateSettingsContainer(
 			settingsContainerDiv,
-			header
+			header,
+			() => chatContainer.syncChips()
 		);
 	}
 

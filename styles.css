@@ -939,12 +939,20 @@ div.im-like-message.llm-widget-chat-message > p {
 
 /* ACTIVE FILE CONTEXT — chip + scan button */
 
-/* Container inside the prompt card, above the textarea */
+/* Container inside the prompt card, above the textarea — scrolls horizontally */
 .llm-context-chip-container {
 	display: flex;
-	flex-wrap: wrap;
+	flex-wrap: nowrap;
+	overflow-x: auto;
 	gap: var(--size-2-1);
 	padding: var(--size-4-2) var(--size-4-3) 0;
+	/* Hide scrollbar while keeping scroll behaviour */
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* IE/Edge */
+}
+
+.llm-context-chip-container::-webkit-scrollbar {
+	display: none; /* Chrome/Safari/WebKit */
 }
 
 /* Individual chip pill */

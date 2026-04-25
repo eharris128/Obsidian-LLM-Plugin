@@ -144,7 +144,8 @@ export class FAB {
 		);
 		settingsContainer.generateSettingsContainer(
 			settingsContainerDiv,
-			header
+			header,
+			() => chatContainer.syncChips()
 		);
 
 		let button = new ButtonComponent(fabContainer);

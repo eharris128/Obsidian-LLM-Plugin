@@ -653,8 +653,8 @@ export class ChatContainer {
 			}
 		}
 
-		// Active file context toggle (explicit user action via scan button, FAB/Modal only)
-		if (this.useActiveFileContext && this.viewType !== "widget" && modelEndpoint !== "images") {
+		// Active file context toggle (explicit user action via scan button)
+		if (this.useActiveFileContext && modelEndpoint !== "images") {
 			try {
 				const activeFile = this.plugin.app.workspace.getActiveFile();
 				if (activeFile) {
@@ -934,32 +934,30 @@ export class ChatContainer {
 		const toolbarRight = toolbarSection.createDiv();
 		toolbarRight.addClass("llm-input-toolbar-right");
 
-		// Add files / file-picker button (FAB and Modal only)
-		if (this.viewType !== "widget") {
-			const addFilesButton = new ButtonComponent(toolbarRight);
-			addFilesButton.setIcon("plus");
-			addFilesButton.setTooltip("Add files as context");
-			addFilesButton.buttonEl.addClass("llm-scan-button");
+		// Add files / file-picker button
+		const addFilesButton = new ButtonComponent(toolbarRight);
+		addFilesButton.setIcon("plus");
+		addFilesButton.setTooltip("Add files as context");
+		addFilesButton.buttonEl.addClass("llm-scan-button");
 
-			addFilesButton.onClick(() => {
-				const settingType = getSettingType(this.viewType);
-				const contextSettings = this.plugin.settings[settingType].contextSettings;
+		addFilesButton.onClick(() => {
+			const settingType = getSettingType(this.viewType);
+			const contextSettings = this.plugin.settings[settingType].contextSettings;
 
-				new FileSelector(
-					this.plugin.app,
-					this.plugin,
-					this.viewType,
-					contextSettings.selectedFiles,
-					(files: string[]) => {
-						contextSettings.selectedFiles = files;
-						this.plugin.saveSettings();
-						this.syncChips();
-					}
-				).open();
-			});
-		}
+			new FileSelector(
+				this.plugin.app,
+				this.plugin,
+				this.viewType,
+				contextSettings.selectedFiles,
+				(files: string[]) => {
+					contextSettings.selectedFiles = files;
+					this.plugin.saveSettings();
+					this.syncChips();
+				}
+			).open();
+		});
 
-		// Scan / use-file-as-context button (FAB and Modal only)
+		// Scan / use-file-as-context button (FAB and Modal only — not widget)
 		if (this.viewType !== "widget") {
 			this.scanButton = new ButtonComponent(toolbarRight);
 			this.scanButton.setIcon("scan");

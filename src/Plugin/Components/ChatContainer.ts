@@ -56,6 +56,7 @@ import {
 import { models, modelNames } from "utils/models";
 import { Header } from "./Header";
 import { MessageStore } from "./MessageStore";
+import { FileSelector } from "./FileSelector";
 import defaultLogo from "assets/LLMgal.svg";
 import zenKidLogo from "assets/zen-kid.svg";
 import ninjaCatLogo from "assets/ninja-cat.svg";
@@ -954,6 +955,31 @@ export class ChatContainer {
 		// Right-side group: scan button (FAB/Modal only) + send button
 		const toolbarRight = toolbarSection.createDiv();
 		toolbarRight.addClass("llm-input-toolbar-right");
+
+		// Add files / file-picker button (FAB and Modal only)
+		if (this.viewType !== "widget") {
+			const addFilesButton = new ButtonComponent(toolbarRight);
+			addFilesButton.setIcon("plus");
+			addFilesButton.setTooltip("Add files as context");
+			addFilesButton.buttonEl.addClass("llm-scan-button");
+
+			addFilesButton.onClick(() => {
+				const settingType = getSettingType(this.viewType);
+				const contextSettings = this.plugin.settings[settingType].contextSettings;
+
+				new FileSelector(
+					this.plugin.app,
+					this.plugin,
+					this.viewType,
+					contextSettings.selectedFiles,
+					(files: string[]) => {
+						contextSettings.selectedFiles = files;
+						this.plugin.saveSettings();
+						this.syncChips();
+					}
+				).open();
+			});
+		}
 
 		// Scan / use-file-as-context button (FAB and Modal only)
 		if (this.viewType !== "widget") {

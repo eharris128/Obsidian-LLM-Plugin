@@ -8,9 +8,6 @@ export class History {
 		try {
 			let history = this.plugin.settings.promptHistory;
 			history.push(message_context);
-			if (history.length > 10) {
-				history.remove(history[0]);
-			}
 			this.plugin.settings.promptHistory = history;
 			this.plugin.saveSettings();
 			return true;

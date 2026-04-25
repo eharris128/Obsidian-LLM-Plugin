@@ -156,7 +156,7 @@ export default class LLMPlugin extends Plugin {
 		this.messageStore = new MessageStore();
 		this.settings.currentIndex = -1;
 		this.messageStore.setMessages([]);
-		this.saveSettings();
+		await this.saveSettings();
 
 		this.registerView(TAB_VIEW_TYPE, (tab) => new WidgetView(tab, this));
 
@@ -268,6 +268,13 @@ export default class LLMPlugin extends Plugin {
 
 			this.settings.fabSettings.historyIndex = -1;
 			this.settings.widgetSettings.historyIndex = -1;
+
+			// Ensure emptyChatAvatar is a valid known value; fall back to default
+			// if the saved value is missing or was corrupted (e.g. from a partial write).
+			const validAvatars = ["llm-gal", "llm-guy", "zen-kid", "ninja-cat"];
+			if (!validAvatars.includes(this.settings.emptyChatAvatar)) {
+				this.settings.emptyChatAvatar = DEFAULT_SETTINGS.emptyChatAvatar;
+			}
 
 			// Migrate linearApiKey → linearWorkspaces
 			if ((dataJSON as any).linearApiKey && !dataJSON.linearWorkspaces) {

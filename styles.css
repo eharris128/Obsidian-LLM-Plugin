@@ -290,7 +290,6 @@
 	align-items: center;
 	justify-content: space-between;
 	padding: var(--size-4-1) var(--size-4-2);
-	border-top: var(--border-width) solid var(--background-modifier-border);
 	gap: var(--size-4-2);
 }
 
@@ -599,22 +598,22 @@ div.im-like-message.llm-widget-chat-message > p {
 }
 
 #_floating-action-button .buttonItem {
-	height: 32px;
-	width: 32px;
+	height: 34px;
+	width: 34px;
 	float: right;
 	margin: var(--size-2-1);
 	cursor: pointer;
 	padding: var(--size-4-1);
-	box-shadow: var(--input-shadow);
 	margin-left: var(--size-2-1);
-	border-radius: var(--radius-s);
+	border-radius: var(--canvas-controls-radius);
 	font-size: initial !important;
-	background-color: var(--background-primary-alt);
-	border: var(--border-width) solid var(--background-modifier-border);
+	background-color: var(--interactive-normal);
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: none;
 }
 
 #_floating-action-button button.buttonItem:hover {
-	background-color: var(--background-secondary);
+	background-color: var(--interactive-hover);
 }
 
 .fab-chat-prompt-text-area {

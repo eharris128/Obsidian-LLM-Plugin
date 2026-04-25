@@ -1020,9 +1020,16 @@ export class ChatContainer {
 
 		promptField.setPlaceholder("Send a message...");
 
+		// Disable send button initially (empty input)
+		sendButton.setDisabled(true);
+		sendButton.buttonEl.addClass("llm-send-button-disabled");
+
 		promptField.onChange((change: string) => {
 			this.prompt = change;
 			promptField.setValue(change);
+			const isEmpty = change.trim().length === 0;
+			sendButton.setDisabled(isEmpty);
+			sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
 		});
 		promptField.inputEl.addEventListener("keydown", (event) => {
 			if (sendButton.disabled === true) return;

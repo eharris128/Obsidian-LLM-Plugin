@@ -9,7 +9,7 @@ import {
 } from "obsidian";
 import { changeDefaultModel, getGpt4AllPath, fetchOllamaModels } from "utils/utils";
 import { models, modelNames, buildOllamaModels } from "utils/models";
-import { GPT4All, ollama } from "utils/constants";
+import { claude, claudeCode, gemini, GPT4All, mistral, ollama, openAI } from "utils/constants";
 import logo from "assets/LLMguy.svg";
 import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
@@ -106,18 +106,31 @@ export default class SettingsView extends PluginSettingTab {
 				const allModels = { ...models, ...ollamaBuilt.models };
 				const allModelNames = { ...modelNames, ...ollamaBuilt.names };
 
+				const { openAIAPIKey, claudeAPIKey, geminiAPIKey, mistralAPIKey } = this.plugin.settings;
 				let keys = Object.keys(allModels);
 				for (let model of keys) {
-					if (allModels[model].type === GPT4All) {
+					const type = allModels[model].type;
+					// Local providers: always show
+					if (type === ollama) {
+						dropdown.addOption(allModels[model].model, model);
+						continue;
+					}
+					// GPT4All: only show if the model file exists locally
+					if (type === GPT4All) {
 						const gpt4AllPath = getGpt4AllPath(this.plugin);
 						const fullPath = `${gpt4AllPath}/${allModels[model].model}`;
 						const exists = this.plugin.fileSystem.existsSync(fullPath);
 						if (exists) {
 							dropdown.addOption(allModels[model].model, model);
 						}
-					} else {
-						dropdown.addOption(allModels[model].model, model);
+						continue;
 					}
+					// Cloud providers: only show if an API key has been entered
+					if (type === openAI && !openAIAPIKey) continue;
+					if ((type === claude || type === claudeCode) && !claudeAPIKey) continue;
+					if (type === gemini && !geminiAPIKey) continue;
+					if (type === mistral && !mistralAPIKey) continue;
+					dropdown.addOption(allModels[model].model, model);
 				}
 				dropdown.onChange((change) => {
 					valueChanged = true;

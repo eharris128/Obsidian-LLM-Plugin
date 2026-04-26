@@ -23,6 +23,8 @@ import { classNames } from "utils/classNames";
 import {
 	assistant,
 	chat,
+	claude,
+	claudeCode,
 	claudeCodeEndpoint,
 	gemini,
 	gemini2FlashStableModel,
@@ -37,6 +39,7 @@ import {
 	messages,
 	ollama,
 	mistral,
+	openAI,
 } from "utils/constants";
 
 import assistantLogo from "Plugin/Components/AssistantLogo";
@@ -934,16 +937,29 @@ export class ChatContainer {
 		const viewSettings = this.plugin.settings[settingType];
 		const modelDropdown = new DropdownComponent(toolbarSection);
 		modelDropdown.selectEl.addClass("llm-model-select");
+		const { openAIAPIKey, claudeAPIKey, geminiAPIKey, mistralAPIKey } = this.plugin.settings;
 		for (const modelDisplayName of Object.keys(models)) {
-			if (models[modelDisplayName].type === GPT4All) {
+			const type = models[modelDisplayName].type;
+			// Local providers: always show
+			if (type === ollama) {
+				modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+				continue;
+			}
+			// GPT4All: only show if the model file exists locally
+			if (type === GPT4All) {
 				const gpt4AllPath = getGpt4AllPath(this.plugin);
 				const fullPath = `${gpt4AllPath}/${models[modelDisplayName].model}`;
 				if (this.plugin.fileSystem.existsSync(fullPath)) {
 					modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
 				}
-			} else {
-				modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+				continue;
 			}
+			// Cloud providers: only show if an API key has been entered
+			if (type === openAI && !openAIAPIKey) continue;
+			if ((type === claude || type === claudeCode) && !claudeAPIKey) continue;
+			if (type === gemini && !geminiAPIKey) continue;
+			if (type === mistral && !mistralAPIKey) continue;
+			modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
 		}
 		modelDropdown.setValue(viewSettings.model);
 		modelDropdown.onChange((change) => {

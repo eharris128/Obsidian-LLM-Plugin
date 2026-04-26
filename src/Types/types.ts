@@ -48,6 +48,7 @@ export type ImageParams = InitialParams & {
 
 export type ChatHistoryItem = InitialParams &
 	ChatParams & {
+		id?: string;
 		modelName: string;
 		vaultContext?: VaultContext;
 	};
@@ -59,6 +60,7 @@ export type ProviderKeyPair = {
 
 export type ImageHistoryItem = InitialParams &
 	ImageParams & {
+		id?: string;
 		modelName: string;
 	};
 

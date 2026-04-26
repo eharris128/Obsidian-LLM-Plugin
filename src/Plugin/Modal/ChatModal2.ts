@@ -5,23 +5,32 @@ import { ChatContainer } from "../Components/ChatContainer";
 import { Header } from "../Components/Header";
 import { HistoryContainer } from "../Components/HistoryContainer";
 import { SettingsContainer } from "../Components/SettingsContainer";
+import { setHistoryIndex, setView } from "utils/utils";
 
 export class ChatModal2 extends Modal {
+	private chatContainer: ChatContainer | null = null;
+
 	constructor(private plugin: LLMPlugin) {
 		super(plugin.app);
 	}
 
 	onOpen() {
+		setView(this.plugin, "modal");
+		setHistoryIndex(this.plugin, "modal");
+		this.plugin.settings.currentIndex = -1;
+		this.plugin.saveSettings();
 		this.modalEl
 			.getElementsByClassName("modal-close-button")[0]
 			.setAttr("style", "display: none");
 		const { contentEl } = this;
 		const header = new Header(this.plugin, "modal");
-		const chatContainer = new ChatContainer(
+		// Modal always gets a fresh store — each opening starts a new conversation.
+		this.chatContainer = new ChatContainer(
 			this.plugin,
 			"modal",
-			this.plugin.messageStore
+			this.plugin.conversationRegistry
 		);
+		const chatContainer = this.chatContainer;
 		const historyContainer = new HistoryContainer(this.plugin, "modal");
 		const settingsContainer = new SettingsContainer(this.plugin, "modal");
 
@@ -57,7 +66,13 @@ export class ChatModal2 extends Modal {
 		);
 		settingsContainer.generateSettingsContainer(
 			settingsContainerDiv,
-			header
+			header,
+			() => chatContainer.syncChips()
 		);
+	}
+
+	onClose() {
+		this.chatContainer?.destroy();
+		this.chatContainer = null;
 	}
 }

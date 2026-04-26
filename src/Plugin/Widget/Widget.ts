@@ -11,6 +11,8 @@ export const TAB_VIEW_TYPE = "tab-view";
 
 export class WidgetView extends ItemView {
 	plugin: LLMPlugin;
+	private chatContainer: ChatContainer | null = null;
+
 	constructor(leaf: WorkspaceLeaf, plugin: LLMPlugin) {
 		super(leaf);
 		this.plugin = plugin;
@@ -39,11 +41,12 @@ export class WidgetView extends ItemView {
 		});
 		container.empty();
 		const header = new Header(this.plugin, "widget");
-		const chatContainer = new ChatContainer(
+		this.chatContainer = new ChatContainer(
 			this.plugin,
 			"widget",
-			this.plugin.messageStore
+			this.plugin.conversationRegistry
 		);
+		const chatContainer = this.chatContainer;
 		const historyContainer = new HistoryContainer(this.plugin, "widget");
 		const settingsContainer = new SettingsContainer(this.plugin, "widget");
 
@@ -84,9 +87,13 @@ export class WidgetView extends ItemView {
 		);
 		settingsContainer.generateSettingsContainer(
 			settingsContainerDiv,
-			header
+			header,
+			() => chatContainer.syncChips()
 		);
 	}
 
-	async onClose() {}
+	async onClose() {
+		this.chatContainer?.destroy();
+		this.chatContainer = null;
+	}
 }

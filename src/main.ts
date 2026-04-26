@@ -32,7 +32,7 @@ import {
 	claude,
 	gemini,
 } from "utils/constants";
-import { MessageStore } from "Plugin/Components/MessageStore";
+import { ConversationRegistry } from "Plugin/Components/ConversationRegistry";
 import {
 	DesktopOperatingSystem,
 	MobileOperatingSystem,
@@ -138,7 +138,7 @@ export default class LLMPlugin extends Plugin {
 	settings: LLMPluginSettings;
 	history: History;
 	fab: FAB;
-	messageStore: MessageStore;
+	conversationRegistry: ConversationRegistry;
 	ribbonIconEl: HTMLElement | null = null;
 
 	async onload() {
@@ -153,10 +153,9 @@ export default class LLMPlugin extends Plugin {
 		await this.checkForAPIKeyBasedModel();
 		this.registerRibbonIcons();
 		this.registerCommands();
-		this.messageStore = new MessageStore();
+		this.conversationRegistry = new ConversationRegistry();
 		this.settings.currentIndex = -1;
-		this.messageStore.setMessages([]);
-		this.saveSettings();
+		await this.saveSettings();
 
 		this.registerView(TAB_VIEW_TYPE, (tab) => new WidgetView(tab, this));
 
@@ -268,6 +267,13 @@ export default class LLMPlugin extends Plugin {
 
 			this.settings.fabSettings.historyIndex = -1;
 			this.settings.widgetSettings.historyIndex = -1;
+
+			// Ensure emptyChatAvatar is a valid known value; fall back to default
+			// if the saved value is missing or was corrupted (e.g. from a partial write).
+			const validAvatars = ["llm-gal", "llm-guy", "zen-kid", "ninja-cat"];
+			if (!validAvatars.includes(this.settings.emptyChatAvatar)) {
+				this.settings.emptyChatAvatar = DEFAULT_SETTINGS.emptyChatAvatar;
+			}
 
 			// Migrate linearApiKey → linearWorkspaces
 			if ((dataJSON as any).linearApiKey && !dataJSON.linearWorkspaces) {

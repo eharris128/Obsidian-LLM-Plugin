@@ -62,6 +62,11 @@
 	width: 100%;
 }
 
+/* Widget sidebar: clip horizontal overflow caused by the bleed technique below */
+.workspace-leaf-content[data-type="tab-view"] > .view-content {
+	overflow-x: hidden;
+}
+
 /* Widget sidebar: bleed out of .view-content's 16 px padding so the toolbar
    spans edge-to-edge, matching the pdf-toolbar appearance */
 .workspace-leaf-content[data-type="tab-view"] .llm-title-div {
@@ -132,14 +137,13 @@
 
 /*MODAL VIEW*/
 .llm-modal-chat-history-container {
-	margin-top: var(--size-4-2);
-	margin-bottom: var(--size-4-2);
 }
 
-.llm-modal-chat-container,
-.llm-modal-settings-container,
 .llm-modal-assistants-container {
-	margin-top: var(--size-4-2);
+}
+
+.llm-modal-settings-container {
+	padding-top: var(--size-4-4);
 }
 
 .llm-modal-chat-container,
@@ -174,18 +178,42 @@
 	overflow: auto;
 }
 
+/* Modal container overrides — must come after the shared padding rule */
+.llm-modal-chat-history-container {
+	padding-top: var(--size-4-4);
+	padding-bottom: var(--size-4-2);
+	gap: var(--size-4-2);
+}
+
+.llm-modal-assistants-container {
+	padding-top: var(--size-4-2);
+}
+
+.llm-modal-settings-container.llm-flex {
+	padding-top: 16px;
+}
+
+.modal:not(.mod-settings) .llm-modal-chat-history-container .setting-item.llm-history-item {
+	background-color: var(--setting-items-background);
+	border: none;
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2);
+}
+
 .llm-modal-chat-container,
 .llm-widget-chat-container,
 .fab-chat-container {
 	justify-content: space-between;
 	padding: 0 var(--size-2-1) var(--size-2-1);
 	width: 100%;
+	position: relative; /* anchor for absolutely-positioned empty state */
 }
 
 .llm-modal-messages-div {
 	min-height: 10rem;
 	max-height: 40vh;
 	overflow-y: auto;
+	padding-top: var(--size-4-4);
 	margin-bottom: var(--size-4-4);
 }
 
@@ -201,14 +229,22 @@
 }
 
 .llm-modal-prompt-container {
-	position: relative;
 	width: 100%;
+	display: flex;
+	flex-direction: column;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	overflow: hidden;
 }
 
 #chat-prompt-text-area {
-	padding: 10px 45px 10px 10px;
-	font-size: var(--font-text-size);
+	padding: var(--size-4-2) var(--size-4-2) var(--size-2-1) var(--size-4-2);
+	font-size: var(--font-ui-medium);
 	resize: none;
+	border: none;
+	box-shadow: none;
+	background: transparent;
+	border-radius: 0;
 }
 
 .llm-modal-chat-prompt-text-area,
@@ -218,7 +254,7 @@
 	min-height: 3rem;
 }
 
-.llm-send-button {
+button.llm-send-button {
 	border-radius: var(--button-radius);
 	box-shadow: none;
 	height: auto;
@@ -228,32 +264,84 @@
 	justify-content: center;
 	cursor: var(--cursor);
 	padding: var(--size-4-2);
-	border-bottom: var(--border-width) solid var(--background-modifier-border);
-	color: var(--llm-text-muted);
-	background-color: var(--interactive-normal);
+	color: var(--text-on-accent);
+	background-color: var(--interactive-accent);
 	--icon-size: var(--icon-s);
 	--icon-stroke: var(--icon-s-stroke-width);
+	flex-shrink: 0;
+	transition: opacity 0.15s ease, background-color 0.15s ease;
 }
 
-.llm-modal-send-button {
-	position: absolute;
-	bottom: 14px;
-	right: 9px;
+button.llm-send-button:not(.llm-send-button-disabled):hover {
+	background-color: var(--interactive-accent-hover);
+	color: var(--text-on-accent);
 }
 
-.fab-send-button {
-	position: absolute;
-	bottom: 14px;
-	right: 9px;
-	height: auto;
+button.llm-send-button.llm-send-button-disabled,
+button.llm-send-button:disabled {
+	opacity: 0.35;
+	cursor: not-allowed;
+	pointer-events: none;
 }
 
+.llm-modal-send-button,
+.fab-send-button,
 .llm-widget-send-button {
-	position: absolute;
-	top: 50%;
-	transform: translateY(-50%);
-	right: 9px;
-	height: auto;
+	/* Previously absolutely positioned; now flows in the toolbar row */
+	position: static;
+	transform: none;
+	top: auto;
+	right: auto;
+	bottom: auto;
+}
+
+/* Chat input two-section layout */
+.llm-input-section {
+	display: flex;
+}
+
+.llm-input-section textarea {
+	flex: 1;
+}
+
+.llm-input-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--size-2-1) var(--size-4-2) var(--size-4-2) var(--size-4-2);
+	gap: var(--size-4-2);
+}
+
+/* Compact model selector in the chat toolbar */
+.llm-model-select {
+	background-color: transparent;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right var(--size-4-1) center;
+	background-size: 12px;
+	border: none;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	cursor: pointer;
+	padding: var(--size-4-1) calc(var(--size-4-1) + 18px) var(--size-4-1) var(--size-4-1);
+	border-radius: var(--radius-s);
+	width: fit-content;
+	max-width: 200px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	-webkit-appearance: none;
+	appearance: none;
+}
+
+.llm-model-select:hover {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+}
+
+.llm-model-select:focus {
+	outline: none;
+	box-shadow: none;
 }
 
 /* IM LIKE MESSAGE*/
@@ -447,7 +535,6 @@ div.im-like-message.llm-widget-chat-message > p {
 /* WIDGET*/
 
 .llm-widget-chat-container {
-	padding-top: var(--size-4-1);
 	padding-bottom: var(--size-4-4);
 }
 
@@ -459,16 +546,21 @@ div.im-like-message.llm-widget-chat-message > p {
 	flex-direction: column;
 	justify-content: flex-start;
 	align-items: stretch;
+	padding-top: var(--size-4-4);
 }
 
 .llm-widget-chat-prompt-text-area {
-	margin-top: var(--size-4-1);
+	/* margin-top removed — textarea lives inside llm-input-section now */
 }
 
 .llm-widget-prompt-container {
 	display: flex;
+	flex-direction: column;
 	margin-top: auto;
-	position: relative;
+	margin-bottom: var(--size-4-2);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	overflow: hidden;
 }
 
 .llm-widget-title-border {
@@ -486,6 +578,11 @@ div.im-like-message.llm-widget-chat-message > p {
 .llm-widget-chat-history-container,
 .llm-widget-settings-container {
 	height: calc(100% - 70px);
+}
+
+.llm-widget-chat-history-container,
+.llm-widget-settings-container {
+	padding-top: var(--size-4-4);
 }
 
 
@@ -524,33 +621,38 @@ div.im-like-message.llm-widget-chat-message > p {
 }
 
 #_floating-action-button .buttonItem {
-	height: 32px;
-	width: 32px;
+	height: 34px;
+	width: 34px;
 	float: right;
 	margin: var(--size-2-1);
 	cursor: pointer;
 	padding: var(--size-4-1);
-	box-shadow: var(--input-shadow);
 	margin-left: var(--size-2-1);
-	border-radius: var(--radius-s);
+	border-radius: var(--canvas-controls-radius);
 	font-size: initial !important;
-	background-color: var(--background-primary-alt);
-	border: var(--border-width) solid var(--background-modifier-border);
+	background-color: var(--interactive-normal);
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: none;
 }
 
 #_floating-action-button button.buttonItem:hover {
-	background-color: var(--background-secondary);
+	background-color: var(--interactive-hover);
 }
 
 .fab-chat-prompt-text-area {
-	flex: 1;
-	min-width: 0;
+	width: 100%;
 	min-height: 50px;
 	resize: none;
+	font-size: var(--font-ui-medium);
 }
 
 .fab-prompt-container {
-	position: relative;
+	display: flex;
+	flex-direction: column;
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	overflow: hidden;
+	background-color: var(--background-primary);
 }
 
 .fab-prompt-container > input[type="text"] {
@@ -563,7 +665,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	overflow-y: auto;
 	flex: 1 1 0;
 	min-height: 0;
-	padding-top: var(--size-4-1);
+	padding-top: var(--size-4-4);
 }
 
 .fab-chat-container {
@@ -582,7 +684,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	flex-direction: column;
 	justify-content: flex-start;
 	align-items: stretch;
-	padding-top: var(--size-4-1);
+	padding-top: var(--size-4-4);
 }
 
 /* Empty-state: center the avatar SVG both axes within the available space.
@@ -777,6 +879,23 @@ div.im-like-message.llm-widget-chat-message > p {
 	fill: var(--text-faint);
 }
 
+/* Empty-state avatar: taken out of flex flow and anchored to the stable
+   chat container so the prompt area's height never affects its position.
+   --llm-prompt-height approximates the default prompt container height
+   (textarea 50px + toolbar ~40px). The icon is shifted up by half that
+   value so it visually lands in the centre of the messages area above
+   the prompt, without moving when a context chip expands the prompt. */
+.fab-chat-container .llm-icon-new-chat,
+.llm-modal-chat-container .llm-icon-new-chat,
+.llm-widget-chat-container .llm-icon-new-chat {
+	--llm-prompt-height: 90px;
+	position: absolute;
+	top: calc(50% - var(--llm-prompt-height) / 2);
+	left: 50%;
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
 #llm-settings-credits {
 	text-align: center;
 }
@@ -840,4 +959,110 @@ div.im-like-message.llm-widget-chat-message > p {
 
 .llm-file-added {
 	background-color: var(--icon-color-active);
+}
+
+/* ACTIVE FILE CONTEXT — chip + scan button */
+
+/* Container inside the prompt card, above the textarea — scrolls horizontally */
+.llm-context-chip-container {
+	display: flex;
+	flex-wrap: nowrap;
+	overflow-x: auto;
+	gap: var(--size-2-1);
+	padding: var(--size-4-2) var(--size-4-2) 0;
+	/* Hide scrollbar while keeping scroll behaviour */
+	scrollbar-width: none; /* Firefox */
+	-ms-overflow-style: none; /* IE/Edge */
+}
+
+.llm-context-chip-container::-webkit-scrollbar {
+	display: none; /* Chrome/Safari/WebKit */
+}
+
+/* Individual chip pill */
+.llm-context-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	padding: var(--size-2-1) var(--size-4-2);
+	background-color: var(--background-modifier-hover);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-l);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	max-width: 220px;
+}
+
+.llm-context-chip-icon {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	--icon-size: 12px;
+	--icon-stroke: 1.5;
+	color: var(--text-faint);
+}
+
+.llm-context-chip-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+}
+
+.llm-context-chip-remove {
+	flex-shrink: 0;
+	cursor: pointer;
+	color: var(--text-faint);
+	font-size: var(--font-ui-small);
+	line-height: 1;
+	user-select: none;
+	padding: 0 2px;
+}
+
+.llm-context-chip-remove:hover {
+	color: var(--text-muted);
+}
+
+/* Right-side toolbar group (scan + send) */
+.llm-input-toolbar-right {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	flex-shrink: 0;
+}
+
+/* Scan button — inactive state (button prefix beats app.css specificity) */
+button.llm-scan-button {
+	border-radius: var(--button-radius);
+	box-shadow: none;
+	border: none;
+	height: auto;
+	line-height: 1;
+	padding: var(--size-4-2);
+	color: var(--text-muted);
+	background: transparent;
+	--icon-size: var(--icon-s);
+	--icon-stroke: var(--icon-s-stroke-width);
+	flex-shrink: 0;
+	cursor: var(--cursor);
+	transition: background-color 100ms ease, color 100ms ease;
+}
+
+button.llm-scan-button:hover {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+	box-shadow: none;
+}
+
+/* Active state */
+button.llm-scan-button.is-active {
+	color: var(--icon-color);
+	background-color: var(--background-modifier-hover);
+	box-shadow: none;
+}
+
+button.llm-scan-button.is-active:hover {
+	background-color: var(--background-modifier-hover);
+	color: var(--icon-color);
+	box-shadow: none;
 }

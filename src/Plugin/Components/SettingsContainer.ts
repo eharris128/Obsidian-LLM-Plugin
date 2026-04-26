@@ -7,21 +7,31 @@ import {
 	getViewInfo,
 	getGpt4AllPath
 } from "utils/utils";
-import { chat, claudeCodeEndpoint, GPT4All, messages, openAI } from "utils/constants"
+import { chat, claudeCodeEndpoint, claude, claudeCode, gemini, GPT4All, messages, mistral, ollama, openAI } from "utils/constants"
 import { Header } from "./Header";
 import { FileSelector } from "./FileSelector";
 
 export class SettingsContainer {
 	viewType: ViewType;
+	private onAdditionalFilesChange?: () => void;
 
 	constructor(private plugin: LLMPlugin, viewType: ViewType) {
 		this.viewType = viewType;
 	}
 
-	async generateSettingsContainer(parentContainer: HTMLElement, Header: Header) {
+	async generateSettingsContainer(
+		parentContainer: HTMLElement,
+		Header: Header,
+		onAdditionalFilesChange?: () => void
+	) {
+		// Persist the callback so re-renders triggered by the Header button or
+		// model dropdown change continue to wire it up correctly.
+		if (onAdditionalFilesChange) {
+			this.onAdditionalFilesChange = onAdditionalFilesChange;
+		}
 		this.resetSettings(parentContainer);
 		this.generateModels(parentContainer, Header);
-		this.generateModelSettings(parentContainer);
+		this.generateModelSettings(parentContainer, this.onAdditionalFilesChange);
 	}
 
 	generateModels(parentContainer: HTMLElement, Header: Header) {
@@ -33,18 +43,31 @@ export class SettingsContainer {
 			.setDesc("The model you want to use to generate a chat response.")
 			.addDropdown((dropdown: DropdownComponent) => {
 				dropdown.addOption("", "---Select model---");
+				const { openAIAPIKey, claudeAPIKey, geminiAPIKey, mistralAPIKey } = this.plugin.settings;
 				let keys = Object.keys(models);
 				for (let model of keys) {
-					if (models[model].type === GPT4All) {
+					const type = models[model].type;
+					// Local providers: always show
+					if (type === ollama) {
+						dropdown.addOption(models[model].model, model);
+						continue;
+					}
+					// GPT4All: only show if the model file exists locally
+					if (type === GPT4All) {
 						const gpt4AllPath = getGpt4AllPath(this.plugin);
 						const fullPath = `${gpt4AllPath}/${models[model].model}`;
 						const exists = this.plugin.fileSystem.existsSync(fullPath);
 						if (exists) {
 							dropdown.addOption(models[model].model, model);
 						}
-					} else {
-						dropdown.addOption(models[model].model, model);
+						continue;
 					}
+					// Cloud providers: only show if an API key has been entered
+					if (type === openAI && !openAIAPIKey) continue;
+					if ((type === claude || type === claudeCode) && !claudeAPIKey) continue;
+					if (type === gemini && !geminiAPIKey) continue;
+					if (type === mistral && !mistralAPIKey) continue;
+					dropdown.addOption(models[model].model, model);
 				}
 				dropdown.onChange((change) => {
 					const { historyIndex } = getViewInfo(
@@ -77,7 +100,7 @@ export class SettingsContainer {
 		parentContainer.empty();
 	}
 
-	generateModelSettings(parentContainer: HTMLElement) {
+	generateModelSettings(parentContainer: HTMLElement, onAdditionalFilesChange?: () => void) {
 		const settingType = getSettingType(this.viewType);
 		const viewSettings = this.plugin.settings[settingType];
 		const endpoint = viewSettings.modelEndpoint;
@@ -95,7 +118,7 @@ export class SettingsContainer {
 		}
 		if (endpoint === chat || messages) {
 			this.generateChatSettings(parentContainer, modelType);
-			this.generateContextSettings(parentContainer);
+			this.generateContextSettings(parentContainer, onAdditionalFilesChange);
 		}
 	}
 
@@ -298,7 +321,7 @@ export class SettingsContainer {
 		}
 	}
 
-	generateContextSettings(parentContainer: HTMLElement) {
+	generateContextSettings(parentContainer: HTMLElement, onAdditionalFilesChange?: () => void) {
 		const settingType = getSettingType(this.viewType);
 		const viewSettings = this.plugin.settings[settingType];
 		const contextSettings = viewSettings.contextSettings;
@@ -378,8 +401,10 @@ export class SettingsContainer {
 							this.plugin.saveSettings();
 							this.updateSelectedFilesDisplay(
 								parentContainer,
-								selectFilesSetting.settingEl
+								selectFilesSetting.settingEl,
+								onAdditionalFilesChange
 							);
+							onAdditionalFilesChange?.();
 						}
 					);
 					modal.open();
@@ -387,12 +412,13 @@ export class SettingsContainer {
 			});
 
 		// Display selected files
-		this.updateSelectedFilesDisplay(parentContainer, selectFilesSetting.settingEl);
+		this.updateSelectedFilesDisplay(parentContainer, selectFilesSetting.settingEl, onAdditionalFilesChange);
 	}
 
 	updateSelectedFilesDisplay(
 		parentContainer: HTMLElement,
-		selectFilesSetting: HTMLElement
+		selectFilesSetting: HTMLElement,
+		onAdditionalFilesChange?: () => void
 	) {
 		const settingType = getSettingType(this.viewType);
 		const contextSettings = this.plugin.settings[settingType].contextSettings;
@@ -446,8 +472,10 @@ export class SettingsContainer {
 					this.plugin.saveSettings();
 					this.updateSelectedFilesDisplay(
 						parentContainer,
-						selectFilesSetting
+						selectFilesSetting,
+						onAdditionalFilesChange
 					);
+					onAdditionalFilesChange?.();
 				});
 			}
 

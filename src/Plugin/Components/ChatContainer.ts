@@ -1,8 +1,10 @@
 import LLMPlugin from "main";
 import {
 	ButtonComponent,
+	DropdownComponent,
 	MarkdownRenderer,
 	Notice,
+	setIcon,
 	TextAreaComponent,
 } from "obsidian";
 import { ChatCompletionChunk } from "openai/resources";
@@ -21,6 +23,8 @@ import { classNames } from "utils/classNames";
 import {
 	assistant,
 	chat,
+	claude,
+	claudeCode,
 	claudeCodeEndpoint,
 	gemini,
 	gemini2FlashStableModel,
@@ -35,11 +39,14 @@ import {
 	messages,
 	ollama,
 	mistral,
+	openAI,
 } from "utils/constants";
 
 import assistantLogo from "Plugin/Components/AssistantLogo";
+import { ConversationRegistry } from "./ConversationRegistry";
 import {
 	claudeCodeMessage,
+	getGpt4AllPath,
 	getSettingType,
 	getViewInfo,
 	messageGPT4AllServer,
@@ -50,8 +57,10 @@ import {
 	openAIMessage,
 	setHistoryIndex,
 } from "utils/utils";
+import { models, modelNames } from "utils/models";
 import { Header } from "./Header";
 import { MessageStore } from "./MessageStore";
+import { FileSelector } from "./FileSelector";
 import defaultLogo from "assets/LLMgal.svg";
 import zenKidLogo from "assets/zen-kid.svg";
 import ninjaCatLogo from "assets/ninja-cat.svg";
@@ -76,58 +85,59 @@ export class ChatContainer {
 	viewType: ViewType;
 	previewText: string;
 	messageStore: MessageStore;
+	private registry: ConversationRegistry;
+	// Stable bound reference so we can cleanly unsubscribe when switching stores.
+	private boundUpdateMessages: (messages: Message[]) => void;
 	contextBuilder: ContextBuilder;
 	currentVaultContext: any = null; // Store context for current generation
 	pendingContextString: string | null = null; // Context string to inject into API call (not shown in UI)
 	claudeCodeSessionId: string | null = null;
+	useActiveFileContext: boolean = false;
+	chipContainer: HTMLElement | null = null;
+	scanButton: ButtonComponent | null = null;
+	activeFileForChip: { name: string } | null = null;
+
 	constructor(
 		private plugin: LLMPlugin,
 		viewType: ViewType,
-		messageStore: MessageStore
+		registry: ConversationRegistry
 	) {
 		this.viewType = viewType;
-		this.messageStore = messageStore;
-		this.messageStore.subscribe(this.updateMessages.bind(this));
+		this.registry = registry;
+		// Each view starts with its own fresh ephemeral store.
+		// It gets promoted into the registry (under a UUID) the first time the
+		// conversation is saved, and swapped for a registry store when the user
+		// loads an existing conversation from history.
+		this.messageStore = new MessageStore();
+		this.boundUpdateMessages = this.updateMessages.bind(this);
+		this.messageStore.subscribe(this.boundUpdateMessages);
 		this.contextBuilder = new ContextBuilder(this.plugin.app);
 	}
 
-	private updateMessages(message: Message[]) {
-		const currentIndex = this.plugin.settings.currentIndex;
-		const fabIndex = this.plugin.settings.fabSettings.historyIndex;
-		const widgetIndex = this.plugin.settings.widgetSettings.historyIndex;
+	/**
+	 * Swap the active MessageStore for a different one, re-wiring the subscriber.
+	 * Safe to call even if the new store is the same instance (no-op).
+	 */
+	private switchToStore(store: MessageStore): void {
+		if (store === this.messageStore) return;
+		this.messageStore.unsubscribe(this.boundUpdateMessages);
+		this.messageStore = store;
+		this.messageStore.subscribe(this.boundUpdateMessages);
+	}
 
-		if (currentIndex > -1) {
-			message = this.plugin.settings.promptHistory[currentIndex].messages;
-		}
+	/**
+	 * Unsubscribe from the current store. Called when the view is closed so
+	 * the store doesn't hold a stale reference to a torn-down DOM tree.
+	 */
+	destroy(): void {
+		this.messageStore.unsubscribe(this.boundUpdateMessages);
+	}
 
-		// Always update the current view
-		if (this.viewType === this.plugin.settings.currentView) {
-			this.resetChat();
-			this.generateIMLikeMessages(message);
-			return;
-		}
-
-		// Update FAB view if it's showing the same history item
-		if (
-			this.viewType === "floating-action-button" &&
-			fabIndex === currentIndex &&
-			currentIndex > -1
-		) {
-			this.resetChat();
-			this.generateIMLikeMessages(message);
-			return;
-		}
-
-		// Update Widget view if it's showing the same history item
-		if (
-			this.viewType === "widget" &&
-			widgetIndex === currentIndex &&
-			currentIndex > -1
-		) {
-			this.resetChat();
-			this.generateIMLikeMessages(message);
-			return;
-		}
+	private updateMessages(messages: Message[]) {
+		// Each view has its own store, so the messages passed here are always
+		// the right ones for this view — no cross-view filtering needed.
+		this.resetChat();
+		this.generateIMLikeMessages(messages);
 	}
 
 	getMessages() {
@@ -425,6 +435,12 @@ export class ChatContainer {
 				this.historyMessages.scroll(0, 9999);
 			});
 
+			// Wait for the stream to finish before post-processing.
+			// Without this await, execution falls through immediately while text
+			// events are still firing, so previewText is "" when
+			// MarkdownRenderer.render and messageStore.addMessage are called.
+			await stream.finalMessage();
+
 			this.streamingDiv.empty();
 			MarkdownRenderer.render(
 				this.plugin.app,
@@ -661,13 +677,28 @@ export class ChatContainer {
 			}
 		}
 
+		// Active file context toggle (explicit user action via scan button)
+		if (this.useActiveFileContext && modelEndpoint !== "images") {
+			try {
+				const activeFile = this.plugin.app.workspace.getActiveFile();
+				if (activeFile) {
+					const content = await this.plugin.app.vault.read(activeFile);
+					const activeFileContextString =
+						`# Active File: ${activeFile.name}\nPath: \`${activeFile.path}\`\n\n\`\`\`\n${content}\n\`\`\`\n`;
+					// Override any previously built context string — explicit toggle wins
+					this.pendingContextString = activeFileContextString;
+					this.currentVaultContext = {
+						activeFile: { path: activeFile.path, name: activeFile.name, content },
+						additionalFiles: [],
+					};
+				}
+			} catch (error) {
+				console.error("Error reading active file for context:", error);
+			}
+		}
+
 		const userMessage = { role: "user" as const, content: this.prompt };
 		this.messageStore.addMessage(userMessage);
-		// Only manually append if subscription won't handle rendering
-		// (i.e., when this view is not the current active view)
-		if (this.viewType !== this.plugin.settings.currentView) {
-			this.appendNewMessage(userMessage);
-		}
 		const params = this.getParams(modelEndpoint, model, modelType);
 		try {
 			this.previewText = "";
@@ -740,6 +771,11 @@ export class ChatContainer {
 			return;
 		}
 
+		// This is a brand-new conversation. Assign a stable UUID so other views
+		// can look up the same MessageStore in the registry later.
+		const conversationId = crypto.randomUUID();
+		this.registry.set(conversationId, this.messageStore);
+
 		if (
 			modelEndpoint === chat ||
 			modelEndpoint === gemini ||
@@ -754,12 +790,14 @@ export class ChatContainer {
 			this.plugin.history.push({
 				...chatParams,
 				modelName,
+				id: conversationId,
 			});
 		}
 		if (modelEndpoint === "images") {
 			this.plugin.history.push({
 				...(params as ImageHistoryItem),
 				modelName,
+				id: conversationId,
 			});
 		}
 		const length = this.plugin.settings.promptHistory.length;
@@ -769,12 +807,15 @@ export class ChatContainer {
 	}
 
 	auto_height(elem: TextAreaComponent, parentElement: Element) {
-		elem.inputEl.setAttribute("style", "height: 50px");
-		const height = elem.inputEl.scrollHeight - 5;
-		if (!(height > parseInt(window.getComputedStyle(elem.inputEl).height)))
-			return;
-		elem.inputEl.setAttribute("style", `height: ${height}px`);
-		elem.inputEl.setAttribute("style", `overflow: hidden`);
+		const MAX_HEIGHT = 140; // ~5 lines before scrolling
+		// Collapse to 1px so scrollHeight accurately reflects content height
+		elem.inputEl.setAttribute("style", "height: 1px");
+		const contentHeight = elem.inputEl.scrollHeight;
+		if (contentHeight <= MAX_HEIGHT) {
+			elem.inputEl.setAttribute("style", `height: ${contentHeight}px; overflow-y: hidden`);
+		} else {
+			elem.inputEl.setAttribute("style", `height: ${MAX_HEIGHT}px; overflow-y: auto`);
+		}
 		parentElement.scrollTo(0, 9999);
 	}
 
@@ -795,6 +836,65 @@ export class ChatContainer {
 		llmGal.appendChild(svgElement);
 	}
 
+	/** Rebuild the chip strip from current state (active file + additional files). */
+	syncChips() {
+		if (!this.chipContainer) return;
+		const settingType = getSettingType(this.viewType);
+		const contextSettings = this.plugin.settings[settingType].contextSettings;
+
+		this.chipContainer.empty();
+
+		const hasActiveFile = this.useActiveFileContext && this.activeFileForChip;
+		const hasAdditional = contextSettings.selectedFiles.length > 0;
+
+		if (!hasActiveFile && !hasAdditional) {
+			this.chipContainer.style.display = "none";
+			return;
+		}
+
+		this.chipContainer.style.display = "flex";
+
+		if (hasActiveFile) {
+			this.buildChip(this.chipContainer, this.activeFileForChip!.name, () => {
+				this.useActiveFileContext = false;
+				this.activeFileForChip = null;
+				this.scanButton?.buttonEl.removeClass("is-active");
+				this.syncChips();
+			});
+		}
+
+		for (const filePath of [...contextSettings.selectedFiles]) {
+			const fileName = filePath.split("/").pop() || filePath;
+			this.buildChip(this.chipContainer, fileName, () => {
+				contextSettings.selectedFiles = contextSettings.selectedFiles.filter(
+					(f) => f !== filePath
+				);
+				this.plugin.saveSettings();
+				this.syncChips();
+			});
+		}
+	}
+
+	private buildChip(
+		container: HTMLElement,
+		name: string,
+		onRemove: () => void
+	): HTMLElement {
+		const chip = container.createDiv({ cls: "llm-context-chip" });
+		const fileIcon = chip.createEl("span", { cls: "llm-context-chip-icon" });
+		setIcon(fileIcon, "file-text");
+		chip.createEl("span", { text: name, cls: "llm-context-chip-name" });
+		const removeBtn = chip.createEl("span", {
+			text: "×",
+			cls: "llm-context-chip-remove",
+		});
+		removeBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			onRemove();
+		});
+		return chip;
+	}
+
 	async generateChatContainer(parentElement: Element, header: Header) {
 		// If we are working with assistants, then we need a valid openAi API key.
 		// If we are working with claude, then we need a valid claude key.
@@ -807,19 +907,130 @@ export class ChatContainer {
 		if (this.getMessages().length === 0) {
 			this.displayNoChatView(this.historyMessages);
 		}
+
+		// Outer prompt container — a flex-column card with border
 		const promptContainer = parentElement.createDiv();
-		const promptField = new TextAreaComponent(promptContainer);
-		const sendButton = new ButtonComponent(promptContainer);
-		if (this.viewType === "floating-action-button") {
-			promptContainer.addClass("llm-flex");
-		}
 		promptContainer.addClass(classNames[this.viewType]["prompt-container"]);
+
+		// Chip strip — shown for all view types; scan button only for FAB/Modal
+		this.chipContainer = promptContainer.createDiv();
+		this.chipContainer.addClass("llm-context-chip-container");
+		this.chipContainer.style.display = "none";
+
+		// Top section: textarea
+		const inputSection = promptContainer.createDiv();
+		inputSection.addClass("llm-input-section");
+		const promptField = new TextAreaComponent(inputSection);
 		promptField.inputEl.className = classNames[this.viewType]["text-area"];
 		promptField.inputEl.id = "chat-prompt-text-area";
 		promptField.inputEl.tabIndex = 0;
 		promptContainer.addEventListener("input", () => {
 			this.auto_height(promptField, parentElement);
 		});
+
+		// Bottom toolbar: model selector (left) + send button (right)
+		const toolbarSection = promptContainer.createDiv();
+		toolbarSection.addClass("llm-input-toolbar");
+
+		// Model dropdown
+		const settingType = getSettingType(this.viewType);
+		const viewSettings = this.plugin.settings[settingType];
+		const modelDropdown = new DropdownComponent(toolbarSection);
+		modelDropdown.selectEl.addClass("llm-model-select");
+		const { openAIAPIKey, claudeAPIKey, geminiAPIKey, mistralAPIKey } = this.plugin.settings;
+		for (const modelDisplayName of Object.keys(models)) {
+			const type = models[modelDisplayName].type;
+			// Local providers: always show
+			if (type === ollama) {
+				modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+				continue;
+			}
+			// GPT4All: only show if the model file exists locally
+			if (type === GPT4All) {
+				const gpt4AllPath = getGpt4AllPath(this.plugin);
+				const fullPath = `${gpt4AllPath}/${models[modelDisplayName].model}`;
+				if (this.plugin.fileSystem.existsSync(fullPath)) {
+					modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+				}
+				continue;
+			}
+			// Cloud providers: only show if an API key has been entered
+			if (type === openAI && !openAIAPIKey) continue;
+			if ((type === claude || type === claudeCode) && !claudeAPIKey) continue;
+			if (type === gemini && !geminiAPIKey) continue;
+			if (type === mistral && !mistralAPIKey) continue;
+			modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+		}
+		modelDropdown.setValue(viewSettings.model);
+		modelDropdown.onChange((change) => {
+			const modelName = modelNames[change];
+			if (!modelName || !models[modelName]) return;
+			viewSettings.model = change;
+			viewSettings.modelName = modelName;
+			viewSettings.modelType = models[modelName].type;
+			viewSettings.endpointURL = models[modelName].url;
+			viewSettings.modelEndpoint = models[modelName].endpoint;
+			this.plugin.saveSettings();
+			header.setHeader(modelName);
+		});
+
+		// Right-side group: scan button (FAB/Modal only) + send button
+		const toolbarRight = toolbarSection.createDiv();
+		toolbarRight.addClass("llm-input-toolbar-right");
+
+		// Add files / file-picker button
+		const addFilesButton = new ButtonComponent(toolbarRight);
+		addFilesButton.setIcon("plus");
+		addFilesButton.setTooltip("Add files as context");
+		addFilesButton.buttonEl.addClass("llm-scan-button");
+
+		addFilesButton.onClick(() => {
+			const settingType = getSettingType(this.viewType);
+			const contextSettings = this.plugin.settings[settingType].contextSettings;
+
+			new FileSelector(
+				this.plugin.app,
+				this.plugin,
+				this.viewType,
+				contextSettings.selectedFiles,
+				(files: string[]) => {
+					contextSettings.selectedFiles = files;
+					this.plugin.saveSettings();
+					this.syncChips();
+				}
+			).open();
+		});
+
+		// Scan / use-file-as-context button (FAB and Modal only — not widget)
+		if (this.viewType !== "widget") {
+			this.scanButton = new ButtonComponent(toolbarRight);
+			this.scanButton.setIcon("scan");
+			this.scanButton.setTooltip("Use file as context");
+			this.scanButton.buttonEl.addClass("llm-scan-button");
+
+			this.scanButton.onClick(() => {
+				this.useActiveFileContext = !this.useActiveFileContext;
+
+				if (this.useActiveFileContext) {
+					const activeFile = this.plugin.app.workspace.getActiveFile();
+					if (activeFile) {
+						this.activeFileForChip = { name: activeFile.name };
+						this.scanButton!.buttonEl.addClass("is-active");
+						this.syncChips();
+					} else {
+						this.useActiveFileContext = false;
+						new Notice("No active file to use as context");
+					}
+				} else {
+					this.activeFileForChip = null;
+					this.scanButton!.buttonEl.removeClass("is-active");
+					this.syncChips();
+				}
+			});
+		}
+
+		// Send button
+		const sendButton = new ButtonComponent(toolbarRight);
 		sendButton.buttonEl.addClass(
 			classNames[this.viewType].button,
 			"llm-send-button"
@@ -829,37 +1040,83 @@ export class ChatContainer {
 
 		promptField.setPlaceholder("Send a message...");
 
+		// Helper to sync send button enabled/disabled state with input content
+		const updateSendButton = (value: string) => {
+			const isEmpty = value.trim().length === 0;
+			sendButton.setDisabled(isEmpty);
+			sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
+		};
+
+		// Disable send button initially (empty input)
+		updateSendButton("");
+
 		promptField.onChange((change: string) => {
 			this.prompt = change;
 			promptField.setValue(change);
+			updateSendButton(change);
 		});
+
+		const clearPromptField = () => {
+			// Only clear the visible textarea; this.prompt intentionally stays
+			// set so that handleGenerateClick (which is not awaited) can still
+			// read it after clearPromptField fires. historyPush (success) and
+			// the catch block (error) both clear this.prompt when the call ends.
+			promptField.setValue("");
+			updateSendButton("");
+		};
+
 		promptField.inputEl.addEventListener("keydown", (event) => {
 			if (sendButton.disabled === true) return;
 
 			if (event.code == "Enter") {
 				event.preventDefault();
 				this.handleGenerateClick(header, sendButton);
-				promptField.inputEl.setText("");
-				promptField.setValue("");
+				clearPromptField();
 			}
 		});
 		sendButton.onClick(() => {
 			this.handleGenerateClick(header, sendButton);
-			promptField.inputEl.setText("");
-			promptField.setValue("");
+			clearPromptField();
 		});
 
-		// Auto-focus the input field when the container is created
-		setTimeout(() => {
-			promptField.inputEl.focus();
-		}, 100);
+		// Auto-populate the active file chip when "Include active file" is enabled in settings.
+		// useActiveFileContext is otherwise only set when the scan button is clicked manually,
+		// so without this block the chip never appears on load even when the setting is on.
+		if (this.plugin.settings[settingType].contextSettings.includeActiveFile) {
+			const activeFile = this.plugin.app.workspace.getActiveFile();
+			if (activeFile) {
+				this.useActiveFileContext = true;
+				this.activeFileForChip = { name: activeFile.name };
+				this.scanButton?.buttonEl.addClass("is-active");
+			}
+		}
+
+		// Restore any chips that were persisted in settings before this session
+		this.syncChips();
 	}
 
 	setMessages(replaceChatHistory: boolean = false) {
 		const { historyIndex } = getViewInfo(this.plugin, this.viewType);
 		if (replaceChatHistory) {
-			let history = this.plugin.settings.promptHistory;
-			this.messageStore.setMessages(history[historyIndex].messages);
+			const history = this.plugin.settings.promptHistory;
+			const historyItem = history[historyIndex];
+			// Backfill: legacy history items (saved before this change) have no id.
+			// Assign one now so every subsequent load — including from other views —
+			// will find the same registry store and stay in sync.
+			if (!historyItem.id) {
+				historyItem.id = crypto.randomUUID();
+				this.plugin.saveSettings();
+			}
+
+			// Get or create the store for this conversation in the registry.
+			// If another view already has it open they share the same instance
+			// and will stay in sync automatically.
+			const store = this.registry.getOrCreate(historyItem.id);
+			if (store.getMessages().length === 0) {
+				// First view to open this conversation — populate from disk.
+				store.setMessages(historyItem.messages);
+			}
+			this.switchToStore(store);
 		}
 		if (!replaceChatHistory) {
 			this.messageStore.addMessage({
@@ -870,7 +1127,10 @@ export class ChatContainer {
 	}
 
 	resetMessages() {
-		this.messageStore.setMessages([]);
+		// Switch to a fresh ephemeral store so the old conversation's store
+		// (which may still be open in another view) is left untouched.
+		const freshStore = new MessageStore();
+		this.switchToStore(freshStore);
 		this.claudeCodeSessionId = null;
 	}
 
@@ -1058,5 +1318,23 @@ export class ChatContainer {
 		this.historyMessages.empty();
 		this.claudeCodeSessionId = null;
 		this.displayNoChatView(this.historyMessages);
+
+		// Reset active file chip state, then re-evaluate from the current setting.
+		// Without this, toggling the setting or switching chats left stale chip state.
+		this.useActiveFileContext = false;
+		this.activeFileForChip = null;
+		this.scanButton?.buttonEl.removeClass("is-active");
+
+		const settingType = getSettingType(this.viewType);
+		if (this.plugin.settings[settingType].contextSettings.includeActiveFile) {
+			const activeFile = this.plugin.app.workspace.getActiveFile();
+			if (activeFile) {
+				this.useActiveFileContext = true;
+				this.activeFileForChip = { name: activeFile.name };
+				this.scanButton?.buttonEl.addClass("is-active");
+			}
+		}
+
+		this.syncChips();
 	}
 }

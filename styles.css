@@ -643,6 +643,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	width: 100%;
 	min-height: 50px;
 	resize: none;
+	font-size: var(--font-ui-medium);
 }
 
 .fab-prompt-container {

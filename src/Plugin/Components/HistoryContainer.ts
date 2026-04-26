@@ -84,6 +84,10 @@ export class HistoryContainer {
 			return;
 		}
 
+		// Remove centering classes that displayNoHistoryView may have added when
+		// the history was empty — now that we have items they must not apply.
+		parentElement.removeClass("llm-justify-content-center");
+
 		const settingType = getSettingType(this.viewType);
 		this.model = this.plugin.settings[settingType].model;
 		this.modelName = this.plugin.settings[settingType].modelName;

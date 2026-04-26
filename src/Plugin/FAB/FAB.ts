@@ -11,6 +11,8 @@ const ROOT_WORKSPACE_CLASS = ".mod-vertical.mod-root";
 
 export class FAB {
 	plugin: LLMPlugin;
+	private chatContainer: ChatContainer | null = null;
+
 	constructor(plugin: LLMPlugin) {
 		this.plugin = plugin;
 	}
@@ -40,11 +42,12 @@ export class FAB {
 		viewArea.style.height = `${savedHeight}px`;
 
 		const header = new Header(this.plugin, "floating-action-button");
-		const chatContainer = new ChatContainer(
+		this.chatContainer = new ChatContainer(
 			this.plugin,
 			"floating-action-button",
-			this.plugin.messageStore
+			this.plugin.conversationRegistry
 		);
+		const chatContainer = this.chatContainer;
 		const historyContainer = new HistoryContainer(
 			this.plugin,
 			"floating-action-button"
@@ -179,6 +182,8 @@ export class FAB {
 	}
 
 	removeFab() {
+		this.chatContainer?.destroy();
+		this.chatContainer = null;
 		const FAB = document.getElementById("_floating-action-button");
 		if (FAB) {
 			FAB.remove();

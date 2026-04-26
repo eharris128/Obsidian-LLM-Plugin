@@ -40,6 +40,7 @@ import {
 } from "utils/constants";
 
 import assistantLogo from "Plugin/Components/AssistantLogo";
+import { ConversationRegistry } from "./ConversationRegistry";
 import {
 	claudeCodeMessage,
 	getGpt4AllPath,
@@ -81,6 +82,9 @@ export class ChatContainer {
 	viewType: ViewType;
 	previewText: string;
 	messageStore: MessageStore;
+	private registry: ConversationRegistry;
+	// Stable bound reference so we can cleanly unsubscribe when switching stores.
+	private boundUpdateMessages: (messages: Message[]) => void;
 	contextBuilder: ContextBuilder;
 	currentVaultContext: any = null; // Store context for current generation
 	pendingContextString: string | null = null; // Context string to inject into API call (not shown in UI)
@@ -89,31 +93,48 @@ export class ChatContainer {
 	chipContainer: HTMLElement | null = null;
 	scanButton: ButtonComponent | null = null;
 	activeFileForChip: { name: string } | null = null;
+
 	constructor(
 		private plugin: LLMPlugin,
 		viewType: ViewType,
-		messageStore: MessageStore
+		registry: ConversationRegistry
 	) {
 		this.viewType = viewType;
-		this.messageStore = messageStore;
-		this.messageStore.subscribe(this.updateMessages.bind(this));
+		this.registry = registry;
+		// Each view starts with its own fresh ephemeral store.
+		// It gets promoted into the registry (under a UUID) the first time the
+		// conversation is saved, and swapped for a registry store when the user
+		// loads an existing conversation from history.
+		this.messageStore = new MessageStore();
+		this.boundUpdateMessages = this.updateMessages.bind(this);
+		this.messageStore.subscribe(this.boundUpdateMessages);
 		this.contextBuilder = new ContextBuilder(this.plugin.app);
 	}
 
-	private updateMessages(message: Message[]) {
-		const currentIndex = this.plugin.settings.currentIndex;
+	/**
+	 * Swap the active MessageStore for a different one, re-wiring the subscriber.
+	 * Safe to call even if the new store is the same instance (no-op).
+	 */
+	private switchToStore(store: MessageStore): void {
+		if (store === this.messageStore) return;
+		this.messageStore.unsubscribe(this.boundUpdateMessages);
+		this.messageStore = store;
+		this.messageStore.subscribe(this.boundUpdateMessages);
+	}
 
-		if (currentIndex > -1) {
-			message = this.plugin.settings.promptHistory[currentIndex].messages;
-		}
+	/**
+	 * Unsubscribe from the current store. Called when the view is closed so
+	 * the store doesn't hold a stale reference to a torn-down DOM tree.
+	 */
+	destroy(): void {
+		this.messageStore.unsubscribe(this.boundUpdateMessages);
+	}
 
-		// Every mounted view always re-renders when the MessageStore changes.
-		// Previously this was gated on plugin.settings.currentView, but that flag
-		// goes stale when multiple views (e.g. modal + widget) are open at the
-		// same time — whichever view last called setView() "won", leaving the
-		// other view stuck and not updating.
+	private updateMessages(messages: Message[]) {
+		// Each view has its own store, so the messages passed here are always
+		// the right ones for this view — no cross-view filtering needed.
 		this.resetChat();
-		this.generateIMLikeMessages(message);
+		this.generateIMLikeMessages(messages);
 	}
 
 	getMessages() {
@@ -747,6 +768,11 @@ export class ChatContainer {
 			return;
 		}
 
+		// This is a brand-new conversation. Assign a stable UUID so other views
+		// can look up the same MessageStore in the registry later.
+		const conversationId = crypto.randomUUID();
+		this.registry.set(conversationId, this.messageStore);
+
 		if (
 			modelEndpoint === chat ||
 			modelEndpoint === gemini ||
@@ -761,12 +787,14 @@ export class ChatContainer {
 			this.plugin.history.push({
 				...chatParams,
 				modelName,
+				id: conversationId,
 			});
 		}
 		if (modelEndpoint === "images") {
 			this.plugin.history.push({
 				...(params as ImageHistoryItem),
 				modelName,
+				id: conversationId,
 			});
 		}
 		const length = this.plugin.settings.promptHistory.length;
@@ -1042,8 +1070,25 @@ export class ChatContainer {
 	setMessages(replaceChatHistory: boolean = false) {
 		const { historyIndex } = getViewInfo(this.plugin, this.viewType);
 		if (replaceChatHistory) {
-			let history = this.plugin.settings.promptHistory;
-			this.messageStore.setMessages(history[historyIndex].messages);
+			const history = this.plugin.settings.promptHistory;
+			const historyItem = history[historyIndex];
+			// Backfill: legacy history items (saved before this change) have no id.
+			// Assign one now so every subsequent load — including from other views —
+			// will find the same registry store and stay in sync.
+			if (!historyItem.id) {
+				historyItem.id = crypto.randomUUID();
+				this.plugin.saveSettings();
+			}
+
+			// Get or create the store for this conversation in the registry.
+			// If another view already has it open they share the same instance
+			// and will stay in sync automatically.
+			const store = this.registry.getOrCreate(historyItem.id);
+			if (store.getMessages().length === 0) {
+				// First view to open this conversation — populate from disk.
+				store.setMessages(historyItem.messages);
+			}
+			this.switchToStore(store);
 		}
 		if (!replaceChatHistory) {
 			this.messageStore.addMessage({
@@ -1054,7 +1099,10 @@ export class ChatContainer {
 	}
 
 	resetMessages() {
-		this.messageStore.setMessages([]);
+		// Switch to a fresh ephemeral store so the old conversation's store
+		// (which may still be open in another view) is left untouched.
+		const freshStore = new MessageStore();
+		this.switchToStore(freshStore);
 		this.claudeCodeSessionId = null;
 	}
 

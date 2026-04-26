@@ -32,7 +32,7 @@ import {
 	claude,
 	gemini,
 } from "utils/constants";
-import { MessageStore } from "Plugin/Components/MessageStore";
+import { ConversationRegistry } from "Plugin/Components/ConversationRegistry";
 import {
 	DesktopOperatingSystem,
 	MobileOperatingSystem,
@@ -138,7 +138,7 @@ export default class LLMPlugin extends Plugin {
 	settings: LLMPluginSettings;
 	history: History;
 	fab: FAB;
-	messageStore: MessageStore;
+	conversationRegistry: ConversationRegistry;
 	ribbonIconEl: HTMLElement | null = null;
 
 	async onload() {
@@ -153,9 +153,8 @@ export default class LLMPlugin extends Plugin {
 		await this.checkForAPIKeyBasedModel();
 		this.registerRibbonIcons();
 		this.registerCommands();
-		this.messageStore = new MessageStore();
+		this.conversationRegistry = new ConversationRegistry();
 		this.settings.currentIndex = -1;
-		this.messageStore.setMessages([]);
 		await this.saveSettings();
 
 		this.registerView(TAB_VIEW_TYPE, (tab) => new WidgetView(tab, this));

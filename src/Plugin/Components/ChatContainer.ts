@@ -1063,6 +1063,18 @@ export class ChatContainer {
 			clearPromptField();
 		});
 
+		// Auto-populate the active file chip when "Include active file" is enabled in settings.
+		// useActiveFileContext is otherwise only set when the scan button is clicked manually,
+		// so without this block the chip never appears on load even when the setting is on.
+		if (this.plugin.settings[settingType].contextSettings.includeActiveFile) {
+			const activeFile = this.plugin.app.workspace.getActiveFile();
+			if (activeFile) {
+				this.useActiveFileContext = true;
+				this.activeFileForChip = { name: activeFile.name };
+				this.scanButton?.buttonEl.addClass("is-active");
+			}
+		}
+
 		// Restore any chips that were persisted in settings before this session
 		this.syncChips();
 	}
@@ -1290,5 +1302,23 @@ export class ChatContainer {
 		this.historyMessages.empty();
 		this.claudeCodeSessionId = null;
 		this.displayNoChatView(this.historyMessages);
+
+		// Reset active file chip state, then re-evaluate from the current setting.
+		// Without this, toggling the setting or switching chats left stale chip state.
+		this.useActiveFileContext = false;
+		this.activeFileForChip = null;
+		this.scanButton?.buttonEl.removeClass("is-active");
+
+		const settingType = getSettingType(this.viewType);
+		if (this.plugin.settings[settingType].contextSettings.includeActiveFile) {
+			const activeFile = this.plugin.app.workspace.getActiveFile();
+			if (activeFile) {
+				this.useActiveFileContext = true;
+				this.activeFileForChip = { name: activeFile.name };
+				this.scanButton?.buttonEl.addClass("is-active");
+			}
+		}
+
+		this.syncChips();
 	}
 }

@@ -239,7 +239,7 @@
 
 #chat-prompt-text-area {
 	padding: var(--size-4-2) var(--size-4-2) var(--size-2-1) var(--size-4-2);
-	font-size: var(--font-text-size);
+	font-size: var(--font-ui-medium);
 	resize: none;
 	border: none;
 	box-shadow: none;

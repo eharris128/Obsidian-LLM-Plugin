@@ -123,15 +123,32 @@
 
 .llm-left-buttons-div {
 	justify-self: flex-start;
+	align-items: center;
+	min-width: 0; /* allow text-overflow to work */
 }
 
 .llm-right-buttons-div {
 	justify-content: flex-end;
+	align-items: center;
+	flex-shrink: 0;
 }
 
 .llm-right-buttons-div,
 .llm-left-buttons-div {
 	flex: 1;
+}
+
+/* FAB popover: chat title in the header */
+.llm-chat-title {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	flex: 1;
+	min-width: 0;
+	padding-right: var(--size-2-1);
 }
 
 

@@ -146,6 +146,8 @@ export default class LLMPlugin extends Plugin {
 	ribbonIconEl: HTMLElement | null = null;
 	statusBarButton: StatusBarButton;
 	recentChatsButton: RecentChatsButton;
+	/** Transient — set before opening the widget so it can auto-load the right conversation. */
+	pendingWidgetHistoryIndex: number = -1;
 
 	async onload() {
 		this.fileSystem = Platform.isDesktop
@@ -239,20 +241,50 @@ export default class LLMPlugin extends Plugin {
 
 	async activateTab() {
 		const { workspace } = this.app;
+		const pendingIndex = this.pendingWidgetHistoryIndex;
 
 		let tab: WorkspaceLeaf | null = null;
 		const tabs = workspace.getLeavesOfType(TAB_VIEW_TYPE);
 
 		if (tabs.length > 0) {
-			// A leaf with our view already exists, use that
 			tab = tabs[0];
+			// View already exists — load conversation directly if one is pending.
+			if (pendingIndex >= 0) {
+				this.pendingWidgetHistoryIndex = -1;
+				(tab.view as WidgetView).loadConversation(pendingIndex);
+			}
 		} else {
-			// Our view could not be found in the workspace, create a new leaf
-			// in a tab for it
 			tab = workspace.getLeaf("tab");
 			await tab.setViewState({ type: TAB_VIEW_TYPE, active: true });
+			// onOpen will handle auto-loading via pendingWidgetHistoryIndex.
 		}
 		workspace.revealLeaf(tab);
+	}
+
+	async activateSidebar() {
+		const { workspace } = this.app;
+		const pendingIndex = this.pendingWidgetHistoryIndex;
+
+		// Look for an existing widget leaf in the right sidebar.
+		const leaves = workspace.getLeavesOfType(TAB_VIEW_TYPE);
+		const sidebarLeaf = leaves.find(
+			(l) => l.getRoot() === workspace.rightSplit
+		);
+
+		let leaf: WorkspaceLeaf;
+		if (sidebarLeaf) {
+			leaf = sidebarLeaf;
+			// View already exists — load conversation directly if one is pending.
+			if (pendingIndex >= 0) {
+				this.pendingWidgetHistoryIndex = -1;
+				(leaf.view as WidgetView).loadConversation(pendingIndex);
+			}
+		} else {
+			leaf = workspace.getRightLeaf(false)!;
+			await leaf.setViewState({ type: TAB_VIEW_TYPE, active: true });
+			// onOpen will handle auto-loading via pendingWidgetHistoryIndex.
+		}
+		workspace.revealLeaf(leaf);
 	}
 
 	async loadSettings() {

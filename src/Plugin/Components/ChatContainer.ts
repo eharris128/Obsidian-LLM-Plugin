@@ -93,6 +93,8 @@ export class ChatContainer {
 	pendingContextString: string | null = null; // Context string to inject into API call (not shown in UI)
 	claudeCodeSessionId: string | null = null;
 	useActiveFileContext: boolean = false;
+	/** Optional callback set by the FAB header to sync the title display. */
+	headerTitleCallback: ((title: string) => void) | null = null;
 	chipContainer: HTMLElement | null = null;
 	scanButton: ButtonComponent | null = null;
 	activeFileForChip: { name: string } | null = null;
@@ -775,6 +777,14 @@ export class ChatContainer {
 		// can look up the same MessageStore in the registry later.
 		const conversationId = crypto.randomUUID();
 		this.registry.set(conversationId, this.messageStore);
+
+		// Update the FAB header title with the first user message.
+		if (this.headerTitleCallback) {
+			const firstUserMessage = this.getMessages().find((m) => m.role === "user");
+			if (firstUserMessage) {
+				this.headerTitleCallback(firstUserMessage.content);
+			}
+		}
 
 		if (
 			modelEndpoint === chat ||

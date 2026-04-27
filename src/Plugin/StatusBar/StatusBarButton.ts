@@ -78,6 +78,10 @@ export class StatusBarButton {
 		const chatHistoryContainer = this.chatHistoryContainer;
 		const settingsContainerDiv = contentArea.createDiv();
 
+		// Wire the title callback and close callback into the FAB-style header.
+		this.chatContainer.headerTitleCallback = (title: string) =>
+			this.header?.setTitle(title);
+
 		this.header.generateHeader(
 			contentArea,
 			chatContainerDiv,
@@ -85,8 +89,12 @@ export class StatusBarButton {
 			settingsContainerDiv,
 			this.chatContainer,
 			historyContainer,
-			settingsContainer
+			settingsContainer,
+			() => this.hidePopover()
 		);
+
+		// The status bar popover uses the FAB header which has a chevron menu
+		// instead of a dedicated history button — no button to hide here.
 
 		settingsContainerDiv.setAttr("style", "display: none");
 		settingsContainerDiv.addClass("fab-settings-container", "llm-flex");

@@ -48,6 +48,8 @@ export class FAB {
 			this.plugin.conversationRegistry
 		);
 		const chatContainer = this.chatContainer;
+		// Wire the header title callback so the title updates when the first message is sent.
+		chatContainer.headerTitleCallback = (title: string) => header.setTitle(title);
 		const historyContainer = new HistoryContainer(
 			this.plugin,
 			"floating-action-button"
@@ -80,7 +82,8 @@ export class FAB {
 			settingsContainerDiv,
 			chatContainer,
 			historyContainer,
-			settingsContainer
+			settingsContainer,
+			() => { viewArea.style.display = "none"; }
 		);
 
 		resizeHandle.addEventListener("pointerdown", (e: PointerEvent) => {

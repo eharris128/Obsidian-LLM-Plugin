@@ -1,10 +1,11 @@
 import LLMPlugin from "main";
-import { ButtonComponent } from "obsidian";
+import { ButtonComponent, Menu } from "obsidian";
 import { ChatContainer } from "./ChatContainer";
 import { HistoryContainer } from "./HistoryContainer";
 import { ViewType } from "Types/types";
 import { getViewInfo, setHistoryIndex } from "utils/utils";
 import { SettingsContainer } from "./SettingsContainer";
+import { DEFAULT_SETTINGS } from "main";
 
 export class Header {
 	viewType: ViewType;
@@ -12,16 +13,23 @@ export class Header {
 		this.viewType = viewType;
 	}
 	modelEl?: HTMLElement;
-	chatHistoryButton: ButtonComponent;
-	newChatButton: ButtonComponent;
-	settingsButton: ButtonComponent;
+	titleEl: HTMLElement | null = null;
+	chatHistoryButton?: ButtonComponent;
+	newChatButton?: ButtonComponent;
+	settingsButton?: ButtonComponent;
 
 	setHeader(_modelName: string) {
 		// Model name is now shown in the chat input toolbar dropdown
 	}
 
+	setTitle(title: string) {
+		if (this.titleEl) {
+			this.titleEl.textContent = title || "";
+		}
+	}
+
 	resetHistoryButton() {
-		this.chatHistoryButton.buttonEl.removeClass("is-active");
+		this.chatHistoryButton?.buttonEl.removeClass("is-active");
 	}
 
 	clickHandler(button: ButtonComponent, toggles: ButtonComponent[]) {
@@ -38,15 +46,15 @@ export class Header {
 	}
 
 	disableButtons() {
-		this.chatHistoryButton.setDisabled(true);
-		this.newChatButton.setDisabled(true);
-		this.settingsButton.setDisabled(true);
+		this.chatHistoryButton?.setDisabled(true);
+		this.newChatButton?.setDisabled(true);
+		this.settingsButton?.setDisabled(true);
 	}
 
 	enableButtons() {
-		this.chatHistoryButton.setDisabled(false);
-		this.newChatButton.setDisabled(false);
-		this.settingsButton.setDisabled(false);
+		this.chatHistoryButton?.setDisabled(false);
+		this.newChatButton?.setDisabled(false);
+		this.settingsButton?.setDisabled(false);
 	}
 
 	generateHeader(
@@ -56,13 +64,177 @@ export class Header {
 		settingsContainerDiv: HTMLElement,
 		chatContainer: ChatContainer,
 		historyContainer: HistoryContainer,
-		settingsContainer: SettingsContainer
+		settingsContainer: SettingsContainer,
+		closeCallback?: () => void
 	) {
 		const titleDiv = createDiv();
+		titleDiv.addClass("llm-title-div", "llm-flex");
+
+		if (this.viewType === "floating-action-button") {
+			this.generateFABHeader(
+				titleDiv,
+				chatContainerDiv,
+				chatHistoryContainerDiv,
+				settingsContainerDiv,
+				chatContainer,
+				historyContainer,
+				settingsContainer,
+				closeCallback
+			);
+		} else {
+			this.generateDefaultHeader(
+				titleDiv,
+				chatContainerDiv,
+				chatHistoryContainerDiv,
+				settingsContainerDiv,
+				chatContainer,
+				historyContainer,
+				settingsContainer
+			);
+		}
+
+		parentElement.prepend(titleDiv);
+	}
+
+	private generateFABHeader(
+		titleDiv: HTMLElement,
+		chatContainerDiv: HTMLElement,
+		chatHistoryContainerDiv: HTMLElement,
+		settingsContainerDiv: HTMLElement,
+		chatContainer: ChatContainer,
+		historyContainer: HistoryContainer,
+		settingsContainer: SettingsContainer,
+		closeCallback?: () => void
+	) {
+		const leftDiv = titleDiv.createDiv();
+		leftDiv.addClass("llm-left-buttons-div", "llm-flex");
+
+		// Chat title text
+		this.titleEl = leftDiv.createEl("span");
+		this.titleEl.addClass("llm-chat-title");
+
+		const rightButtonsDiv = titleDiv.createDiv();
+		rightButtonsDiv.addClass("llm-right-buttons-div", "llm-flex");
+
+		// Chevron dropdown button
+		const chevronButton = new ButtonComponent(rightButtonsDiv);
+		chevronButton.buttonEl.addClass("clickable-icon");
+		chevronButton.setIcon("chevron-down");
+		chevronButton.setTooltip("More options");
+		chevronButton.onClick((evt: MouseEvent) => {
+			const menu = new Menu();
+
+			menu.addItem((item) => {
+				item.setTitle("New chat")
+					.setIcon("plus")
+					.onClick(() => {
+						const { modelName } = getViewInfo(this.plugin, this.viewType);
+						this.setTitle("");
+						chatContainerDiv.show();
+						settingsContainerDiv.hide();
+						chatHistoryContainerDiv.hide();
+						chatContainer.newChat();
+						chatContainer.resetMessages();
+						setHistoryIndex(this.plugin, this.viewType);
+						this.plugin.settings.currentIndex = -1;
+						this.plugin.saveSettings();
+					});
+			});
+
+			menu.addItem((item) => {
+				item.setTitle("Open in sidebar")
+					.setIcon("panel-right")
+					.onClick(() => {
+						const historyIndex = this.plugin.settings.fabSettings.historyIndex;
+						this.plugin.pendingWidgetHistoryIndex = historyIndex;
+						this.plugin.activateSidebar();
+						closeCallback?.();
+					});
+			});
+
+			menu.addItem((item) => {
+				item.setTitle("Open in tab")
+					.setIcon("layout-dashboard")
+					.onClick(() => {
+						const historyIndex = this.plugin.settings.fabSettings.historyIndex;
+						this.plugin.pendingWidgetHistoryIndex = historyIndex;
+						this.plugin.activateTab();
+						closeCallback?.();
+					});
+			});
+
+			menu.addSeparator();
+
+			menu.addItem((item) => {
+				item.setTitle("Delete chat")
+					.setIcon("trash")
+					.onClick(() => {
+						const historyIndex = this.plugin.settings.fabSettings.historyIndex;
+						if (historyIndex >= 0) {
+							this.plugin.settings.promptHistory =
+								this.plugin.settings.promptHistory.filter(
+									(_, idx) => idx !== historyIndex
+								);
+							this.plugin.settings.fabSettings.historyIndex =
+								DEFAULT_SETTINGS.fabSettings.historyIndex;
+							this.plugin.settings.currentIndex = -1;
+							this.plugin.saveSettings();
+						}
+						this.setTitle("");
+						chatContainerDiv.show();
+						settingsContainerDiv.hide();
+						chatHistoryContainerDiv.hide();
+						chatContainer.newChat();
+						chatContainer.resetMessages();
+					});
+			});
+
+			menu.showAtMouseEvent(evt);
+		});
+
+		// Settings button
+		this.settingsButton = new ButtonComponent(rightButtonsDiv);
+		this.settingsButton.setTooltip("Chat settings");
+		this.settingsButton.onClick(() => {
+			settingsContainer.resetSettings(settingsContainerDiv);
+			settingsContainer.generateSettingsContainer(
+				settingsContainerDiv,
+				this
+			);
+			this.clickHandler(this.settingsButton!, []);
+			if (!settingsContainerDiv.isShown()) {
+				settingsContainerDiv.show();
+				chatContainerDiv.hide();
+				chatHistoryContainerDiv.hide();
+			} else {
+				chatContainerDiv.show();
+				settingsContainerDiv.hide();
+			}
+		});
+		this.settingsButton.buttonEl.addClass("clickable-icon", "settings-button");
+		this.settingsButton.setIcon("settings-2");
+
+		// Close (X) button
+		if (closeCallback) {
+			const closeButton = new ButtonComponent(rightButtonsDiv);
+			closeButton.buttonEl.addClass("clickable-icon");
+			closeButton.setIcon("x");
+			closeButton.setTooltip("Close");
+			closeButton.onClick(closeCallback);
+		}
+	}
+
+	private generateDefaultHeader(
+		titleDiv: HTMLElement,
+		chatContainerDiv: HTMLElement,
+		chatHistoryContainerDiv: HTMLElement,
+		settingsContainerDiv: HTMLElement,
+		chatContainer: ChatContainer,
+		historyContainer: HistoryContainer,
+		settingsContainer: SettingsContainer
+	) {
 		const leftButtonDiv = titleDiv.createDiv();
 		const rightButtonsDiv = titleDiv.createDiv();
-
-		titleDiv.addClass("llm-title-div", "llm-flex");
 
 		this.chatHistoryButton = new ButtonComponent(leftButtonDiv);
 		this.chatHistoryButton.setTooltip("Chats");
@@ -75,8 +247,8 @@ export class Header {
 				chatContainer,
 				this
 			);
-			this.clickHandler(this.chatHistoryButton, [
-				this.settingsButton,
+			this.clickHandler(this.chatHistoryButton!, [
+				this.settingsButton!,
 			]);
 			if (!chatHistoryContainerDiv.isShown()) {
 				chatHistoryContainerDiv.show();
@@ -88,13 +260,8 @@ export class Header {
 			}
 		});
 
-		if (this.viewType === "floating-action-button") {
-			this.newChatButton = new ButtonComponent(leftButtonDiv);
-			this.settingsButton = new ButtonComponent(rightButtonsDiv);
-		} else {
-			this.newChatButton = new ButtonComponent(rightButtonsDiv);
-			this.settingsButton = new ButtonComponent(rightButtonsDiv);
-		}
+		this.newChatButton = new ButtonComponent(rightButtonsDiv);
+		this.settingsButton = new ButtonComponent(rightButtonsDiv);
 
 		this.settingsButton.setTooltip("Chat settings");
 		this.settingsButton.onClick(() => {
@@ -103,8 +270,8 @@ export class Header {
 				settingsContainerDiv,
 				this
 			);
-			this.clickHandler(this.settingsButton, [
-				this.chatHistoryButton,
+			this.clickHandler(this.settingsButton!, [
+				this.chatHistoryButton!,
 			]);
 			if (!settingsContainerDiv.isShown()) {
 				settingsContainerDiv.show();
@@ -119,9 +286,9 @@ export class Header {
 		this.newChatButton.setTooltip("New chat");
 		this.newChatButton.onClick(() => {
 			const { modelName } = getViewInfo(this.plugin, this.viewType);
-			this.clickHandler(this.newChatButton, [
-				this.settingsButton,
-				this.chatHistoryButton,
+			this.clickHandler(this.newChatButton!, [
+				this.settingsButton!,
+				this.chatHistoryButton!,
 			]);
 			this.setHeader(modelName);
 			chatContainerDiv.show();
@@ -149,9 +316,7 @@ export class Header {
 			"new-chat-button"
 		);
 		this.chatHistoryButton.setIcon("menu");
-		this.settingsButton.setIcon("sliders-horizontal");
+		this.settingsButton.setIcon("settings-2");
 		this.newChatButton.setIcon("plus");
-
-		parentElement.prepend(titleDiv);
 	}
 }

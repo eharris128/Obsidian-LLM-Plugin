@@ -91,7 +91,8 @@ export class RecentChatsButton {
 					modelEl.setText(item.modelName);
 				}
 
-				row.addEventListener("click", () => {
+				row.addEventListener("click", (e) => {
+					e.stopPropagation();
 					this.hidePopover();
 					this.statusBarButton.openAtHistory(index);
 				});

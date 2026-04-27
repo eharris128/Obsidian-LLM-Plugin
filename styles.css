@@ -70,6 +70,7 @@
 /* Widget sidebar: bleed out of .view-content's 16 px padding so the toolbar
    spans edge-to-edge, matching the pdf-toolbar appearance */
 .workspace-leaf-content[data-type="tab-view"] .llm-title-div {
+	background-color: transparent;
 	margin-left: calc(-1 * var(--size-4-4));
 	margin-right: calc(-1 * var(--size-4-4));
 	margin-top: calc(-1 * var(--size-4-4));

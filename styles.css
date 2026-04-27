@@ -1066,3 +1066,131 @@ button.llm-scan-button.is-active:hover {
 	color: var(--icon-color);
 	box-shadow: none;
 }
+
+/* STATUS BAR BUTTON */
+
+.llm-status-bar-button {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	cursor: pointer;
+	padding: 0 var(--size-2-2);
+	border-radius: var(--radius-s);
+	color: var(--status-bar-text-color);
+	transition: background-color 100ms ease;
+}
+
+.llm-status-bar-button:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.llm-status-bar-icon {
+	display: flex;
+	align-items: center;
+}
+
+.llm-status-bar-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.llm-status-bar-label {
+	font-size: var(--font-ui-smaller);
+}
+
+/* Popover — floats above the status bar, fixed to viewport */
+.llm-status-bar-popover {
+	position: fixed;
+	z-index: var(--layer-popover);
+	width: 400px;
+	min-width: 400px;
+	padding: var(--size-4-4);
+	background-color: var(--background-secondary);
+	border-radius: var(--radius-m);
+	border: var(--border-width) solid var(--background-modifier-border);
+	box-shadow: var(--shadow-l);
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+}
+
+/* RECENT CHATS POPOVER */
+
+.llm-recent-chats-popover {
+	position: fixed;
+	z-index: var(--layer-popover);
+	width: 340px;
+	/* max-height caps upward growth; the list scrolls internally */
+	max-height: min(480px, 80vh);
+	background-color: var(--background-primary);
+	border-radius: var(--radius-m);
+	border: var(--border-width) solid var(--background-modifier-border);
+	box-shadow: var(--shadow-l);
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.llm-recent-chats-search-wrapper {
+	padding: var(--size-4-2) var(--size-4-3);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+	flex-shrink: 0;
+}
+
+.llm-recent-chats-search {
+	width: 100%;
+	box-sizing: border-box;
+	background-color: var(--background-modifier-form-field);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	padding: var(--size-2-2) var(--size-4-2);
+	outline: none;
+}
+
+.llm-recent-chats-search:focus {
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.llm-recent-chats-list {
+	overflow-y: auto;
+	flex: 1;
+	padding: var(--size-2-1) 0;
+}
+
+.llm-recent-chats-item {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-1);
+	padding: var(--size-4-2) var(--size-4-3);
+	cursor: pointer;
+	border-radius: 0;
+	transition: background-color 80ms ease;
+}
+
+.llm-recent-chats-item:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.llm-recent-chats-item-text {
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.llm-recent-chats-item-model {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.llm-recent-chats-empty {
+	padding: var(--size-4-4) var(--size-4-3);
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	text-align: center;
+}

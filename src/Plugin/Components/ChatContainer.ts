@@ -1314,6 +1314,48 @@ export class ChatContainer {
 		this.historyMessages.removeClass("center-llmgal");
 		this.historyMessages.removeClass("llm-justify-content-center");
 	}
+	/**
+	 * Refresh the active-file chip to the currently open file without
+	 * disturbing conversation history or user-toggled scan state.
+	 *
+	 * - If the user has context ON (useActiveFileContext=true): swap the file
+	 *   name to whatever is active now, or clear the chip if nothing is open.
+	 * - If context is OFF because the user explicitly disabled it via the scan
+	 *   button: leave it alone.
+	 * - If context is OFF only because no file was active when the popover was
+	 *   first built, but includeActiveFile is on and a file is now open: enable
+	 *   it so the chip appears for the first time.
+	 */
+	refreshActiveFileChip() {
+		const settingType = getSettingType(this.viewType);
+		const includeActiveFile =
+			this.plugin.settings[settingType].contextSettings.includeActiveFile;
+
+		if (this.useActiveFileContext) {
+			// Context is on — update to the currently active file.
+			const activeFile = this.plugin.app.workspace.getActiveFile();
+			if (activeFile) {
+				this.activeFileForChip = { name: activeFile.name };
+			} else {
+				// No file open any more — turn the chip off cleanly.
+				this.activeFileForChip = null;
+				this.useActiveFileContext = false;
+				this.scanButton?.buttonEl.removeClass("is-active");
+			}
+			this.syncChips();
+		} else if (includeActiveFile && !this.activeFileForChip) {
+			// Context was never activated because no file was open at build
+			// time. Try again now that the popover is being shown.
+			const activeFile = this.plugin.app.workspace.getActiveFile();
+			if (activeFile) {
+				this.useActiveFileContext = true;
+				this.activeFileForChip = { name: activeFile.name };
+				this.scanButton?.buttonEl.addClass("is-active");
+				this.syncChips();
+			}
+		}
+	}
+
 	newChat() {
 		this.historyMessages.empty();
 		this.claudeCodeSessionId = null;

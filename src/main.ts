@@ -9,6 +9,8 @@ import {
 
 import { History } from "History/HistoryHandler";
 import { FAB } from "Plugin/FAB/FAB";
+import { StatusBarButton } from "Plugin/StatusBar/StatusBarButton";
+import { RecentChatsButton } from "Plugin/StatusBar/RecentChatsButton";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
 import { TAB_VIEW_TYPE, WidgetView } from "Plugin/Widget/Widget";
 import SettingsView from "Settings/SettingsView";
@@ -66,6 +68,7 @@ export interface LLMPluginSettings {
 	ollamaModels: string[];
 	emptyChatAvatar: string;
 	fabViewHeight?: number;
+	showStatusBarButton: boolean;
 }
 
 const defaultSettings = {
@@ -130,6 +133,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	ollamaHost: "http://localhost:11434",
 	ollamaModels: [],
 	emptyChatAvatar: "llm-gal",
+	showStatusBarButton: false,
 };
 
 export default class LLMPlugin extends Plugin {
@@ -140,6 +144,8 @@ export default class LLMPlugin extends Plugin {
 	fab: FAB;
 	conversationRegistry: ConversationRegistry;
 	ribbonIconEl: HTMLElement | null = null;
+	statusBarButton: StatusBarButton;
+	recentChatsButton: RecentChatsButton;
 
 	async onload() {
 		this.fileSystem = Platform.isDesktop
@@ -161,10 +167,18 @@ export default class LLMPlugin extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.fab = new FAB(this);
+		this.statusBarButton = new StatusBarButton(this);
+		this.recentChatsButton = new RecentChatsButton(this, this.statusBarButton);
 		this.addSettingTab(new SettingsView(this.app, this, this.fab));
 		if (this.settings.showFAB) {
 			setTimeout(() => {
 				this.fab.regenerateFAB();
+			}, 500);
+		}
+		if (this.settings.showStatusBarButton) {
+			setTimeout(() => {
+				this.statusBarButton.generate();
+				this.recentChatsButton.generate();
 			}, 500);
 		}
 		this.history = new History(this);
@@ -172,6 +186,8 @@ export default class LLMPlugin extends Plugin {
 
 	onunload() {
 		this.fab.removeFab();
+		this.statusBarButton.remove();
+		this.recentChatsButton.remove();
 	}
 
 	private registerCommands() {

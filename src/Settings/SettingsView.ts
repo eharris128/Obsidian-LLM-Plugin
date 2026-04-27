@@ -185,6 +185,26 @@ export default class SettingsView extends PluginSettingTab {
 					});
 			});
 
+		// Add Toggle Status Bar Button
+		new Setting(containerEl)
+			.setName("Toggle Ask AI in status bar")
+			.setDesc("Shows an 'Ask AI' button in the status bar that opens the chat popover")
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.showStatusBarButton)
+					.onChange(async (value) => {
+						this.plugin.settings.showStatusBarButton = value;
+						await this.plugin.saveSettings();
+						if (value) {
+							this.plugin.statusBarButton.generate();
+							this.plugin.recentChatsButton.generate();
+						} else {
+							this.plugin.statusBarButton.remove();
+							this.plugin.recentChatsButton.remove();
+						}
+					});
+			});
+
 		// Add Toggle Ribbon Icon
 		new Setting(containerEl)
 			.setName("Show ribbon icon")

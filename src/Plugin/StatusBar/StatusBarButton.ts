@@ -315,6 +315,9 @@ export class StatusBarButton {
 		this.chatContainerDiv.querySelector(".messages-div")?.scroll(0, 9999);
 		this.header?.setHeader(historyItem?.modelName ?? "");
 		this.header?.resetHistoryButton();
+		// Update the header title to match the loaded conversation.
+		const displayTitle = historyItem?.prompt || historyItem?.messages[0]?.content || "";
+		this.header?.setTitle(displayTitle);
 	}
 
 	remove() {

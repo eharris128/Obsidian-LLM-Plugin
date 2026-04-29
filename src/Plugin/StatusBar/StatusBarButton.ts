@@ -219,16 +219,9 @@ export class StatusBarButton {
 				this.repositionPopover();
 			});
 
-			// Dismiss on click outside
-			this.clickOutsideHandler = (e: MouseEvent) => {
-				if (
-					this.popoverEl &&
-					!this.popoverEl.contains(e.target as Node) &&
-					!this.statusBarEl?.contains(e.target as Node)
-				) {
-					this.hidePopover();
-				}
-			};
+			// Dismiss on click outside (tab-header clicks are excluded so the
+			// popover stays open when the user switches Obsidian tabs).
+			this.clickOutsideHandler = this.buildClickOutsideHandler();
 			// Defer so the current click event doesn't immediately close it.
 			setTimeout(() => {
 				document.addEventListener("click", this.clickOutsideHandler!);
@@ -244,6 +237,25 @@ export class StatusBarButton {
 			document.removeEventListener("click", this.clickOutsideHandler);
 			this.clickOutsideHandler = null;
 		}
+	}
+
+	/** Build the click-outside handler, ignoring workspace tab navigation clicks. */
+	private buildClickOutsideHandler(): (e: MouseEvent) => void {
+		return (e: MouseEvent) => {
+			const target = e.target as Node;
+			if (
+				this.popoverEl &&
+				!this.popoverEl.contains(target) &&
+				!this.statusBarEl?.contains(target)
+			) {
+				// Don't close when the user switches Obsidian tabs/leaves.
+				// Workspace tab headers sit outside the popover but shouldn't
+				// dismiss it — the user just wants to look at a different note.
+				const el = target as Element;
+				if (el.closest?.(".workspace-tab-header")) return;
+				this.hidePopover();
+			}
+		};
 	}
 
 	/**
@@ -291,15 +303,7 @@ export class StatusBarButton {
 				this.repositionPopover();
 			});
 
-			this.clickOutsideHandler = (e: MouseEvent) => {
-				if (
-					this.popoverEl &&
-					!this.popoverEl.contains(e.target as Node) &&
-					!this.statusBarEl?.contains(e.target as Node)
-				) {
-					this.hidePopover();
-				}
-			};
+			this.clickOutsideHandler = this.buildClickOutsideHandler();
 			setTimeout(() => {
 				document.addEventListener("click", this.clickOutsideHandler!);
 			}, 0);

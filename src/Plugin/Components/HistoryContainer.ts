@@ -124,6 +124,7 @@ export class HistoryContainer {
 			const loadedItem = this.plugin.settings.promptHistory[index];
 			const displayTitle = loadedItem?.prompt || loadedItem?.messages[0]?.content || "";
 			Header.setTitle(displayTitle);
+			Header.showTitle();
 		};
 
 		eventListener.bind(this);

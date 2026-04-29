@@ -49,10 +49,8 @@
 }
 
 .llm-title-div {
-	/* Match .pdf-toolbar exactly */
 	align-items: stretch;
 	background-color: var(--background-primary);
-	border-bottom: var(--border-width) solid var(--background-modifier-border);
 	display: flex;
 	justify-content: space-between;
 	overflow: auto;
@@ -67,9 +65,10 @@
 	overflow-x: hidden;
 }
 
-/* Widget sidebar: bleed out of .view-content's 16 px padding so the toolbar
+/* Widget sidebar/tab: bleed out of .view-content's 16 px padding so the toolbar
    spans edge-to-edge, matching the pdf-toolbar appearance */
 .workspace-leaf-content[data-type="tab-view"] .llm-title-div {
+	background-color: transparent;
 	margin-left: calc(-1 * var(--size-4-4));
 	margin-right: calc(-1 * var(--size-4-4));
 	margin-top: calc(-1 * var(--size-4-4));
@@ -78,13 +77,23 @@
 	width: calc(100% + 2 * var(--size-4-4));
 }
 
-/* llm-title-div already has border-bottom — hide the redundant lineBreak divs */
+/* Chat in tab: keep the border-bottom to match .pdf-toolbar; hide the redundant lineBreak div */
+.mod-root .workspace-leaf-content[data-type="tab-view"] .llm-title-div {
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
 .workspace-leaf-content[data-type="tab-view"] .llm-widget-title-border,
 .modal-content .llm-modal-title-border {
 	display: none;
 }
 
-/* Modal: same bleed as widget — contentEl has var(--size-4-4) padding on all sides */
+/* Sidebar widget: match Obsidian nav-header vertical spacing (8 px top + bottom) */
+.mod-left-split .workspace-leaf-content[data-type="tab-view"] .llm-title-div,
+.mod-right-split .workspace-leaf-content[data-type="tab-view"] .llm-title-div {
+	padding-top: var(--size-4-2);
+	padding-bottom: var(--size-4-2);
+}
+
+/* Modal (Ask AI): same bleed as widget — contentEl has var(--size-4-4) padding on all sides */
 .modal-content .llm-title-div {
 	margin-left: calc(-1 * var(--size-4-4));
 	margin-right: calc(-1 * var(--size-4-4));
@@ -123,15 +132,32 @@
 
 .llm-left-buttons-div {
 	justify-self: flex-start;
+	align-items: center;
+	min-width: 0; /* allow text-overflow to work */
 }
 
 .llm-right-buttons-div {
 	justify-content: flex-end;
+	align-items: center;
+	flex-shrink: 0;
 }
 
 .llm-right-buttons-div,
 .llm-left-buttons-div {
 	flex: 1;
+}
+
+/* FAB popover: chat title in the header */
+.llm-chat-title {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	flex: 1;
+	min-width: 0;
+	padding-right: var(--size-2-1);
 }
 
 
@@ -1065,4 +1091,132 @@ button.llm-scan-button.is-active:hover {
 	background-color: var(--background-modifier-hover);
 	color: var(--icon-color);
 	box-shadow: none;
+}
+
+/* STATUS BAR BUTTON */
+
+.llm-status-bar-button {
+	display: flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	cursor: pointer;
+	padding: 0 var(--size-2-2);
+	border-radius: var(--radius-s);
+	color: var(--status-bar-text-color);
+	transition: background-color 100ms ease;
+}
+
+.llm-status-bar-button:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.llm-status-bar-icon {
+	display: flex;
+	align-items: center;
+}
+
+.llm-status-bar-icon svg {
+	width: 12px;
+	height: 12px;
+}
+
+.llm-status-bar-label {
+	font-size: var(--font-ui-smaller);
+}
+
+/* Popover — floats above the status bar, fixed to viewport */
+.llm-status-bar-popover {
+	position: fixed;
+	z-index: var(--layer-popover);
+	width: 400px;
+	min-width: 400px;
+	padding: var(--size-4-4);
+	background-color: var(--background-secondary);
+	border-radius: var(--radius-m);
+	border: var(--border-width) solid var(--background-modifier-border);
+	box-shadow: var(--shadow-l);
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+}
+
+/* RECENT CHATS POPOVER */
+
+.llm-recent-chats-popover {
+	position: fixed;
+	z-index: var(--layer-popover);
+	width: 340px;
+	/* max-height caps upward growth; the list scrolls internally */
+	max-height: min(480px, 80vh);
+	background-color: var(--background-primary);
+	border-radius: var(--radius-m);
+	border: var(--border-width) solid var(--background-modifier-border);
+	box-shadow: var(--shadow-l);
+	display: flex;
+	flex-direction: column;
+	box-sizing: border-box;
+	overflow: hidden;
+}
+
+.llm-recent-chats-search-wrapper {
+	padding: var(--size-4-2) var(--size-4-3);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+	flex-shrink: 0;
+}
+
+.llm-recent-chats-search {
+	width: 100%;
+	box-sizing: border-box;
+	background-color: var(--background-modifier-form-field);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	padding: var(--size-2-2) var(--size-4-2);
+	outline: none;
+}
+
+.llm-recent-chats-search:focus {
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.llm-recent-chats-list {
+	overflow-y: auto;
+	flex: 1;
+	padding: var(--size-2-1) 0;
+}
+
+.llm-recent-chats-item {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-2-1);
+	padding: var(--size-4-2) var(--size-4-3);
+	cursor: pointer;
+	border-radius: 0;
+	transition: background-color 80ms ease;
+}
+
+.llm-recent-chats-item:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+.llm-recent-chats-item-text {
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.llm-recent-chats-item-model {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.llm-recent-chats-empty {
+	padding: var(--size-4-4) var(--size-4-3);
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	text-align: center;
 }

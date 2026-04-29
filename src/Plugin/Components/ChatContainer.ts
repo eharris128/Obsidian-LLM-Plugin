@@ -93,6 +93,8 @@ export class ChatContainer {
 	pendingContextString: string | null = null; // Context string to inject into API call (not shown in UI)
 	claudeCodeSessionId: string | null = null;
 	useActiveFileContext: boolean = false;
+	/** Optional callback set by the FAB header to sync the title display. */
+	headerTitleCallback: ((title: string) => void) | null = null;
 	chipContainer: HTMLElement | null = null;
 	scanButton: ButtonComponent | null = null;
 	activeFileForChip: { name: string } | null = null;
@@ -305,7 +307,7 @@ export class ChatContainer {
 					}
 					if (message.type === "assistant") {
 						for (const block of message.message.content) {
-							if (block.type === "text") {
+							if (block.type === "text" && block.text) {
 								if (firstText) {
 									this.streamingDiv.empty();
 									firstText = false;
@@ -376,13 +378,16 @@ export class ChatContainer {
 			try {
 				let firstChunk = true;
 				for await (const chunk of stream) {
-					if (firstChunk) {
+					const chunkText = chunk.text || "";
+					if (firstChunk && chunkText) {
 						this.streamingDiv.empty();
 						firstChunk = false;
 					}
-					this.previewText += chunk.text || "";
-					this.streamingDiv.textContent = this.previewText;
-					this.historyMessages.scroll(0, 9999);
+					this.previewText += chunkText;
+					if (!firstChunk) {
+						this.streamingDiv.textContent = this.previewText;
+						this.historyMessages.scroll(0, 9999);
+					}
 				}
 			} catch (err) {
 				console.error(err);
@@ -426,13 +431,15 @@ export class ChatContainer {
 
 			let firstText = true;
 			stream.on("text", (text) => {
-				if (firstText) {
+				if (firstText && text) {
 					this.streamingDiv.empty();
 					firstText = false;
 				}
 				this.previewText += text || "";
-				this.streamingDiv.textContent = this.previewText;
-				this.historyMessages.scroll(0, 9999);
+				if (!firstText) {
+					this.streamingDiv.textContent = this.previewText;
+					this.historyMessages.scroll(0, 9999);
+				}
 			});
 
 			// Wait for the stream to finish before post-processing.
@@ -478,13 +485,16 @@ export class ChatContainer {
 
 			let firstChunk = true;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
-				if (firstChunk) {
+				const content = chunk.choices[0]?.delta?.content || "";
+				if (firstChunk && content) {
 					this.streamingDiv.empty();
 					firstChunk = false;
 				}
-				this.previewText += chunk.choices[0]?.delta?.content || "";
-				this.streamingDiv.textContent = this.previewText;
-				this.historyMessages.scroll(0, 9999);
+				this.previewText += content;
+				if (!firstChunk) {
+					this.streamingDiv.textContent = this.previewText;
+					this.historyMessages.scroll(0, 9999);
+				}
 			}
 			this.streamingDiv.empty();
 			MarkdownRenderer.render(
@@ -528,13 +538,16 @@ export class ChatContainer {
 
 			let firstChunk = true;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
-				if (firstChunk) {
+				const content = chunk.choices[0]?.delta?.content || "";
+				if (firstChunk && content) {
 					this.streamingDiv.empty();
 					firstChunk = false;
 				}
-				this.previewText += chunk.choices[0]?.delta?.content || "";
-				this.streamingDiv.textContent = this.previewText;
-				this.historyMessages.scroll(0, 9999);
+				this.previewText += content;
+				if (!firstChunk) {
+					this.streamingDiv.textContent = this.previewText;
+					this.historyMessages.scroll(0, 9999);
+				}
 			}
 			this.streamingDiv.empty();
 			MarkdownRenderer.render(
@@ -775,6 +788,14 @@ export class ChatContainer {
 		// can look up the same MessageStore in the registry later.
 		const conversationId = crypto.randomUUID();
 		this.registry.set(conversationId, this.messageStore);
+
+		// Update the FAB header title with the first user message.
+		if (this.headerTitleCallback) {
+			const firstUserMessage = this.getMessages().find((m) => m.role === "user");
+			if (firstUserMessage) {
+				this.headerTitleCallback(firstUserMessage.content);
+			}
+		}
 
 		if (
 			modelEndpoint === chat ||
@@ -1314,6 +1335,48 @@ export class ChatContainer {
 		this.historyMessages.removeClass("center-llmgal");
 		this.historyMessages.removeClass("llm-justify-content-center");
 	}
+	/**
+	 * Refresh the active-file chip to the currently open file without
+	 * disturbing conversation history or user-toggled scan state.
+	 *
+	 * - If the user has context ON (useActiveFileContext=true): swap the file
+	 *   name to whatever is active now, or clear the chip if nothing is open.
+	 * - If context is OFF because the user explicitly disabled it via the scan
+	 *   button: leave it alone.
+	 * - If context is OFF only because no file was active when the popover was
+	 *   first built, but includeActiveFile is on and a file is now open: enable
+	 *   it so the chip appears for the first time.
+	 */
+	refreshActiveFileChip() {
+		const settingType = getSettingType(this.viewType);
+		const includeActiveFile =
+			this.plugin.settings[settingType].contextSettings.includeActiveFile;
+
+		if (this.useActiveFileContext) {
+			// Context is on — update to the currently active file.
+			const activeFile = this.plugin.app.workspace.getActiveFile();
+			if (activeFile) {
+				this.activeFileForChip = { name: activeFile.name };
+			} else {
+				// No file open any more — turn the chip off cleanly.
+				this.activeFileForChip = null;
+				this.useActiveFileContext = false;
+				this.scanButton?.buttonEl.removeClass("is-active");
+			}
+			this.syncChips();
+		} else if (includeActiveFile && !this.activeFileForChip) {
+			// Context was never activated because no file was open at build
+			// time. Try again now that the popover is being shown.
+			const activeFile = this.plugin.app.workspace.getActiveFile();
+			if (activeFile) {
+				this.useActiveFileContext = true;
+				this.activeFileForChip = { name: activeFile.name };
+				this.scanButton?.buttonEl.addClass("is-active");
+				this.syncChips();
+			}
+		}
+	}
+
 	newChat() {
 		this.historyMessages.empty();
 		this.claudeCodeSessionId = null;

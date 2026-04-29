@@ -9,7 +9,7 @@ import {
 } from "obsidian";
 import { changeDefaultModel, getGpt4AllPath, fetchOllamaModels } from "utils/utils";
 import { models, modelNames, buildOllamaModels } from "utils/models";
-import { claude, claudeCode, gemini, GPT4All, mistral, ollama, openAI } from "utils/constants";
+import { GPT4All, ollama } from "utils/constants";
 import logo from "assets/LLMguy.svg";
 import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
@@ -106,7 +106,6 @@ export default class SettingsView extends PluginSettingTab {
 				const allModels = { ...models, ...ollamaBuilt.models };
 				const allModelNames = { ...modelNames, ...ollamaBuilt.names };
 
-				const { openAIAPIKey, claudeAPIKey, geminiAPIKey, mistralAPIKey } = this.plugin.settings;
 				let keys = Object.keys(allModels);
 				for (let model of keys) {
 					const type = allModels[model].type;
@@ -125,11 +124,7 @@ export default class SettingsView extends PluginSettingTab {
 						}
 						continue;
 					}
-					// Cloud providers: only show if an API key has been entered
-					if (type === openAI && !openAIAPIKey) continue;
-					if ((type === claude || type === claudeCode) && !claudeAPIKey) continue;
-					if (type === gemini && !geminiAPIKey) continue;
-					if (type === mistral && !mistralAPIKey) continue;
+					// All other providers: always show regardless of API key presence
 					dropdown.addOption(allModels[model].model, model);
 				}
 				dropdown.onChange((change) => {
@@ -181,6 +176,26 @@ export default class SettingsView extends PluginSettingTab {
 						await this.plugin.saveSettings();
 						if (value) {
 							this.fab.regenerateFAB();
+						}
+					});
+			});
+
+		// Add Toggle Status Bar Button
+		new Setting(containerEl)
+			.setName("Toggle Ask AI in status bar")
+			.setDesc("Shows an 'Ask AI' button in the status bar that opens the chat popover")
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.showStatusBarButton)
+					.onChange(async (value) => {
+						this.plugin.settings.showStatusBarButton = value;
+						await this.plugin.saveSettings();
+						if (value) {
+							this.plugin.statusBarButton.generate();
+							this.plugin.recentChatsButton.generate();
+						} else {
+							this.plugin.statusBarButton.remove();
+							this.plugin.recentChatsButton.remove();
 						}
 					});
 			});

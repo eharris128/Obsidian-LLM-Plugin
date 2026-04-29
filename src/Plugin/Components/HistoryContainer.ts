@@ -120,6 +120,11 @@ export class HistoryContainer {
 			this.plugin.saveSettings();
 			Header.setHeader(modelName);
 			Header.resetHistoryButton();
+			// Sync the FAB header title with the loaded conversation's first message.
+			const loadedItem = this.plugin.settings.promptHistory[index];
+			const displayTitle = loadedItem?.prompt || loadedItem?.messages[0]?.content || "";
+			Header.setTitle(displayTitle);
+			Header.showTitle();
 		};
 
 		eventListener.bind(this);

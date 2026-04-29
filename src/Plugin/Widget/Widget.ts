@@ -72,6 +72,8 @@ export class WidgetView extends ItemView {
 		// Sync header state
 		this.header?.setHeader(historyItem?.modelName ?? "");
 		this.header?.resetHistoryButton();
+		const displayTitle = historyItem?.prompt || historyItem?.messages[0]?.content || "";
+		this.header?.setTitle(displayTitle);
 	}
 
 	async onOpen() {

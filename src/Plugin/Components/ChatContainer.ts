@@ -307,7 +307,7 @@ export class ChatContainer {
 					}
 					if (message.type === "assistant") {
 						for (const block of message.message.content) {
-							if (block.type === "text") {
+							if (block.type === "text" && block.text) {
 								if (firstText) {
 									this.streamingDiv.empty();
 									firstText = false;
@@ -378,13 +378,16 @@ export class ChatContainer {
 			try {
 				let firstChunk = true;
 				for await (const chunk of stream) {
-					if (firstChunk) {
+					const chunkText = chunk.text || "";
+					if (firstChunk && chunkText) {
 						this.streamingDiv.empty();
 						firstChunk = false;
 					}
-					this.previewText += chunk.text || "";
-					this.streamingDiv.textContent = this.previewText;
-					this.historyMessages.scroll(0, 9999);
+					this.previewText += chunkText;
+					if (!firstChunk) {
+						this.streamingDiv.textContent = this.previewText;
+						this.historyMessages.scroll(0, 9999);
+					}
 				}
 			} catch (err) {
 				console.error(err);
@@ -428,13 +431,15 @@ export class ChatContainer {
 
 			let firstText = true;
 			stream.on("text", (text) => {
-				if (firstText) {
+				if (firstText && text) {
 					this.streamingDiv.empty();
 					firstText = false;
 				}
 				this.previewText += text || "";
-				this.streamingDiv.textContent = this.previewText;
-				this.historyMessages.scroll(0, 9999);
+				if (!firstText) {
+					this.streamingDiv.textContent = this.previewText;
+					this.historyMessages.scroll(0, 9999);
+				}
 			});
 
 			// Wait for the stream to finish before post-processing.
@@ -480,13 +485,16 @@ export class ChatContainer {
 
 			let firstChunk = true;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
-				if (firstChunk) {
+				const content = chunk.choices[0]?.delta?.content || "";
+				if (firstChunk && content) {
 					this.streamingDiv.empty();
 					firstChunk = false;
 				}
-				this.previewText += chunk.choices[0]?.delta?.content || "";
-				this.streamingDiv.textContent = this.previewText;
-				this.historyMessages.scroll(0, 9999);
+				this.previewText += content;
+				if (!firstChunk) {
+					this.streamingDiv.textContent = this.previewText;
+					this.historyMessages.scroll(0, 9999);
+				}
 			}
 			this.streamingDiv.empty();
 			MarkdownRenderer.render(
@@ -530,13 +538,16 @@ export class ChatContainer {
 
 			let firstChunk = true;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
-				if (firstChunk) {
+				const content = chunk.choices[0]?.delta?.content || "";
+				if (firstChunk && content) {
 					this.streamingDiv.empty();
 					firstChunk = false;
 				}
-				this.previewText += chunk.choices[0]?.delta?.content || "";
-				this.streamingDiv.textContent = this.previewText;
-				this.historyMessages.scroll(0, 9999);
+				this.previewText += content;
+				if (!firstChunk) {
+					this.streamingDiv.textContent = this.previewText;
+					this.historyMessages.scroll(0, 9999);
+				}
 			}
 			this.streamingDiv.empty();
 			MarkdownRenderer.render(

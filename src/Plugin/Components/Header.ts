@@ -196,7 +196,7 @@ export class Header {
 		this.chatHistoryButton = new ButtonComponent(rightButtonsDiv);
 		this.chatHistoryButton.setTooltip("Chats");
 		this.chatHistoryButton.buttonEl.addClass("clickable-icon", "chat-history");
-		this.chatHistoryButton.setIcon("menu");
+		this.chatHistoryButton.setIcon("messages-square");
 		this.chatHistoryButton.onClick(() => {
 			historyContainer.resetHistory(chatHistoryContainerDiv);
 			historyContainer.generateHistoryContainer(
@@ -337,7 +337,7 @@ export class Header {
 		this.chatHistoryButton.buttonEl.addClass("clickable-icon", "chat-history");
 		this.settingsButton.buttonEl.addClass("clickable-icon", "settings-button");
 		this.newChatButton.buttonEl.addClass("clickable-icon", "new-chat-button");
-		this.chatHistoryButton.setIcon("menu");
+		this.chatHistoryButton.setIcon("messages-square");
 		this.settingsButton.setIcon("settings-2");
 		this.newChatButton.setIcon("plus");
 	}

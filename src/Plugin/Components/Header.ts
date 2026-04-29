@@ -28,6 +28,14 @@ export class Header {
 		}
 	}
 
+	showTitle() {
+		this.titleEl?.show();
+	}
+
+	hideTitle() {
+		this.titleEl?.hide();
+	}
+
 	resetHistoryButton() {
 		this.chatHistoryButton?.buttonEl.removeClass("is-active");
 	}
@@ -130,6 +138,7 @@ export class Header {
 					.onClick(() => {
 						const { modelName } = getViewInfo(this.plugin, this.viewType);
 						this.setTitle("");
+						this.showTitle();
 						chatContainerDiv.show();
 						settingsContainerDiv.hide();
 						chatHistoryContainerDiv.hide();
@@ -181,6 +190,7 @@ export class Header {
 							this.plugin.saveSettings();
 						}
 						this.setTitle("");
+						this.showTitle();
 						chatContainerDiv.show();
 						settingsContainerDiv.hide();
 						chatHistoryContainerDiv.hide();
@@ -211,9 +221,11 @@ export class Header {
 				chatHistoryContainerDiv.show();
 				settingsContainerDiv.hide();
 				chatContainerDiv.hide();
+				this.hideTitle();
 			} else {
 				chatContainerDiv.show();
 				chatHistoryContainerDiv.hide();
+				this.showTitle();
 			}
 		});
 
@@ -231,9 +243,11 @@ export class Header {
 				settingsContainerDiv.show();
 				chatContainerDiv.hide();
 				chatHistoryContainerDiv.hide();
+				this.hideTitle();
 			} else {
 				chatContainerDiv.show();
 				settingsContainerDiv.hide();
+				this.showTitle();
 			}
 		});
 		this.settingsButton.buttonEl.addClass("clickable-icon", "settings-button");
@@ -290,9 +304,11 @@ export class Header {
 				chatHistoryContainerDiv.show();
 				settingsContainerDiv.hide();
 				chatContainerDiv.hide();
+				this.hideTitle();
 			} else {
 				chatContainerDiv.show();
 				chatHistoryContainerDiv.hide();
+				this.showTitle();
 			}
 		});
 
@@ -310,9 +326,11 @@ export class Header {
 				settingsContainerDiv.show();
 				chatContainerDiv.hide();
 				chatHistoryContainerDiv.hide();
+				this.hideTitle();
 			} else {
 				chatContainerDiv.show();
 				settingsContainerDiv.hide();
+				this.showTitle();
 			}
 		});
 
@@ -324,6 +342,7 @@ export class Header {
 				this.chatHistoryButton!,
 			]);
 			this.setHeader(modelName);
+			this.showTitle();
 			chatContainerDiv.show();
 			settingsContainerDiv.hide();
 			chatHistoryContainerDiv.hide();

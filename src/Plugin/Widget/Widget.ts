@@ -96,6 +96,8 @@ export class WidgetView extends ItemView {
 		);
 		const chatContainer = this.chatContainer;
 		const header = this.header;
+		// Update the header title when the first message of a new conversation is sent
+		chatContainer.headerTitleCallback = (title: string) => header.setTitle(title);
 		const historyContainer = new HistoryContainer(this.plugin, "widget");
 		const settingsContainer = new SettingsContainer(this.plugin, "widget");
 

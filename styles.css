@@ -49,10 +49,8 @@
 }
 
 .llm-title-div {
-	/* Match .pdf-toolbar exactly */
 	align-items: stretch;
 	background-color: var(--background-primary);
-	border-bottom: var(--border-width) solid var(--background-modifier-border);
 	display: flex;
 	justify-content: space-between;
 	overflow: auto;
@@ -67,7 +65,7 @@
 	overflow-x: hidden;
 }
 
-/* Widget sidebar: bleed out of .view-content's 16 px padding so the toolbar
+/* Widget sidebar/tab: bleed out of .view-content's 16 px padding so the toolbar
    spans edge-to-edge, matching the pdf-toolbar appearance */
 .workspace-leaf-content[data-type="tab-view"] .llm-title-div {
 	background-color: transparent;
@@ -79,13 +77,23 @@
 	width: calc(100% + 2 * var(--size-4-4));
 }
 
-/* llm-title-div already has border-bottom — hide the redundant lineBreak divs */
+/* Chat in tab: keep the border-bottom to match .pdf-toolbar; hide the redundant lineBreak div */
+.mod-root .workspace-leaf-content[data-type="tab-view"] .llm-title-div {
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
 .workspace-leaf-content[data-type="tab-view"] .llm-widget-title-border,
 .modal-content .llm-modal-title-border {
 	display: none;
 }
 
-/* Modal: same bleed as widget — contentEl has var(--size-4-4) padding on all sides */
+/* Sidebar widget: match Obsidian nav-header vertical spacing (8 px top + bottom) */
+.mod-left-split .workspace-leaf-content[data-type="tab-view"] .llm-title-div,
+.mod-right-split .workspace-leaf-content[data-type="tab-view"] .llm-title-div {
+	padding-top: var(--size-4-2);
+	padding-bottom: var(--size-4-2);
+}
+
+/* Modal (Ask AI): same bleed as widget — contentEl has var(--size-4-4) padding on all sides */
 .modal-content .llm-title-div {
 	margin-left: calc(-1 * var(--size-4-4));
 	margin-right: calc(-1 * var(--size-4-4));

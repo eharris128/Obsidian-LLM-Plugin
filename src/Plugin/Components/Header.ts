@@ -192,6 +192,31 @@ export class Header {
 			menu.showAtMouseEvent(evt);
 		});
 
+		// Chat history button
+		this.chatHistoryButton = new ButtonComponent(rightButtonsDiv);
+		this.chatHistoryButton.setTooltip("Chats");
+		this.chatHistoryButton.buttonEl.addClass("clickable-icon", "chat-history");
+		this.chatHistoryButton.setIcon("menu");
+		this.chatHistoryButton.onClick(() => {
+			historyContainer.resetHistory(chatHistoryContainerDiv);
+			historyContainer.generateHistoryContainer(
+				chatHistoryContainerDiv,
+				this.plugin.settings.promptHistory,
+				chatContainerDiv,
+				chatContainer,
+				this
+			);
+			this.clickHandler(this.chatHistoryButton!, [this.settingsButton!]);
+			if (!chatHistoryContainerDiv.isShown()) {
+				chatHistoryContainerDiv.show();
+				settingsContainerDiv.hide();
+				chatContainerDiv.hide();
+			} else {
+				chatContainerDiv.show();
+				chatHistoryContainerDiv.hide();
+			}
+		});
+
 		// Settings button
 		this.settingsButton = new ButtonComponent(rightButtonsDiv);
 		this.settingsButton.setTooltip("Chat settings");
@@ -201,7 +226,7 @@ export class Header {
 				settingsContainerDiv,
 				this
 			);
-			this.clickHandler(this.settingsButton!, []);
+			this.clickHandler(this.settingsButton!, [this.chatHistoryButton!]);
 			if (!settingsContainerDiv.isShown()) {
 				settingsContainerDiv.show();
 				chatContainerDiv.hide();
@@ -234,9 +259,20 @@ export class Header {
 		settingsContainer: SettingsContainer
 	) {
 		const leftButtonDiv = titleDiv.createDiv();
-		const rightButtonsDiv = titleDiv.createDiv();
+		leftButtonDiv.addClass("llm-left-buttons-div", "llm-flex");
 
-		this.chatHistoryButton = new ButtonComponent(leftButtonDiv);
+		// Chat title on the left
+		this.titleEl = leftButtonDiv.createEl("span");
+		this.titleEl.addClass("llm-chat-title");
+
+		const rightButtonsDiv = titleDiv.createDiv();
+		rightButtonsDiv.addClass("llm-right-buttons-div", "llm-flex");
+
+		// Right buttons in order: chat history → settings → new chat
+		this.chatHistoryButton = new ButtonComponent(rightButtonsDiv);
+		this.settingsButton = new ButtonComponent(rightButtonsDiv);
+		this.newChatButton = new ButtonComponent(rightButtonsDiv);
+
 		this.chatHistoryButton.setTooltip("Chats");
 		this.chatHistoryButton.onClick(() => {
 			historyContainer.resetHistory(chatHistoryContainerDiv);
@@ -259,9 +295,6 @@ export class Header {
 				chatHistoryContainerDiv.hide();
 			}
 		});
-
-		this.newChatButton = new ButtonComponent(rightButtonsDiv);
-		this.settingsButton = new ButtonComponent(rightButtonsDiv);
 
 		this.settingsButton.setTooltip("Chat settings");
 		this.settingsButton.onClick(() => {
@@ -301,20 +334,9 @@ export class Header {
 			this.plugin.saveSettings();
 		});
 
-		leftButtonDiv.addClass("llm-left-buttons-div", "llm-flex");
-		rightButtonsDiv.addClass("llm-right-buttons-div", "llm-flex");
-		this.chatHistoryButton.buttonEl.addClass(
-			"clickable-icon",
-			"chat-history"
-		);
-		this.settingsButton.buttonEl.addClass(
-			"clickable-icon",
-			"settings-button"
-		);
-		this.newChatButton.buttonEl.addClass(
-			"clickable-icon",
-			"new-chat-button"
-		);
+		this.chatHistoryButton.buttonEl.addClass("clickable-icon", "chat-history");
+		this.settingsButton.buttonEl.addClass("clickable-icon", "settings-button");
+		this.newChatButton.buttonEl.addClass("clickable-icon", "new-chat-button");
 		this.chatHistoryButton.setIcon("menu");
 		this.settingsButton.setIcon("settings-2");
 		this.newChatButton.setIcon("plus");

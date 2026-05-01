@@ -326,19 +326,7 @@ export class ChatContainer {
 			}
 
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -397,19 +385,7 @@ export class ChatContainer {
 			}
 
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -451,19 +427,7 @@ export class ChatContainer {
 			await stream.finalMessage();
 
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -499,19 +463,7 @@ export class ChatContainer {
 				}
 			}
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -552,19 +504,7 @@ export class ChatContainer {
 				}
 			}
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -605,19 +545,7 @@ export class ChatContainer {
 				this.historyMessages.scroll(0, 9999);
 			}
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -953,17 +881,7 @@ export class ChatContainer {
 
 		// Render final markdown
 		this.streamingDiv.empty();
-		MarkdownRenderer.render(
-			this.plugin.app,
-			this.previewText,
-			this.streamingDiv,
-			"",
-			this.plugin
-		);
-		const copyButtons = this.streamingDiv.querySelectorAll(
-			".copy-code-button"
-		) as NodeListOf<HTMLElement>;
-		copyButtons.forEach((btn) => btn.setAttribute("style", "display: none"));
+		this.renderMarkdown(this.previewText, this.streamingDiv);
 
 		this.messageStore.addMessage({ role: assistant, content: this.previewText });
 
@@ -1433,6 +1351,45 @@ export class ChatContainer {
 		});
 	}
 
+	/**
+	 * Render markdown into a container and wire up internal Obsidian links so
+	 * they open the target file when clicked, regardless of which view type
+	 * (Modal, Widget, FAB) is hosting the chat.
+	 */
+	private renderMarkdown(content: string, container: HTMLElement): void {
+		const sourcePath =
+			this.plugin.app.workspace.getActiveFile()?.path ?? "";
+		MarkdownRenderer.render(
+			this.plugin.app,
+			content,
+			container,
+			sourcePath,
+			this.plugin
+		);
+		// Hide inline copy-code buttons (we have our own copy action).
+		container
+			.querySelectorAll<HTMLElement>(".copy-code-button")
+			.forEach((btn) => btn.setAttribute("style", "display: none"));
+		// Wire up internal links (wikilinks rendered as .internal-link) so
+		// clicking them opens the note in Obsidian.
+		container
+			.querySelectorAll<HTMLAnchorElement>("a.internal-link")
+			.forEach((link) => {
+				link.addEventListener("click", (e: MouseEvent) => {
+					e.preventDefault();
+					const href =
+						link.getAttribute("data-href") ??
+						link.getAttribute("href") ??
+						"";
+					this.plugin.app.workspace.openLinkText(
+						href,
+						sourcePath,
+						e.ctrlKey || e.metaKey
+					);
+				});
+			});
+	}
+
 	private createMessage(
 		content: string,
 		index: number,
@@ -1460,17 +1417,11 @@ export class ChatContainer {
 			contentWrap.addClass("llm-flex-column");
 			const imLikeMessage = contentWrap.createDiv();
 			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
-			MarkdownRenderer.render(this.plugin.app, content, imLikeMessage, "", this.plugin);
-			imLikeMessage.querySelectorAll(".copy-code-button").forEach((item: Element) => {
-				(item as HTMLElement).setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(content, imLikeMessage);
 		} else {
 			const imLikeMessage = imLikeMessageContainer.createDiv();
 			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
-			MarkdownRenderer.render(this.plugin.app, content, imLikeMessage, "", this.plugin);
-			imLikeMessage.querySelectorAll(".copy-code-button").forEach((item: Element) => {
-				(item as HTMLElement).setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(content, imLikeMessage);
 		}
 
 		// Actions bar — revealed on hover of messageWrapper via CSS

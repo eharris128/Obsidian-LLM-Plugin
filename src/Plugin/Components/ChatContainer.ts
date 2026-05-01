@@ -326,7 +326,7 @@ export class ChatContainer {
 			}
 
 			this.streamingDiv.empty();
-			this.renderMarkdown(this.previewText, this.streamingDiv);
+			await this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -385,7 +385,7 @@ export class ChatContainer {
 			}
 
 			this.streamingDiv.empty();
-			this.renderMarkdown(this.previewText, this.streamingDiv);
+			await this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -427,7 +427,7 @@ export class ChatContainer {
 			await stream.finalMessage();
 
 			this.streamingDiv.empty();
-			this.renderMarkdown(this.previewText, this.streamingDiv);
+			await this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -463,7 +463,7 @@ export class ChatContainer {
 				}
 			}
 			this.streamingDiv.empty();
-			this.renderMarkdown(this.previewText, this.streamingDiv);
+			await this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -504,7 +504,7 @@ export class ChatContainer {
 				}
 			}
 			this.streamingDiv.empty();
-			this.renderMarkdown(this.previewText, this.streamingDiv);
+			await this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -545,7 +545,7 @@ export class ChatContainer {
 				this.historyMessages.scroll(0, 9999);
 			}
 			this.streamingDiv.empty();
-			this.renderMarkdown(this.previewText, this.streamingDiv);
+			await this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -881,7 +881,7 @@ export class ChatContainer {
 
 		// Render final markdown
 		this.streamingDiv.empty();
-		this.renderMarkdown(this.previewText, this.streamingDiv);
+		await this.renderMarkdown(this.previewText, this.streamingDiv);
 
 		this.messageStore.addMessage({ role: assistant, content: this.previewText });
 
@@ -1374,10 +1374,10 @@ export class ChatContainer {
 	 * they open the target file when clicked, regardless of which view type
 	 * (Modal, Widget, FAB) is hosting the chat.
 	 */
-	private renderMarkdown(content: string, container: HTMLElement): void {
+	private async renderMarkdown(content: string, container: HTMLElement): Promise<void> {
 		const sourcePath =
 			this.plugin.app.workspace.getActiveFile()?.path ?? "";
-		MarkdownRenderer.render(
+		await MarkdownRenderer.render(
 			this.plugin.app,
 			this.linkifyMdRefs(content),
 			container,
@@ -1408,12 +1408,12 @@ export class ChatContainer {
 			});
 	}
 
-	private createMessage(
+	private async createMessage(
 		content: string,
 		index: number,
 		finalMessage: Boolean,
 		assistant: Boolean = false
-	) {
+	): Promise<void> {
 		// Outer wrapper carries the alignment class so CSS selectors like
 		// .llm-message-wrapper.llm-flex-start (bubble background) fire correctly.
 		const messageWrapper = this.historyMessages.createDiv();
@@ -1435,11 +1435,11 @@ export class ChatContainer {
 			contentWrap.addClass("llm-flex-column");
 			const imLikeMessage = contentWrap.createDiv();
 			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
-			this.renderMarkdown(content, imLikeMessage);
+			await this.renderMarkdown(content, imLikeMessage);
 		} else {
 			const imLikeMessage = imLikeMessageContainer.createDiv();
 			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
-			this.renderMarkdown(content, imLikeMessage);
+			await this.renderMarkdown(content, imLikeMessage);
 		}
 
 		// Actions bar — revealed on hover of messageWrapper via CSS
@@ -1466,24 +1466,25 @@ export class ChatContainer {
 		}
 	}
 
-	generateIMLikeMessages(messages: Message[]) {
+	async generateIMLikeMessages(messages: Message[]) {
 		let finalMessage = false;
-		messages.map(({ role, content }, index) => {
+		for (let index = 0; index < messages.length; index++) {
+			const { role, content } = messages[index];
 			if (index === messages.length - 1) finalMessage = true;
 			if (role === "assistant") {
-				this.createMessage(content, index, finalMessage, true);
-				return;
+				await this.createMessage(content, index, finalMessage, true);
+			} else {
+				await this.createMessage(content, index, finalMessage);
 			}
-			this.createMessage(content, index, finalMessage);
-		});
+		}
 		this.historyMessages.scroll(0, 9999);
 	}
 
-	appendNewMessage(message: Message) {
+	async appendNewMessage(message: Message) {
 		const length = this.historyMessages.childNodes.length;
 		const { content } = message;
 
-		this.createMessage(content, length, false);
+		await this.createMessage(content, length, false);
 	}
 	removeLastMessageAndHistoryMessage() {
 		const messages = this.messageStore.getMessages();

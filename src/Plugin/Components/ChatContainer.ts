@@ -673,8 +673,10 @@ export class ChatContainer {
 		let vaultContext = null;
 		let contextString: string | null = null;
 
-		// Only build context for chat endpoints (not images) and if feature is enabled
-		if (modelEndpoint !== "images" && this.plugin.settings.enableFileContext) {
+		// Build context when the global feature flag is on OR when the user has
+		// explicitly added files via the + chip button (explicit intent always wins).
+		const hasExplicitFileContext = (contextSettings.selectedFiles?.length ?? 0) > 0;
+		if (modelEndpoint !== "images" && (this.plugin.settings.enableFileContext || hasExplicitFileContext)) {
 			try {
 				contextString = await this.contextBuilder.buildFormattedContext(
 					contextSettings,
@@ -709,6 +711,22 @@ export class ChatContainer {
 				}
 			} catch (error) {
 				console.error("Error reading active file for context:", error);
+			}
+		}
+
+		// For agent mode: prepend a hint that identifies the active/context file(s)
+		// so the model knows which file to act on when the user says "this page", etc.
+		if (this.supportsAgentMode(modelType) && modelEndpoint !== "images") {
+			const activeFile = this.plugin.app.workspace.getActiveFile();
+			if (activeFile || this.pendingContextString) {
+				const activeHint = activeFile
+					? `The user's currently active note is "${activeFile.name}" at vault path "${activeFile.path}". When the user refers to "this page", "this note", "this file", or similar, they mean this file.\n\n`
+					: "";
+				if (activeHint && this.pendingContextString) {
+					this.pendingContextString = activeHint + this.pendingContextString;
+				} else if (activeHint && !this.pendingContextString) {
+					this.pendingContextString = activeHint;
+				}
 			}
 		}
 

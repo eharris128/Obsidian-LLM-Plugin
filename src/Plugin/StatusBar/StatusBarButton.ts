@@ -254,6 +254,8 @@ export class StatusBarButton {
 				// sidebar plugin views, etc.) should leave the popover intact.
 				if (el.closest?.(".workspace-leaf-content")) return;
 				if (el.closest?.(".workspace-tab-header")) return;
+				if (el.closest?.(".workspace-ribbon")) return;
+				if (el.closest?.(".sidebar-toggle-button")) return;
 				this.hidePopover();
 			}
 		};

@@ -103,6 +103,9 @@ const defaultSettings = {
 		selectedFiles: [],
 		maxContextTokensPercent: 70, // 70% for context, 30% for response
 	},
+	agentSettings: {
+		permissionMode: "ask" as import("./Types/types").PermissionMode,
+	},
 };
 
 export const DEFAULT_SETTINGS: LLMPluginSettings = {
@@ -309,6 +312,10 @@ export default class LLMPlugin extends Plugin {
 					imageSettings: {
 						...defaultSettings.imageSettings,
 						...(dataJSON[key]?.imageSettings),
+					},
+					agentSettings: {
+						...defaultSettings.agentSettings,
+						...(dataJSON[key]?.agentSettings),
 					},
 				};
 			}

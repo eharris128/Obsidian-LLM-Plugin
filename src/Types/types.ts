@@ -87,6 +87,20 @@ export type Model = {
 
 export type ViewType = "modal" | "widget" | "floating-action-button";
 
+/** Controls when the agent asks for permission before executing a tool. */
+export type PermissionMode =
+	| "ask"           // Auto-approve safe (read-only) tools; ask for write/danger
+	| "auto-approve"  // Never ask — execute all tools automatically
+	| "ask-everything"// Always ask, even for read-only tools
+	| "read-only";    // Only allow safe tools; silently deny write/danger
+
+/** Risk level assigned to each tool in ObsidianToolRegistry. */
+export type RiskTier = "safe" | "write" | "danger";
+
+export type AgentSettings = {
+	permissionMode: PermissionMode;
+};
+
 export type ViewSettings = {
 	model: string;
 	modelName: string;
@@ -97,6 +111,7 @@ export type ViewSettings = {
 	imageSettings: ImageSettings;
 	chatSettings: ChatSettings;
 	contextSettings: ContextSettings;
+	agentSettings: AgentSettings;
 };
 
 export type ResponseFormat = "url" | "b64_json";

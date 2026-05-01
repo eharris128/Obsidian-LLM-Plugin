@@ -57,6 +57,8 @@ import {
 	openAIMessage,
 	setHistoryIndex,
 } from "utils/utils";
+import { AgentLoop, AgentCallbacks } from "services/AgentLoop";
+import OpenAI from "openai";
 import { models, modelNames } from "utils/models";
 import { Header } from "./Header";
 import { MessageStore } from "./MessageStore";
@@ -324,19 +326,7 @@ export class ChatContainer {
 			}
 
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -395,19 +385,7 @@ export class ChatContainer {
 			}
 
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -449,19 +427,7 @@ export class ChatContainer {
 			await stream.finalMessage();
 
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -497,19 +463,7 @@ export class ChatContainer {
 				}
 			}
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -550,19 +504,7 @@ export class ChatContainer {
 				}
 			}
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -603,19 +545,7 @@ export class ChatContainer {
 				this.historyMessages.scroll(0, 9999);
 			}
 			this.streamingDiv.empty();
-			MarkdownRenderer.render(
-				this.plugin.app,
-				this.previewText,
-				this.streamingDiv,
-				"",
-				this.plugin
-			);
-			const copyButton = this.streamingDiv.querySelectorAll(
-				".copy-code-button"
-			) as NodeListOf<HTMLElement>;
-			copyButton.forEach((item) => {
-				item.setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(this.previewText, this.streamingDiv);
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -671,8 +601,10 @@ export class ChatContainer {
 		let vaultContext = null;
 		let contextString: string | null = null;
 
-		// Only build context for chat endpoints (not images) and if feature is enabled
-		if (modelEndpoint !== "images" && this.plugin.settings.enableFileContext) {
+		// Build context when the global feature flag is on OR when the user has
+		// explicitly added files via the + chip button (explicit intent always wins).
+		const hasExplicitFileContext = (contextSettings.selectedFiles?.length ?? 0) > 0;
+		if (modelEndpoint !== "images" && (this.plugin.settings.enableFileContext || hasExplicitFileContext)) {
 			try {
 				contextString = await this.contextBuilder.buildFormattedContext(
 					contextSettings,
@@ -710,13 +642,38 @@ export class ChatContainer {
 			}
 		}
 
+		// For agent mode: prepend a hint that identifies the active/context file(s)
+		// so the model knows which file to act on when the user says "this page", etc.
+		if (this.supportsAgentMode(modelType) && modelEndpoint !== "images") {
+			const activeFile = this.plugin.app.workspace.getActiveFile();
+			if (activeFile || this.pendingContextString) {
+				const activeHint = activeFile
+					? `The user's currently active note is "${activeFile.name}" at vault path "${activeFile.path}". When the user refers to "this page", "this note", "this file", or similar, they mean this file.\n\n`
+					: "";
+				if (activeHint && this.pendingContextString) {
+					this.pendingContextString = activeHint + this.pendingContextString;
+				} else if (activeHint && !this.pendingContextString) {
+					this.pendingContextString = activeHint;
+				}
+			}
+		}
+
 		const userMessage = { role: "user" as const, content: this.prompt };
 		this.messageStore.addMessage(userMessage);
 		const params = this.getParams(modelEndpoint, model, modelType);
 		try {
 			this.previewText = "";
 			if (modelEndpoint !== "images") {
-				await this.handleGenerate();
+				if (this.supportsAgentMode(modelType)) {
+					await this.runAgentMode(
+						params as ChatParams,
+						model,
+						modelType,
+						modelName
+					);
+				} else {
+					await this.handleGenerate();
+				}
 				// Clear context after generation
 				this.currentVaultContext = null;
 				this.pendingContextString = null;
@@ -771,6 +728,169 @@ export class ChatContainer {
 				}, 1000);
 			}
 		}
+	}
+
+	// ---------------------------------------------------------------------------
+	// Agent mode helpers
+	// ---------------------------------------------------------------------------
+
+	/** Returns true for providers that support native tool calling. */
+	private supportsAgentMode(modelType: string): boolean {
+		return (
+			modelType === claude ||
+			modelType === ollama ||
+			modelType === mistral ||
+			modelType === openAI
+		);
+	}
+
+	/** Build the right OpenAI-compatible client for a given provider. */
+	private createOpenAIClient(modelType: string): OpenAI {
+		if (modelType === ollama) {
+			return new OpenAI({
+				apiKey: "ollama",
+				baseURL: `${this.plugin.settings.ollamaHost}/v1`,
+				dangerouslyAllowBrowser: true,
+				timeout: 30000,
+			});
+		}
+		if (modelType === mistral) {
+			return new OpenAI({
+				apiKey: this.plugin.settings.mistralAPIKey,
+				baseURL: "https://api.mistral.ai/v1",
+				dangerouslyAllowBrowser: true,
+			});
+		}
+		// openAI
+		return new OpenAI({
+			apiKey: this.plugin.settings.openAIAPIKey,
+			dangerouslyAllowBrowser: true,
+		});
+	}
+
+	/**
+	 * Render an inline approval card in the chat history and return a Promise
+	 * that resolves to true (Allow) or false (Deny) when the user clicks.
+	 */
+	private showPermissionUI(
+		toolName: string,
+		toolDescription: string,
+		input: Record<string, any>
+	): Promise<boolean> {
+		return new Promise((resolve) => {
+			const card = this.historyMessages.createDiv({ cls: "llm-permission-card" });
+
+			// Header row
+			const cardHeader = card.createDiv({ cls: "llm-permission-header" });
+			const iconEl = cardHeader.createEl("span", { cls: "llm-permission-icon" });
+			setIcon(iconEl, "wand-sparkles");
+			cardHeader.createEl("span", {
+				text: "Agent wants to perform an action",
+				cls: "llm-permission-title",
+			});
+
+			// Body
+			const body = card.createDiv({ cls: "llm-permission-body" });
+			body.createEl("div", {
+				text: toolDescription,
+				cls: "llm-permission-description",
+			});
+			const inputEl = body.createEl("pre", { cls: "llm-permission-input" });
+			inputEl.textContent = JSON.stringify(input, null, 2);
+
+			// Buttons
+			const btnRow = card.createDiv({ cls: "llm-permission-buttons" });
+
+			const denyBtn = new ButtonComponent(btnRow);
+			denyBtn.setButtonText("Deny");
+			denyBtn.buttonEl.addClass("llm-permission-deny");
+
+			const allowBtn = new ButtonComponent(btnRow);
+			allowBtn.setButtonText("Allow");
+			allowBtn.buttonEl.addClass("llm-permission-allow", "mod-cta");
+
+			const cleanup = (e: MouseEvent, result: boolean) => {
+				// Stop propagation BEFORE removing the card. If we remove the card
+				// first, the button element is detached from the DOM mid-bubble.
+				// Obsidian's global click handler then sees event.target is no
+				// longer in the document and interprets it as a click-outside,
+				// closing the FAB/popover. Stopping here prevents that entirely.
+				e.stopPropagation();
+				card.remove();
+				resolve(result);
+			};
+
+			denyBtn.onClick((e) => cleanup(e, false));
+			allowBtn.onClick((e) => cleanup(e, true));
+
+			this.historyMessages.scroll(0, 9999);
+		});
+	}
+
+	/**
+	 * Run the agentic loop for the current prompt, handling tool calls and
+	 * permission prompts, then commit the final response to the message store.
+	 */
+	private async runAgentMode(
+		params: ChatParams,
+		model: string,
+		modelType: string,
+		modelName: string
+	): Promise<void> {
+		const settingType = getSettingType(this.viewType);
+		const permissionMode =
+			this.plugin.settings[settingType].agentSettings?.permissionMode ?? "ask";
+
+		const agentLoop = new AgentLoop(
+			this.plugin.app,
+			permissionMode,
+			this.showPermissionUI.bind(this)
+		);
+
+		const callbacks: AgentCallbacks = {
+			onStart: () => {
+				this.setDiv(true);
+				this.showThinkingAnimation();
+			},
+			onChunk: (text) => {
+				// First chunk: clear the thinking animation
+				if (this.previewText === "" && text) {
+					this.streamingDiv.empty();
+				}
+				this.previewText += text;
+				this.streamingDiv.textContent = this.previewText;
+				this.historyMessages.scroll(0, 9999);
+			},
+			onThinking: () => {
+				// Between tool turns: show thinking animation again; the next
+				// onChunk will replace streamingDiv content with accumulated text.
+				this.showThinkingAnimation();
+			},
+		};
+
+		if (modelType === claude) {
+			await agentLoop.runAnthropic(
+				params,
+				this.plugin.settings.claudeAPIKey,
+				callbacks
+			);
+		} else {
+			const client = this.createOpenAIClient(modelType);
+			await agentLoop.runOpenAICompatible(params, client, callbacks);
+		}
+
+		// Render final markdown
+		this.streamingDiv.empty();
+		this.renderMarkdown(this.previewText, this.streamingDiv);
+
+		this.messageStore.addMessage({ role: assistant, content: this.previewText });
+
+		const messageContext = {
+			...(params as ChatParams),
+			messages: this.getMessages(),
+			modelName,
+		} as ChatHistoryItem;
+		this.historyPush(messageContext, this.currentVaultContext);
 	}
 
 	historyPush(params: HistoryItem, vaultContext?: any) {
@@ -1208,8 +1328,8 @@ export class ChatContainer {
 
 	showThinkingAnimation() {
 		this.streamingDiv.empty();
-		const thinkingContainer = this.streamingDiv.createEl("div", { 
-			cls: "llm-thinking-animation" 
+		const thinkingContainer = this.streamingDiv.createEl("div", {
+			cls: "llm-thinking-animation"
 		});
 		thinkingContainer.createEl("span", {
 			cls: "llm-thinking-text",
@@ -1220,6 +1340,7 @@ export class ChatContainer {
 			const dot = dots.createEl("span", { cls: "streaming-dot" });
 			dot.textContent = ".";
 		}
+		this.historyMessages.scroll(0, 9999);
 	}
 
 	appendImage(imageURLs: string[]) {
@@ -1228,6 +1349,63 @@ export class ChatContainer {
 			img.src = url;
 			img.alt = `image generated with ${this.prompt}`;
 		});
+	}
+
+	/**
+	 * Convert bare "filename.md" references in LLM responses to Obsidian
+	 * wikilinks so MarkdownRenderer produces clickable .internal-link elements.
+	 *
+	 * Skips patterns already inside [[wikilinks]], markdown links (url), or
+	 * URLs (containing ://).
+	 */
+	private linkifyMdRefs(text: string): string {
+		// Negative lookbehind: don't match if preceded by [, (, or /
+		// (catches [[already]], (url), and http://path/file.md).
+		// Negative lookahead:  don't match if followed by ] or )
+		// (catches the closing half of existing syntax).
+		return text.replace(
+			/(?<![\[(/])(\b[\w][\w ./-]*?\.md\b)(?![)\]])/g,
+			"[[$1]]"
+		);
+	}
+
+	/**
+	 * Render markdown into a container and wire up internal Obsidian links so
+	 * they open the target file when clicked, regardless of which view type
+	 * (Modal, Widget, FAB) is hosting the chat.
+	 */
+	private renderMarkdown(content: string, container: HTMLElement): void {
+		const sourcePath =
+			this.plugin.app.workspace.getActiveFile()?.path ?? "";
+		MarkdownRenderer.render(
+			this.plugin.app,
+			this.linkifyMdRefs(content),
+			container,
+			sourcePath,
+			this.plugin
+		);
+		// Hide inline copy-code buttons (we have our own copy action).
+		container
+			.querySelectorAll<HTMLElement>(".copy-code-button")
+			.forEach((btn) => btn.setAttribute("style", "display: none"));
+		// Wire up internal links (wikilinks rendered as .internal-link) so
+		// clicking them opens the note in Obsidian.
+		container
+			.querySelectorAll<HTMLAnchorElement>("a.internal-link")
+			.forEach((link) => {
+				link.addEventListener("click", (e: MouseEvent) => {
+					e.preventDefault();
+					const href =
+						link.getAttribute("data-href") ??
+						link.getAttribute("href") ??
+						"";
+					this.plugin.app.workspace.openLinkText(
+						href,
+						sourcePath,
+						e.ctrlKey || e.metaKey
+					);
+				});
+			});
 	}
 
 	private createMessage(
@@ -1257,17 +1435,11 @@ export class ChatContainer {
 			contentWrap.addClass("llm-flex-column");
 			const imLikeMessage = contentWrap.createDiv();
 			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
-			MarkdownRenderer.render(this.plugin.app, content, imLikeMessage, "", this.plugin);
-			imLikeMessage.querySelectorAll(".copy-code-button").forEach((item: Element) => {
-				(item as HTMLElement).setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(content, imLikeMessage);
 		} else {
 			const imLikeMessage = imLikeMessageContainer.createDiv();
 			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
-			MarkdownRenderer.render(this.plugin.app, content, imLikeMessage, "", this.plugin);
-			imLikeMessage.querySelectorAll(".copy-code-button").forEach((item: Element) => {
-				(item as HTMLElement).setAttribute("style", "display: none");
-			});
+			this.renderMarkdown(content, imLikeMessage);
 		}
 
 		// Actions bar — revealed on hover of messageWrapper via CSS

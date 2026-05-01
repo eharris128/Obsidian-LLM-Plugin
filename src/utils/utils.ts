@@ -485,6 +485,7 @@ export function getViewInfo(
 			modelEndpoint: plugin.settings.modalSettings.modelEndpoint,
 			endpointURL: plugin.settings.modalSettings.endpointURL,
 			contextSettings: plugin.settings.modalSettings.contextSettings,
+			agentSettings: plugin.settings.modalSettings.agentSettings,
 		};
 	}
 
@@ -499,6 +500,7 @@ export function getViewInfo(
 			modelEndpoint: plugin.settings.widgetSettings.modelEndpoint,
 			endpointURL: plugin.settings.widgetSettings.endpointURL,
 			contextSettings: plugin.settings.widgetSettings.contextSettings,
+			agentSettings: plugin.settings.widgetSettings.agentSettings,
 		};
 	}
 
@@ -513,6 +515,7 @@ export function getViewInfo(
 			modelEndpoint: plugin.settings.fabSettings.modelEndpoint,
 			endpointURL: plugin.settings.fabSettings.endpointURL,
 			contextSettings: plugin.settings.fabSettings.contextSettings,
+			agentSettings: plugin.settings.fabSettings.agentSettings,
 		};
 	}
 
@@ -536,6 +539,7 @@ export function getViewInfo(
 			selectedFiles: [],
 			maxContextTokensPercent: 0,
 		},
+		agentSettings: { permissionMode: "ask" },
 	};
 }
 

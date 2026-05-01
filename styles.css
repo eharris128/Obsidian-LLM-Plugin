@@ -1106,6 +1106,85 @@ button.llm-scan-button.is-active:hover {
 	transition: background-color 100ms ease;
 }
 
+/* AGENT PERMISSION CARD */
+
+.llm-permission-card {
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-secondary);
+	padding: var(--size-4-3);
+	margin: var(--size-4-2) 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+}
+
+.llm-permission-header {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+	--icon-size: var(--icon-s);
+	--icon-stroke: var(--icon-s-stroke-width);
+	color: var(--color-accent);
+}
+
+.llm-permission-title {
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+}
+
+.llm-permission-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+}
+
+.llm-permission-description {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+}
+
+.llm-permission-input {
+	background-color: var(--background-modifier-form-field);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2);
+	font-size: var(--font-ui-smaller);
+	font-family: var(--font-monospace);
+	color: var(--text-normal);
+	white-space: pre-wrap;
+	word-break: break-all;
+	margin: 0;
+	max-height: 120px;
+	overflow-y: auto;
+}
+
+.llm-permission-buttons {
+	display: flex;
+	gap: var(--size-4-2);
+	justify-content: flex-end;
+}
+
+button.llm-permission-deny {
+	background-color: transparent;
+	border: var(--border-width) solid var(--background-modifier-border);
+	color: var(--text-muted);
+}
+
+button.llm-permission-deny:hover {
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+	box-shadow: none;
+}
+
+button.llm-permission-allow {
+	/* mod-cta provides accent background; just ensure sizing */
+	padding: var(--size-4-1) var(--size-4-3);
+}
+
 .llm-status-bar-button:hover {
 	background-color: var(--background-modifier-hover);
 }

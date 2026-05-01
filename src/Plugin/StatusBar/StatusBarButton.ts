@@ -15,7 +15,6 @@ export class StatusBarButton {
 	private header: Header | null = null;
 	private chatContainerDiv: HTMLElement | null = null;
 	private chatHistoryContainer: HTMLElement | null = null;
-	private clickOutsideHandler: ((e: MouseEvent) => void) | null = null;
 
 	constructor(plugin: LLMPlugin) {
 		this.plugin = plugin;
@@ -219,13 +218,6 @@ export class StatusBarButton {
 				this.repositionPopover();
 			});
 
-			// Dismiss on click outside (tab-header clicks are excluded so the
-			// popover stays open when the user switches Obsidian tabs).
-			this.clickOutsideHandler = this.buildClickOutsideHandler();
-			// Defer so the current click event doesn't immediately close it.
-			setTimeout(() => {
-				document.addEventListener("click", this.clickOutsideHandler!);
-			}, 0);
 		} else {
 			this.hidePopover();
 		}
@@ -233,32 +225,6 @@ export class StatusBarButton {
 
 	private hidePopover() {
 		if (this.popoverEl) this.popoverEl.style.display = "none";
-		if (this.clickOutsideHandler) {
-			document.removeEventListener("click", this.clickOutsideHandler);
-			this.clickOutsideHandler = null;
-		}
-	}
-
-	/** Build the click-outside handler, ignoring workspace tab navigation clicks. */
-	private buildClickOutsideHandler(): (e: MouseEvent) => void {
-		return (e: MouseEvent) => {
-			const target = e.target as Node;
-			if (
-				this.popoverEl &&
-				!this.popoverEl.contains(target) &&
-				!this.statusBarEl?.contains(target)
-			) {
-				const el = target as Element;
-				// Don't close when the user navigates around Obsidian.
-				// Any click inside a workspace leaf (editor, file explorer,
-				// sidebar plugin views, etc.) should leave the popover intact.
-				if (el.closest?.(".workspace-leaf-content")) return;
-				if (el.closest?.(".workspace-tab-header")) return;
-				if (el.closest?.(".workspace-ribbon")) return;
-				if (el.closest?.(".sidebar-toggle-button")) return;
-				this.hidePopover();
-			}
-		};
 	}
 
 	/**
@@ -306,10 +272,6 @@ export class StatusBarButton {
 				this.repositionPopover();
 			});
 
-			this.clickOutsideHandler = this.buildClickOutsideHandler();
-			setTimeout(() => {
-				document.addEventListener("click", this.clickOutsideHandler!);
-			}, 0);
 		}
 
 		// Load the selected conversation into the chat view

@@ -1352,6 +1352,24 @@ export class ChatContainer {
 	}
 
 	/**
+	 * Convert bare "filename.md" references in LLM responses to Obsidian
+	 * wikilinks so MarkdownRenderer produces clickable .internal-link elements.
+	 *
+	 * Skips patterns already inside [[wikilinks]], markdown links (url), or
+	 * URLs (containing ://).
+	 */
+	private linkifyMdRefs(text: string): string {
+		// Negative lookbehind: don't match if preceded by [, (, or /
+		// (catches [[already]], (url), and http://path/file.md).
+		// Negative lookahead:  don't match if followed by ] or )
+		// (catches the closing half of existing syntax).
+		return text.replace(
+			/(?<![\[(/])(\b[\w][\w ./-]*?\.md\b)(?![)\]])/g,
+			"[[$1]]"
+		);
+	}
+
+	/**
 	 * Render markdown into a container and wire up internal Obsidian links so
 	 * they open the target file when clicked, regardless of which view type
 	 * (Modal, Widget, FAB) is hosting the chat.
@@ -1361,7 +1379,7 @@ export class ChatContainer {
 			this.plugin.app.workspace.getActiveFile()?.path ?? "";
 		MarkdownRenderer.render(
 			this.plugin.app,
-			content,
+			this.linkifyMdRefs(content),
 			container,
 			sourcePath,
 			this.plugin

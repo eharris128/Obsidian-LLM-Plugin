@@ -248,10 +248,11 @@ export class StatusBarButton {
 				!this.popoverEl.contains(target) &&
 				!this.statusBarEl?.contains(target)
 			) {
-				// Don't close when the user switches Obsidian tabs/leaves.
-				// Workspace tab headers sit outside the popover but shouldn't
-				// dismiss it — the user just wants to look at a different note.
 				const el = target as Element;
+				// Don't close when the user navigates around Obsidian.
+				// Any click inside a workspace leaf (editor, file explorer,
+				// sidebar plugin views, etc.) should leave the popover intact.
+				if (el.closest?.(".workspace-leaf-content")) return;
 				if (el.closest?.(".workspace-tab-header")) return;
 				this.hidePopover();
 			}

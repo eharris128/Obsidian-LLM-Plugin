@@ -163,6 +163,33 @@ export default class SettingsView extends PluginSettingTab {
 				});
 			});
 
+		// Agent mode permission setting
+		new Setting(containerEl)
+			.setName("Agent permission mode")
+			.setDesc(
+				"Controls when the agent asks for your approval before performing actions in your vault."
+			)
+			.addDropdown((dropdown: DropdownComponent) => {
+				dropdown.addOption("ask", "Ask (approve writes, auto-allow reads)");
+				dropdown.addOption("auto-approve", "Auto-approve all (no prompts)");
+				dropdown.addOption("ask-everything", "Ask for everything");
+				dropdown.addOption("read-only", "Read-only (deny any writes)");
+
+				// Read from modal settings as the canonical source
+				const currentMode =
+					this.plugin.settings.modalSettings.agentSettings?.permissionMode ?? "ask";
+				dropdown.setValue(currentMode);
+
+				dropdown.onChange(async (value) => {
+					const mode = value as import("../Types/types").PermissionMode;
+					// Apply to all three views so it behaves as a global setting
+					this.plugin.settings.modalSettings.agentSettings = { permissionMode: mode };
+					this.plugin.settings.widgetSettings.agentSettings = { permissionMode: mode };
+					this.plugin.settings.fabSettings.agentSettings = { permissionMode: mode };
+					await this.plugin.saveSettings();
+				});
+			});
+
 		// Add Toggle FAB button
 		new Setting(containerEl)
 			.setName("Toggle FAB")

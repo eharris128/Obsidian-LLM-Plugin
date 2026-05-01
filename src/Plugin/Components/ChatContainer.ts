@@ -57,6 +57,8 @@ import {
 	openAIMessage,
 	setHistoryIndex,
 } from "utils/utils";
+import { AgentLoop, AgentCallbacks } from "services/AgentLoop";
+import OpenAI from "openai";
 import { models, modelNames } from "utils/models";
 import { Header } from "./Header";
 import { MessageStore } from "./MessageStore";
@@ -716,7 +718,16 @@ export class ChatContainer {
 		try {
 			this.previewText = "";
 			if (modelEndpoint !== "images") {
-				await this.handleGenerate();
+				if (this.supportsAgentMode(modelType)) {
+					await this.runAgentMode(
+						params as ChatParams,
+						model,
+						modelType,
+						modelName
+					);
+				} else {
+					await this.handleGenerate();
+				}
 				// Clear context after generation
 				this.currentVaultContext = null;
 				this.pendingContextString = null;
@@ -771,6 +782,179 @@ export class ChatContainer {
 				}, 1000);
 			}
 		}
+	}
+
+	// ---------------------------------------------------------------------------
+	// Agent mode helpers
+	// ---------------------------------------------------------------------------
+
+	/** Returns true for providers that support native tool calling. */
+	private supportsAgentMode(modelType: string): boolean {
+		return (
+			modelType === claude ||
+			modelType === ollama ||
+			modelType === mistral ||
+			modelType === openAI
+		);
+	}
+
+	/** Build the right OpenAI-compatible client for a given provider. */
+	private createOpenAIClient(modelType: string): OpenAI {
+		if (modelType === ollama) {
+			return new OpenAI({
+				apiKey: "ollama",
+				baseURL: `${this.plugin.settings.ollamaHost}/v1`,
+				dangerouslyAllowBrowser: true,
+				timeout: 30000,
+			});
+		}
+		if (modelType === mistral) {
+			return new OpenAI({
+				apiKey: this.plugin.settings.mistralAPIKey,
+				baseURL: "https://api.mistral.ai/v1",
+				dangerouslyAllowBrowser: true,
+			});
+		}
+		// openAI
+		return new OpenAI({
+			apiKey: this.plugin.settings.openAIAPIKey,
+			dangerouslyAllowBrowser: true,
+		});
+	}
+
+	/**
+	 * Render an inline approval card in the chat history and return a Promise
+	 * that resolves to true (Allow) or false (Deny) when the user clicks.
+	 */
+	private showPermissionUI(
+		toolName: string,
+		toolDescription: string,
+		input: Record<string, any>
+	): Promise<boolean> {
+		return new Promise((resolve) => {
+			const card = this.historyMessages.createDiv({ cls: "llm-permission-card" });
+
+			// Header row
+			const cardHeader = card.createDiv({ cls: "llm-permission-header" });
+			const iconEl = cardHeader.createEl("span", { cls: "llm-permission-icon" });
+			setIcon(iconEl, "wand-sparkles");
+			cardHeader.createEl("span", {
+				text: "Agent wants to perform an action",
+				cls: "llm-permission-title",
+			});
+
+			// Body
+			const body = card.createDiv({ cls: "llm-permission-body" });
+			body.createEl("div", {
+				text: toolDescription,
+				cls: "llm-permission-description",
+			});
+			const inputEl = body.createEl("pre", { cls: "llm-permission-input" });
+			inputEl.textContent = JSON.stringify(input, null, 2);
+
+			// Buttons
+			const btnRow = card.createDiv({ cls: "llm-permission-buttons" });
+
+			const denyBtn = new ButtonComponent(btnRow);
+			denyBtn.setButtonText("Deny");
+			denyBtn.buttonEl.addClass("llm-permission-deny");
+
+			const allowBtn = new ButtonComponent(btnRow);
+			allowBtn.setButtonText("Allow");
+			allowBtn.buttonEl.addClass("llm-permission-allow", "mod-cta");
+
+			const cleanup = (e: MouseEvent, result: boolean) => {
+				// Stop propagation BEFORE removing the card. If we remove the card
+				// first, the button element is detached from the DOM mid-bubble.
+				// Obsidian's global click handler then sees event.target is no
+				// longer in the document and interprets it as a click-outside,
+				// closing the FAB/popover. Stopping here prevents that entirely.
+				e.stopPropagation();
+				card.remove();
+				resolve(result);
+			};
+
+			denyBtn.onClick((e) => cleanup(e, false));
+			allowBtn.onClick((e) => cleanup(e, true));
+
+			this.historyMessages.scroll(0, 9999);
+		});
+	}
+
+	/**
+	 * Run the agentic loop for the current prompt, handling tool calls and
+	 * permission prompts, then commit the final response to the message store.
+	 */
+	private async runAgentMode(
+		params: ChatParams,
+		model: string,
+		modelType: string,
+		modelName: string
+	): Promise<void> {
+		const settingType = getSettingType(this.viewType);
+		const permissionMode =
+			this.plugin.settings[settingType].agentSettings?.permissionMode ?? "ask";
+
+		const agentLoop = new AgentLoop(
+			this.plugin.app,
+			permissionMode,
+			this.showPermissionUI.bind(this)
+		);
+
+		const callbacks: AgentCallbacks = {
+			onStart: () => {
+				this.setDiv(true);
+				this.showThinkingAnimation();
+			},
+			onChunk: (text) => {
+				// First chunk: clear the thinking animation
+				if (this.previewText === "" && text) {
+					this.streamingDiv.empty();
+				}
+				this.previewText += text;
+				this.streamingDiv.textContent = this.previewText;
+				this.historyMessages.scroll(0, 9999);
+			},
+			onThinking: () => {
+				// Between tool turns: show thinking animation again; the next
+				// onChunk will replace streamingDiv content with accumulated text.
+				this.showThinkingAnimation();
+			},
+		};
+
+		if (modelType === claude) {
+			await agentLoop.runAnthropic(
+				params,
+				this.plugin.settings.claudeAPIKey,
+				callbacks
+			);
+		} else {
+			const client = this.createOpenAIClient(modelType);
+			await agentLoop.runOpenAICompatible(params, client, callbacks);
+		}
+
+		// Render final markdown
+		this.streamingDiv.empty();
+		MarkdownRenderer.render(
+			this.plugin.app,
+			this.previewText,
+			this.streamingDiv,
+			"",
+			this.plugin
+		);
+		const copyButtons = this.streamingDiv.querySelectorAll(
+			".copy-code-button"
+		) as NodeListOf<HTMLElement>;
+		copyButtons.forEach((btn) => btn.setAttribute("style", "display: none"));
+
+		this.messageStore.addMessage({ role: assistant, content: this.previewText });
+
+		const messageContext = {
+			...(params as ChatParams),
+			messages: this.getMessages(),
+			modelName,
+		} as ChatHistoryItem;
+		this.historyPush(messageContext, this.currentVaultContext);
 	}
 
 	historyPush(params: HistoryItem, vaultContext?: any) {
@@ -1208,8 +1392,8 @@ export class ChatContainer {
 
 	showThinkingAnimation() {
 		this.streamingDiv.empty();
-		const thinkingContainer = this.streamingDiv.createEl("div", { 
-			cls: "llm-thinking-animation" 
+		const thinkingContainer = this.streamingDiv.createEl("div", {
+			cls: "llm-thinking-animation"
 		});
 		thinkingContainer.createEl("span", {
 			cls: "llm-thinking-text",
@@ -1220,6 +1404,7 @@ export class ChatContainer {
 			const dot = dots.createEl("span", { cls: "streaming-dot" });
 			dot.textContent = ".";
 		}
+		this.historyMessages.scroll(0, 9999);
 	}
 
 	appendImage(imageURLs: string[]) {

@@ -80,6 +80,10 @@ export class VaultIndexer {
 
 	/** Index (or re-index) a single file. Does NOT call store.save() — caller must. */
 	async indexFile(file: TFile): Promise<void> {
+		// Ensure the existing index is loaded before upserting, so a subsequent
+		// save() doesn't overwrite the full index with just this one file
+		// (can happen when the modify event fires before indexVault() has run).
+		await this.store.ensureLoaded();
 		const content = await this.app.vault.read(file);
 		const chunks = chunkMarkdown(content, file.path);
 		if (chunks.length === 0) return;

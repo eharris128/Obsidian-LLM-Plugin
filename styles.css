@@ -1472,3 +1472,86 @@ details[open] .llm-rag-sources-summary::before {
 .llm-rag-source-link:hover {
 	text-decoration: underline;
 }
+
+/* ── Tool call collapsible panel ─────────────────────────────────────────── */
+
+.llm-tool-calls {
+	margin-bottom: var(--size-4-2);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	overflow: hidden;
+}
+
+.llm-tool-calls-summary {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	padding: var(--size-4-2) var(--size-4-3);
+	background: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	cursor: pointer;
+	user-select: none;
+	list-style: none;
+}
+
+.llm-tool-calls-summary::-webkit-details-marker {
+	display: none;
+}
+
+.llm-tool-calls-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.llm-tool-calls-label {
+	flex: 1;
+}
+
+.llm-tool-calls-chevron {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+	transition: transform 120ms ease;
+}
+
+details[open] .llm-tool-calls-chevron {
+	transform: rotate(180deg);
+}
+
+.llm-tool-calls-body {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-top: var(--border-width) solid var(--background-modifier-border);
+}
+
+.llm-tool-call-item {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+}
+
+.llm-tool-call-name {
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.llm-tool-call-input {
+	display: block;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	background: var(--background-modifier-form-field);
+	padding: var(--size-4-1) var(--size-4-2);
+	border-radius: var(--radius-s);
+	word-break: break-all;
+	white-space: pre-wrap;
+}

@@ -110,9 +110,14 @@ export class ChatContainer {
 	/**
 	 * Tool calls indexed by assistant-message turn (0-based).
 	 * Entry i holds all tool calls made before the i-th assistant response.
-	 * Cleared on newChat().
+	 * Cleared on newChat(). Populated by runAgentMode (live) or setToolCallsByTurn (from file load).
 	 */
-	private allToolCallsByTurn: Map<number, ToolCallRecord[]> = new Map();
+	allToolCallsByTurn: Map<number, ToolCallRecord[]> = new Map();
+
+	/** Restore tool-call data when loading a conversation from a file. */
+	setToolCallsByTurn(map: Map<number, ToolCallRecord[]>): void {
+		this.allToolCallsByTurn = map;
+	}
 	/** Resolves when the most recent generateIMLikeMessages render is complete. */
 	private renderingPromise: Promise<void> = Promise.resolve();
 	/** Incremented each time a new render starts; stale renders compare against this and abort. */
@@ -261,10 +266,7 @@ export class ChatContainer {
 		if (endpoint === messages) {
 			const params: ChatParams = {
 				prompt: this.prompt,
-				// The Claude API accepts the most recent user message
-				// as well as an optional most recent assistant message.
-				// This initial approach only sends the most recent user message.
-				messages: messagesForParams.slice(-1),
+				messages: messagesForParams,
 				model,
 				temperature:
 					this.plugin.settings[settingType].chatSettings.temperature,
@@ -1529,7 +1531,7 @@ export class ChatContainer {
 		if (this.plugin.settings.ragSettings?.enabled && this.plugin.vaultIndexer) {
 			const vaultSearchButton = new ButtonComponent(toolbarRight);
 			vaultSearchButton.setIcon("search");
-			vaultSearchButton.setTooltip("Search vault (RAG)");
+			vaultSearchButton.setTooltip("Search vault");
 			vaultSearchButton.buttonEl.addClass("llm-scan-button");
 
 			// Hide/show based on whether the selected model supports agent mode
@@ -1816,7 +1818,8 @@ export class ChatContainer {
 		content: string,
 		index: number,
 		finalMessage: Boolean,
-		assistant: Boolean = false
+		assistant: Boolean = false,
+		toolCalls?: ToolCallRecord[]
 	): Promise<void> {
 		// Outer wrapper carries the alignment class so CSS selectors like
 		// .llm-message-wrapper.llm-flex-start (bubble background) fire correctly.
@@ -1837,6 +1840,12 @@ export class ChatContainer {
 
 			const contentWrap = imLikeMessageContainer.createDiv();
 			contentWrap.addClass("llm-flex-column");
+
+			// Collapsible tool call panel — shown when the agent used tools this turn
+			if (toolCalls?.length) {
+				this.appendToolCallsPanel(contentWrap, toolCalls);
+			}
+
 			const imLikeMessage = contentWrap.createDiv();
 			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
 			await this.renderMarkdown(content, imLikeMessage);
@@ -1872,6 +1881,7 @@ export class ChatContainer {
 
 	async generateIMLikeMessages(messages: Message[], gen?: number) {
 		let finalMessage = false;
+		let assistantIdx = 0;
 		for (let index = 0; index < messages.length; index++) {
 			// Abort if a newer render has been kicked off since this one started.
 			// Each await inside createMessage (e.g. renderMarkdown) is a yield
@@ -1882,7 +1892,9 @@ export class ChatContainer {
 			const { role, content } = messages[index];
 			if (index === messages.length - 1) finalMessage = true;
 			if (role === "assistant") {
-				await this.createMessage(content, index, finalMessage, true);
+				const toolCalls = this.allToolCallsByTurn.get(assistantIdx);
+				await this.createMessage(content, index, finalMessage, true, toolCalls);
+				assistantIdx++;
 			} else {
 				await this.createMessage(content, index, finalMessage);
 			}
@@ -1996,6 +2008,34 @@ export class ChatContainer {
 		const enabled = this.plugin.settings.enableFileContext;
 		this.addFilesButton?.buttonEl.toggleClass("llm-hidden", !enabled);
 		this.scanButton?.buttonEl.toggleClass("llm-hidden", !enabled);
+	}
+
+	/**
+	 * Append a collapsible tool-call disclosure panel above the response,
+	 * showing which tools the agent invoked during this turn.
+	 */
+	private appendToolCallsPanel(container: HTMLElement, toolCalls: ToolCallRecord[]): void {
+		const count = toolCalls.length;
+		const details = container.createEl("details", { cls: "llm-tool-calls" });
+
+		const summary = details.createEl("summary", { cls: "llm-tool-calls-summary" });
+		const iconEl = summary.createEl("span", { cls: "llm-tool-calls-icon" });
+		setIcon(iconEl, "wrench");
+		summary.createEl("span", {
+			cls: "llm-tool-calls-label",
+			text: count === 1 ? "1 tool call" : `${count} tool calls`,
+		});
+		const chevronEl = summary.createEl("span", { cls: "llm-tool-calls-chevron" });
+		setIcon(chevronEl, "chevron-down");
+
+		const body = details.createEl("div", { cls: "llm-tool-calls-body" });
+		for (const tc of toolCalls) {
+			const item = body.createEl("div", { cls: "llm-tool-call-item" });
+			item.createEl("span", { cls: "llm-tool-call-name", text: tc.name });
+			const inputStr = JSON.stringify(tc.input);
+			const truncated = inputStr.length > 300 ? inputStr.slice(0, 297) + "…" : inputStr;
+			item.createEl("code", { cls: "llm-tool-call-input", text: truncated });
+		}
 	}
 
 	/**

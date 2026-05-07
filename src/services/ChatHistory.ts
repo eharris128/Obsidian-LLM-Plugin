@@ -17,6 +17,7 @@ export interface LoadedChat {
 	meta: ChatFileMeta;
 	messages: Message[];
 	filePath: string;
+	toolCallsByTurn: Map<number, ToolCallRecord[]>;
 }
 
 /**
@@ -267,9 +268,60 @@ export class ChatHistory {
 		if (!fmMatch) throw new Error(`Invalid chat file format: ${filePath}`);
 
 		const meta = parseYaml(fmMatch[1]) as ChatFileMeta;
-		const { messages } = this.markdownToMessages(fmMatch[2].trim());
+		const rawBody = fmMatch[2].trim();
+		const { messages } = this.markdownToMessages(rawBody);
+		const toolCallsByTurn = this.parseToolCallsFromBody(rawBody);
 
-		return { meta, messages, filePath };
+		return { meta, messages, filePath, toolCallsByTurn };
+	}
+
+	/**
+	 * Parse tool-call callout blocks from the raw markdown body.
+	 * Returns a map of assistant-turn-index → ToolCallRecord[].
+	 */
+	private parseToolCallsFromBody(rawBody: string): Map<number, ToolCallRecord[]> {
+		const result = new Map<number, ToolCallRecord[]>();
+		// Use the same split as markdownToMessages so indices stay in sync.
+		const parts = rawBody.split(/\n?## (User|Assistant)\n\n?/);
+		let assistantIdx = 0;
+		for (let i = 1; i < parts.length; i += 2) {
+			if (parts[i] !== "Assistant") continue;
+			const section = (parts[i + 1] ?? "").trimStart();
+			if (section.startsWith("> [!info]-")) {
+				// Extract consecutive lines starting with ">"
+				const calloutLines: string[] = [];
+				for (const line of section.split("\n")) {
+					if (line.startsWith(">")) calloutLines.push(line);
+					else break;
+				}
+				const toolCalls = this.parseToolCallCallout(calloutLines);
+				if (toolCalls.length > 0) result.set(assistantIdx, toolCalls);
+			}
+			assistantIdx++;
+		}
+		return result;
+	}
+
+	/** Extract ToolCallRecords from the lines of one [!info] callout block. */
+	private parseToolCallCallout(lines: string[]): ToolCallRecord[] {
+		const calls: ToolCallRecord[] = [];
+		let currentName: string | null = null;
+		for (const line of lines) {
+			const nameMatch = line.match(/^> \*\*(.+)\*\*$/);
+			const inputMatch = line.match(/^> `(.+)`$/);
+			if (nameMatch) {
+				currentName = nameMatch[1];
+			} else if (inputMatch && currentName) {
+				let input: Record<string, any> = {};
+				try {
+					// Strip truncation marker before parsing
+					input = JSON.parse(inputMatch[1].replace(/…$/, ""));
+				} catch { /* ignore malformed JSON */ }
+				calls.push({ name: currentName, input });
+				currentName = null;
+			}
+		}
+		return calls;
 	}
 
 	/**

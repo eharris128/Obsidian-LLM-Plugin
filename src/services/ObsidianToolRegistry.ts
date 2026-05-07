@@ -128,6 +128,21 @@ export class ObsidianToolRegistry {
 			},
 			risk: "safe",
 		},
+		{
+			name: "grep_vault",
+			description: "Search all notes in the vault for lines matching a text pattern or regex. Use this for structural queries like 'find notes with external links', 'find notes containing a URL', 'find notes that mention X'. Returns matching file paths, line numbers, and surrounding context. Prefer this over listing all files and reading each one individually.",
+			parameters: {
+				type: "object",
+				properties: {
+					pattern: { type: "string", description: "Text or regular expression to search for across all notes. Examples: 'https?://' to find external links, 'TODO' to find todos, '\\[\\[' to find internal links." },
+					folder: { type: "string", description: "Optional vault-root folder path to restrict the search (e.g. 'Projects'). Leave empty to search all notes." },
+					context_lines: { type: "string", description: "Number of surrounding lines to include with each match for context (0–5, default 1)." },
+					max_results: { type: "string", description: "Maximum number of matching lines to return (1–200, default 50)." },
+				},
+				required: ["pattern"],
+			},
+			risk: "safe",
+		},
 	];
 
 	constructor(private app: App, private vaultIndexer?: VaultIndexer) {}
@@ -233,6 +248,58 @@ export class ObsidianToolRegistry {
 					const topK = Math.min(10, Math.max(1, parseInt(limit ?? "5", 10) || 5));
 					const result = await this.vaultIndexer.semanticSearch(query, topK);
 					return { success: true, result };
+				}
+
+				case "grep_vault": {
+					const {
+						pattern,
+						folder,
+						context_lines: ctxArg,
+						max_results: maxArg,
+					} = input as { pattern: string; folder?: string; context_lines?: string; max_results?: string };
+
+					const ctxLines = Math.min(5, Math.max(0, parseInt(ctxArg ?? "1", 10) || 1));
+					const maxResults = Math.min(200, Math.max(1, parseInt(maxArg ?? "50", 10) || 50));
+
+					let regex: RegExp;
+					try {
+						regex = new RegExp(pattern, "i");
+					} catch {
+						return { success: false, error: `Invalid regex pattern: ${pattern}` };
+					}
+
+					const files = this.app.vault
+						.getMarkdownFiles()
+						.filter(f => !folder || f.path.startsWith(folder.endsWith("/") ? folder : folder + "/"));
+
+					const matches: string[] = [];
+
+					for (const file of files) {
+						if (matches.length >= maxResults) break;
+						let content: string;
+						try {
+							content = await this.app.vault.read(file);
+						} catch {
+							continue;
+						}
+						const lines = content.split("\n");
+						for (let i = 0; i < lines.length; i++) {
+							if (matches.length >= maxResults) break;
+							if (regex.test(lines[i])) {
+								const start = Math.max(0, i - ctxLines);
+								const end = Math.min(lines.length - 1, i + ctxLines);
+								const excerpt = lines.slice(start, end + 1).join("\n");
+								matches.push(`${file.path} (line ${i + 1}):\n${excerpt}`);
+							}
+						}
+					}
+
+					if (matches.length === 0) {
+						return { success: true, result: `No matches found for pattern: ${pattern}` };
+					}
+
+					const header = `Found ${matches.length} match${matches.length === 1 ? "" : "es"} for "${pattern}":\n\n`;
+					return { success: true, result: header + matches.join("\n\n---\n\n") };
 				}
 
 				default:

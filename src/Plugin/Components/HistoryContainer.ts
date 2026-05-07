@@ -364,8 +364,11 @@ export class HistoryContainer {
 			const loadConversation = () => {
 				this.plugin.chatHistory
 					.load(file.path)
-					.then(({ meta, messages }) => {
+					.then(({ meta, messages, toolCallsByTurn }) => {
 						chat.resetChat();
+
+						// Restore tool call metadata so panels render correctly
+						chat.setToolCallsByTurn(toolCallsByTurn);
 
 						// Restore messages into the store
 						chat.messageStore.setMessages(messages);

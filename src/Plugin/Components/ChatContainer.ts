@@ -1812,6 +1812,111 @@ export class ChatContainer {
 					);
 				});
 			});
+		// Some LLMs (especially smaller models) wrap wiki-links in backticks,
+		// which survive as <code>[[file.md]]</code> even after linkifyMdRefs
+		// strips the backticks — because MarkdownRenderer re-parses the markdown
+		// and may re-wrap them as code spans in certain list contexts.
+		// This post-processor converts any remaining [[...]] text in the rendered
+		// DOM into real clickable internal links, regardless of their wrapper.
+		this.linkifyRenderedWikilinks(container, sourcePath);
+	}
+
+	/**
+	 * Walk the rendered DOM and replace any literal [[target]] text that
+	 * MarkdownRenderer left un-linked with a real <a class="internal-link">.
+	 *
+	 * Handles two cases:
+	 *  1. <code>[[file.md]]</code>  — replaces the whole <code> element.
+	 *  2. Text nodes containing [[...]] — splits and inserts link elements.
+	 *
+	 * Skips <pre> blocks (fenced code) so genuine code examples are untouched.
+	 */
+	private linkifyRenderedWikilinks(container: HTMLElement, sourcePath: string): void {
+		const WIKI_RE = /\[\[([^\]]+)\]\]/g;
+
+		const makeLink = (target: string): HTMLAnchorElement => {
+			const a = document.createElement("a");
+			a.className = "internal-link";
+			a.setAttribute("data-href", target);
+			a.setAttribute("href", target);
+			a.textContent = target;
+			a.addEventListener("click", (e: MouseEvent) => {
+				e.preventDefault();
+				this.plugin.app.workspace.openLinkText(
+					target,
+					sourcePath,
+					e.ctrlKey || e.metaKey
+				);
+			});
+			return a;
+		};
+
+		// Case 1: <code> elements whose entire text is a [[...]] link.
+		// Replace the <code> element with the link so we also remove the
+		// code styling that makes the reference look like a code snippet.
+		container.querySelectorAll<HTMLElement>("code").forEach((codeEl) => {
+			if (codeEl.closest("pre")) return; // skip fenced code blocks
+			const text = codeEl.textContent ?? "";
+			const match = text.match(/^\[\[([^\]]+)\]\]$/);
+			if (match) {
+				codeEl.replaceWith(makeLink(match[1]));
+			}
+		});
+
+		// Case 2: plain text nodes that still contain [[...]] patterns.
+		// (These can appear when the model outputs [[file]] without backticks
+		// but MarkdownRenderer left them as literal text for any reason.)
+		const walker = document.createTreeWalker(
+			container,
+			NodeFilter.SHOW_TEXT,
+			{
+				acceptNode(node) {
+					// Skip text inside <pre> (fenced code blocks)
+					if ((node.parentElement as HTMLElement)?.closest("pre")) {
+						return NodeFilter.FILTER_REJECT;
+					}
+					// Skip text already inside an <a> (already a link)
+					if ((node.parentElement as HTMLElement)?.closest("a")) {
+						return NodeFilter.FILTER_REJECT;
+					}
+					return NodeFilter.FILTER_ACCEPT;
+				},
+			}
+		);
+
+		const textNodes: Text[] = [];
+		let n: Node | null;
+		while ((n = walker.nextNode())) {
+			if (WIKI_RE.test(n.textContent ?? "")) {
+				textNodes.push(n as Text);
+			}
+			WIKI_RE.lastIndex = 0; // reset stateful regex after test()
+		}
+
+		for (const textNode of textNodes) {
+			const parent = textNode.parentNode;
+			if (!parent) continue;
+
+			const text = textNode.textContent ?? "";
+			const fragment = document.createDocumentFragment();
+			let lastIndex = 0;
+			let m: RegExpExecArray | null;
+			WIKI_RE.lastIndex = 0;
+
+			while ((m = WIKI_RE.exec(text)) !== null) {
+				if (m.index > lastIndex) {
+					fragment.appendChild(document.createTextNode(text.slice(lastIndex, m.index)));
+				}
+				fragment.appendChild(makeLink(m[1]));
+				lastIndex = m.index + m[0].length;
+			}
+
+			if (lastIndex < text.length) {
+				fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+			}
+
+			parent.replaceChild(fragment, textNode);
+		}
 	}
 
 	private async createMessage(

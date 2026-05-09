@@ -4,6 +4,11 @@
  *
  * Each skill lives at: <skillsFolder>/<skill-name>/SKILL.md
  *
+ * NOTE: We use `vault.adapter` for all file I/O rather than `vault.getMarkdownFiles()`
+ * because Obsidian does not always index plugin-adjacent or non-standard folders into
+ * its TFile cache. The adapter works directly against the file system and is reliable
+ * regardless of Obsidian's internal indexing state.
+ *
  * SKILL.md format:
  * ---
  * name: my-skill
@@ -19,7 +24,7 @@
  * injected into the model's context when the skill is active.
  */
 
-import { App, TAbstractFile, TFile } from "obsidian";
+import { App, TFile } from "obsidian";
 
 export interface ParsedSkill {
 	/** Unique key derived from the folder name (also used for /slash invocation). */
@@ -71,41 +76,66 @@ export class SkillRegistry {
 	}
 
 	/**
-	 * Scan the skills folder and parse every SKILL.md found.
-	 * Safe to call multiple times — fully replaces the in-memory map.
+	 * Scan the skills folder via the vault adapter and parse every SKILL.md found.
+	 * Uses adapter.list() so it works even when Obsidian hasn't indexed the files
+	 * into its TFile cache.
 	 */
 	async reloadAll(): Promise<void> {
 		this.skills.clear();
 		const folderPath = this.skillsFolder;
-		const folder = this.app.vault.getAbstractFileByPath(folderPath);
-		if (!folder) return; // folder doesn't exist yet — that's fine
 
-		const markdownFiles = this.app.vault.getMarkdownFiles();
-		const skillFiles = markdownFiles.filter(
-			(f) =>
-				f.path.startsWith(folderPath + "/") &&
-				f.name === "SKILL.md"
-		);
+		let listing: { folders: string[]; files: string[] };
+		try {
+			listing = await this.app.vault.adapter.list(folderPath);
+		} catch {
+			// Folder doesn't exist yet — nothing to load
+			return;
+		}
 
-		for (const file of skillFiles) {
-			await this.loadSkillFile(file);
+		// Each skill lives one level down: <skillsFolder>/<skill-id>/SKILL.md
+		// When users create a note named "SKILL.md" inside Obsidian, it is saved as
+		// "SKILL.md.md" on disk (Obsidian appends .md automatically). Try both.
+		for (const subFolder of listing.folders) {
+			const candidates = [
+				`${subFolder}/SKILL.md`,
+				`${subFolder}/SKILL.md.md`,
+			];
+			for (const candidate of candidates) {
+				const exists = await this.app.vault.adapter.exists(candidate);
+				if (exists) {
+					await this.loadSkillByPath(candidate);
+					break; // found it — don't check the other variant
+				}
+			}
 		}
 	}
 
 	/**
-	 * Parse and register a single SKILL.md file.
-	 * Called on initial load and whenever the file is created/modified.
+	 * Load and register a skill from an arbitrary vault-relative path string.
+	 * Uses the adapter directly, so it works regardless of Obsidian's TFile cache.
 	 */
-	async loadSkillFile(file: TFile): Promise<void> {
+	async loadSkillByPath(filePath: string): Promise<void> {
 		try {
-			const raw = await this.app.vault.read(file);
-			const skill = SkillRegistry.parseSkillFile(raw, file.path, this.skillsFolder);
+			const exists = await this.app.vault.adapter.exists(filePath);
+			if (!exists) return;
+			const raw = await this.app.vault.adapter.read(filePath);
+			const skill = SkillRegistry.parseSkillFile(raw, filePath, this.skillsFolder);
 			if (skill) {
 				this.skills.set(skill.id, skill);
+				console.log(`[SkillRegistry] Loaded skill: ${skill.id} (${skill.name})`);
 			}
 		} catch (e) {
-			console.error(`[SkillRegistry] Failed to parse ${file.path}:`, e);
+			console.error(`[SkillRegistry] Failed to parse ${filePath}:`, e);
 		}
+	}
+
+	/**
+	 * Parse and register a single SKILL.md TFile.
+	 * Used when the vault event system fires for an indexed file.
+	 * Falls back to adapter-based loading so it always works.
+	 */
+	async loadSkillFile(file: TFile): Promise<void> {
+		await this.loadSkillByPath(file.path);
 	}
 
 	/**
@@ -121,10 +151,11 @@ export class SkillRegistry {
 		}
 	}
 
-	/** True if the given vault path is inside the skills folder and is a SKILL.md. */
+	/** True if the given vault path is inside the skills folder and is a SKILL.md (or SKILL.md.md). */
 	isSkillFile(path: string): boolean {
 		return (
-			path.startsWith(this.skillsFolder + "/") && path.endsWith("/SKILL.md")
+			path.startsWith(this.skillsFolder + "/") &&
+			(path.endsWith("/SKILL.md") || path.endsWith("/SKILL.md.md"))
 		);
 	}
 

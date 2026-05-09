@@ -432,18 +432,16 @@ export default class LLMPlugin extends Plugin {
 	private registerSkillVaultEvents(): void {
 		this.registerEvent(
 			this.app.vault.on("create", async (file) => {
-				if (!(file instanceof (await import("obsidian")).TFile)) return;
 				if (this.skillRegistry.isSkillFile(file.path)) {
-					await this.skillRegistry.loadSkillFile(file as any);
+					await this.skillRegistry.loadSkillByPath(file.path);
 				}
 			})
 		);
 
 		this.registerEvent(
 			this.app.vault.on("modify", async (file) => {
-				if (!(file instanceof (await import("obsidian")).TFile)) return;
 				if (this.skillRegistry.isSkillFile(file.path)) {
-					await this.skillRegistry.loadSkillFile(file as any);
+					await this.skillRegistry.loadSkillByPath(file.path);
 				}
 			})
 		);
@@ -458,16 +456,11 @@ export default class LLMPlugin extends Plugin {
 
 		this.registerEvent(
 			this.app.vault.on("rename", async (file, oldPath) => {
-				// Remove old entry if it was a skill file
 				if (this.skillRegistry.isSkillFile(oldPath)) {
 					this.skillRegistry.removeByPath(oldPath);
 				}
-				// Register new path if it's now a skill file
-				if (
-					this.skillRegistry.isSkillFile(file.path) &&
-					file instanceof (await import("obsidian")).TFile
-				) {
-					await this.skillRegistry.loadSkillFile(file as any);
+				if (this.skillRegistry.isSkillFile(file.path)) {
+					await this.skillRegistry.loadSkillByPath(file.path);
 				}
 			})
 		);

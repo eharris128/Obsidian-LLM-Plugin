@@ -329,10 +329,12 @@ button.llm-send-button:disabled {
 /* Chat input two-section layout */
 .llm-input-section {
 	display: flex;
+	align-items: center;
 }
 
 .llm-input-section textarea {
 	flex: 1;
+	min-width: 0;
 }
 
 .llm-input-toolbar {
@@ -682,7 +684,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	flex-direction: column;
 	border: var(--border-width) solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
-	overflow: hidden;
+	/* overflow: visible so the slash-command menu can float above the container */
 	background-color: var(--background-primary);
 }
 
@@ -1708,4 +1710,131 @@ details[open] .llm-tool-calls-chevron {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	max-width: 200px;
+}
+
+/* ── Slash command skill token (shown inside the input area) ─────────────── */
+
+.llm-slash-token {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	flex-shrink: 0;
+	margin-left: var(--size-4-2);
+	padding: var(--size-2-1) var(--size-2-2) var(--size-2-1) var(--size-2-1);
+	background: hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.15);
+	color: var(--interactive-accent);
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	cursor: default;
+	user-select: none;
+	white-space: nowrap;
+	max-width: 180px;
+}
+
+.llm-slash-token-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.llm-slash-token-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.llm-slash-token-remove {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+	opacity: 0.6;
+	cursor: pointer;
+}
+
+.llm-slash-token-remove:hover {
+	opacity: 1;
+}
+
+/* ── Slash command picker menu ────────────────────────────────────────────── */
+/* Mounted on document.body; position: fixed is set via JS so it clears any
+   overflow:hidden ancestor container. Width/bottom are also set dynamically. */
+
+.llm-slash-menu {
+	position: fixed;
+	background: var(--background-primary);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: var(--shadow-l);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	z-index: 9999;
+	max-height: 320px;
+	min-width: 260px;
+	max-width: 420px;
+	overflow-y: auto;
+}
+
+.llm-slash-menu-header {
+	padding: var(--size-4-2) var(--size-4-3) var(--size-2-1);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	color: var(--text-faint);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+
+.llm-slash-menu-item {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.llm-slash-menu-item:hover,
+.llm-slash-menu-item-selected {
+	background: var(--background-modifier-hover);
+}
+
+.llm-slash-menu-item-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 28px;
+	height: 28px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	--icon-size: var(--icon-s);
+}
+
+.llm-slash-menu-item-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.llm-slash-menu-item-name {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.llm-slash-menu-item-desc {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }

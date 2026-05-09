@@ -75,6 +75,7 @@ import ninjaCatLogo from "assets/ninja-cat.svg";
 import llmGuyLogo from "assets/llm-guy.svg";
 import llmGalLogo from "assets/llm-gal.svg";
 import { ContextBuilder } from "services/ContextBuilder";
+import { ParsedSkill } from "Skills/SkillRegistry";
 
 const avatarSvgs: Record<string, string> = {
 	"llm-gal": llmGalLogo,
@@ -148,6 +149,12 @@ export class ChatContainer {
 	 * or by globally-enabled skills. Cleared after each generation.
 	 */
 	private activeSkillId: string | null = null;
+	/**
+	 * The floating slash-command menu element mounted on document.body.
+	 * Stored here so each ChatContainer instance manages only its own menu —
+	 * prevents other views' generateChatContainer calls from removing it.
+	 */
+	private slashMenuEl: HTMLElement | null = null;
 
 	constructor(
 		private plugin: LLMPlugin,
@@ -183,6 +190,8 @@ export class ChatContainer {
 	 */
 	destroy(): void {
 		this.messageStore.unsubscribe(this.boundUpdateMessages);
+		this.slashMenuEl?.remove();
+		this.slashMenuEl = null;
 	}
 
 	private updateMessages(messages: Message[]) {
@@ -1504,9 +1513,37 @@ export class ChatContainer {
 		this.chipContainer.addClass("llm-context-chip-container");
 		this.chipContainer.style.display = "none";
 
-		// Top section: textarea
+		// Top section: textarea + slash token
 		const inputSection = promptContainer.createDiv();
 		inputSection.addClass("llm-input-section");
+
+		// Skill slash token — shown inside the input area when a skill is selected
+		const skillTokenEl = inputSection.createDiv({ cls: "llm-slash-token" });
+		skillTokenEl.style.display = "none";
+		const skillTokenIcon = skillTokenEl.createSpan({ cls: "llm-slash-token-icon" });
+		setIcon(skillTokenIcon, "scroll-text");
+		const skillTokenLabel = skillTokenEl.createSpan({ cls: "llm-slash-token-label" });
+		const skillTokenRemove = skillTokenEl.createSpan({ cls: "llm-slash-token-remove" });
+		setIcon(skillTokenRemove, "x");
+
+		let selectedSlashSkillId: string | null = null;
+
+		const setSkillToken = (skillId: string | null) => {
+			selectedSlashSkillId = skillId;
+			if (skillId) {
+				const skill = this.plugin.skillRegistry?.getSkill(skillId);
+				skillTokenLabel.textContent = `/${skill?.name ?? skillId}`;
+				skillTokenEl.style.display = "";
+			} else {
+				skillTokenEl.style.display = "none";
+			}
+		};
+
+		skillTokenRemove.addEventListener("click", () => {
+			setSkillToken(null);
+			promptField.inputEl.focus();
+		});
+
 		const promptField = new TextAreaComponent(inputSection);
 		promptField.inputEl.className = classNames[this.viewType]["text-area"];
 		promptField.inputEl.id = "chat-prompt-text-area";
@@ -1514,6 +1551,106 @@ export class ChatContainer {
 		promptContainer.addEventListener("input", () => {
 			this.auto_height(promptField, parentElement);
 		});
+
+		// Slash command picker menu — mounted on document.body with position:fixed
+		// so it is never clipped by overflow:hidden/auto on any ancestor container.
+		// Each ChatContainer instance manages only its own menu via this.slashMenuEl,
+		// so other views' menus are not accidentally removed.
+		this.slashMenuEl?.remove();
+		this.slashMenuEl = document.body.createDiv({ cls: "llm-slash-menu" });
+		const slashMenu = this.slashMenuEl;
+		slashMenu.style.display = "none";
+		let slashMenuIndex = 0;
+		let slashMenuSkills: ParsedSkill[] = [];
+
+		// Position the menu just above the prompt container using fixed coords.
+		// Use requestAnimationFrame so the browser has laid out the menu content
+		// and offsetHeight is accurate before we compute the top position.
+		const positionSlashMenu = () => {
+			requestAnimationFrame(() => {
+				const rect = (promptContainer as HTMLElement).getBoundingClientRect();
+				const menuH = slashMenu.offsetHeight;
+				const gap = 6;
+				slashMenu.style.left = `${rect.left}px`;
+				slashMenu.style.top = `${rect.top - menuH - gap}px`;
+				slashMenu.style.bottom = "";
+			});
+		};
+
+		const repositionHandler = () => {
+			if (slashMenu.style.display !== "none") positionSlashMenu();
+		};
+		window.addEventListener("resize", repositionHandler);
+
+		// Clean up the body-mounted menu if the prompt container leaves the DOM.
+		const cleanupObserver = new MutationObserver(() => {
+			if (!document.contains(promptContainer)) {
+				slashMenu.remove();
+				window.removeEventListener("resize", repositionHandler);
+				cleanupObserver.disconnect();
+			}
+		});
+		cleanupObserver.observe(document.body, { childList: true, subtree: false });
+
+		const renderSlashMenu = (skills: ParsedSkill[]) => {
+			slashMenu.empty();
+			slashMenuSkills = skills;
+			slashMenuIndex = 0;
+			if (skills.length === 0) { slashMenu.style.display = "none"; return; }
+
+			// Header label
+			slashMenu.createDiv({ cls: "llm-slash-menu-header", text: "Skills" });
+
+			for (let i = 0; i < skills.length; i++) {
+				const skill = skills[i];
+				const item = slashMenu.createDiv({ cls: "llm-slash-menu-item" });
+				if (i === 0) item.addClass("llm-slash-menu-item-selected");
+
+				const iconEl = item.createSpan({ cls: "llm-slash-menu-item-icon" });
+				setIcon(iconEl, "scroll-text");
+
+				const textEl = item.createDiv({ cls: "llm-slash-menu-item-text" });
+				textEl.createDiv({ cls: "llm-slash-menu-item-name", text: skill.name });
+				if (skill.description) {
+					textEl.createDiv({ cls: "llm-slash-menu-item-desc", text: skill.description });
+				}
+
+				item.addEventListener("mousedown", (e: MouseEvent) => {
+					e.preventDefault(); // keep textarea focused
+					selectSkillFromMenu(skill);
+				});
+			}
+
+			slashMenu.style.display = "flex";
+			positionSlashMenu();
+		};
+
+		const hideSlashMenu = () => {
+			slashMenu.style.display = "none";
+			slashMenuSkills = [];
+			slashMenuIndex = 0;
+		};
+
+		const updateSlashMenuHighlight = () => {
+			const items = slashMenu.querySelectorAll<HTMLElement>(".llm-slash-menu-item");
+			items.forEach((el, i) => {
+				el.toggleClass("llm-slash-menu-item-selected", i === slashMenuIndex);
+				if (i === slashMenuIndex) el.scrollIntoView({ block: "nearest" });
+			});
+		};
+
+		const selectSkillFromMenu = (skill: ParsedSkill) => {
+			// Strip the typed slash prefix from the textarea, keep any trailing text
+			const raw = promptField.getValue();
+			const after = raw.replace(/^\/[a-zA-Z0-9_-]*\s*/, "");
+			promptField.setValue(after);
+			this.prompt = after;
+			// updateSendButton is defined later in this closure — safe to call at runtime
+			updateSendButton(after);
+			setSkillToken(skill.id);
+			hideSlashMenu();
+			promptField.inputEl.focus();
+		};
 
 		// Bottom toolbar: model selector (left) + send button (right)
 		const toolbarSection = promptContainer.createDiv();
@@ -1681,8 +1818,30 @@ export class ChatContainer {
 
 		promptField.onChange((change: string) => {
 			this.prompt = change;
-			promptField.setValue(change);
 			updateSendButton(change);
+		});
+
+		// Slash command menu — use a direct input listener so it fires on every
+		// keystroke without going through Obsidian's onChange abstraction layer.
+		promptField.inputEl.addEventListener("input", () => {
+			const value = promptField.inputEl.value;
+			if (!selectedSlashSkillId) {
+				const slashMatch = value.match(/^\/([a-zA-Z0-9_-]*)/);
+				if (slashMatch) {
+					const query = slashMatch[1].toLowerCase();
+					const allSkills = this.plugin.skillRegistry?.getSkills() ?? [];
+					const filtered = query
+						? allSkills.filter(
+							(s) =>
+								s.id.toLowerCase().startsWith(query) ||
+								s.name.toLowerCase().startsWith(query)
+						  )
+						: allSkills;
+					renderSlashMenu(filtered);
+				} else {
+					hideSlashMenu();
+				}
+			}
 		});
 
 		const clearPromptField = () => {
@@ -1692,18 +1851,55 @@ export class ChatContainer {
 			// the catch block (error) both clear this.prompt when the call ends.
 			promptField.setValue("");
 			updateSendButton("");
+			setSkillToken(null);
 		};
 
 		promptField.inputEl.addEventListener("keydown", (event) => {
+			// Handle slash menu keyboard navigation first
+			if (slashMenu.style.display !== "none") {
+				if (event.key === "ArrowDown") {
+					event.preventDefault();
+					slashMenuIndex = Math.min(slashMenuIndex + 1, slashMenuSkills.length - 1);
+					updateSlashMenuHighlight();
+					return;
+				}
+				if (event.key === "ArrowUp") {
+					event.preventDefault();
+					slashMenuIndex = Math.max(slashMenuIndex - 1, 0);
+					updateSlashMenuHighlight();
+					return;
+				}
+				if (event.key === "Tab" || event.key === "Enter") {
+					event.preventDefault();
+					if (slashMenuSkills[slashMenuIndex]) {
+						selectSkillFromMenu(slashMenuSkills[slashMenuIndex]);
+					}
+					return; // Tab/Enter selects skill; Enter does NOT send
+				}
+				if (event.key === "Escape") {
+					event.preventDefault();
+					hideSlashMenu();
+					return;
+				}
+			}
+
 			if (sendButton.disabled === true) return;
 
-			if (event.code == "Enter") {
+			if (event.code === "Enter") {
 				event.preventDefault();
+				// Inject selected skill prefix into prompt before sending
+				if (selectedSlashSkillId) {
+					this.prompt = `/${selectedSlashSkillId} ${this.prompt}`.trim();
+				}
 				this.handleGenerateClick(header, sendButton);
 				clearPromptField();
 			}
 		});
 		sendButton.onClick(() => {
+			// Inject selected skill prefix into prompt before sending
+			if (selectedSlashSkillId) {
+				this.prompt = `/${selectedSlashSkillId} ${this.prompt}`.trim();
+			}
 			this.handleGenerateClick(header, sendButton);
 			clearPromptField();
 		});

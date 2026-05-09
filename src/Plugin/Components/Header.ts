@@ -6,7 +6,6 @@ import { HistoryContainer } from "./HistoryContainer";
 import { ViewType } from "Types/types";
 import { getViewInfo, setHistoryIndex, setHistoryFilePath } from "utils/utils";
 import { SettingsContainer } from "./SettingsContainer";
-import { SkillsContainer } from "./SkillsContainer";
 import { DEFAULT_SETTINGS } from "main";
 
 export class Header {
@@ -19,7 +18,6 @@ export class Header {
 	chatHistoryButton?: ButtonComponent;
 	newChatButton?: ButtonComponent;
 	settingsButton?: ButtonComponent;
-	skillsButton?: ButtonComponent;
 
 	setHeader(_modelName: string) {
 		// Model name is now shown in the chat input toolbar dropdown
@@ -50,8 +48,8 @@ export class Header {
 			if (!button.buttonEl.classList.contains("new-chat-button")) {
 				button.buttonEl.addClass("is-active");
 			}
-			toggles.map((el) => {
-				el.buttonEl.removeClass("is-active");
+			toggles.forEach((toggle) => {
+				toggle.buttonEl.removeClass("is-active");
 			});
 		}
 	}
@@ -60,14 +58,12 @@ export class Header {
 		this.chatHistoryButton?.setDisabled(true);
 		this.newChatButton?.setDisabled(true);
 		this.settingsButton?.setDisabled(true);
-		this.skillsButton?.setDisabled(true);
 	}
 
 	enableButtons() {
 		this.chatHistoryButton?.setDisabled(false);
 		this.newChatButton?.setDisabled(false);
 		this.settingsButton?.setDisabled(false);
-		this.skillsButton?.setDisabled(false);
 	}
 
 	generateHeader(
@@ -78,9 +74,7 @@ export class Header {
 		chatContainer: ChatContainer,
 		historyContainer: HistoryContainer,
 		settingsContainer: SettingsContainer,
-		closeCallback?: () => void,
-		skillsContainerDiv?: HTMLElement,
-		skillsContainer?: SkillsContainer
+		closeCallback?: () => void
 	) {
 		const titleDiv = createDiv();
 		titleDiv.addClass("llm-title-div", "llm-flex");
@@ -94,9 +88,7 @@ export class Header {
 				chatContainer,
 				historyContainer,
 				settingsContainer,
-				closeCallback,
-				skillsContainerDiv,
-				skillsContainer
+				closeCallback
 			);
 		} else {
 			this.generateDefaultHeader(
@@ -106,9 +98,7 @@ export class Header {
 				settingsContainerDiv,
 				chatContainer,
 				historyContainer,
-				settingsContainer,
-				skillsContainerDiv,
-				skillsContainer
+				settingsContainer
 			);
 		}
 
@@ -123,9 +113,7 @@ export class Header {
 		chatContainer: ChatContainer,
 		historyContainer: HistoryContainer,
 		settingsContainer: SettingsContainer,
-		closeCallback?: () => void,
-		skillsContainerDiv?: HTMLElement,
-		skillsContainer?: SkillsContainer
+		closeCallback?: () => void
 	) {
 		const leftDiv = titleDiv.createDiv();
 		leftDiv.addClass("llm-left-buttons-div", "llm-flex");
@@ -268,12 +256,11 @@ export class Header {
 		this.settingsButton.onClick(() => {
 			settingsContainer.resetSettings(settingsContainerDiv);
 			settingsContainer.generateSettingsContainer(settingsContainerDiv);
-			this.clickHandler(this.settingsButton!, [this.chatHistoryButton!, this.skillsButton!].filter(Boolean) as ButtonComponent[]);
+			this.clickHandler(this.settingsButton!, [this.chatHistoryButton!]);
 			if (!settingsContainerDiv.isShown()) {
 				settingsContainerDiv.show();
 				chatContainerDiv.hide();
 				chatHistoryContainerDiv.hide();
-				skillsContainerDiv?.hide();
 				this.hideTitle();
 			} else {
 				chatContainerDiv.show();
@@ -283,30 +270,6 @@ export class Header {
 		});
 		this.settingsButton.buttonEl.addClass("clickable-icon", "settings-button");
 		this.settingsButton.setIcon("settings-2");
-
-		// Skills button (only shown when the SkillsContainer is wired up)
-		if (skillsContainerDiv && skillsContainer) {
-			this.skillsButton = new ButtonComponent(rightButtonsDiv);
-			this.skillsButton.setTooltip("Skills");
-			this.skillsButton.buttonEl.addClass("clickable-icon", "skills-button");
-			this.skillsButton.setIcon("scroll-text");
-			this.skillsButton.onClick(() => {
-				skillsContainer.resetSkills(skillsContainerDiv!);
-				skillsContainer.generateSkillsContainer(skillsContainerDiv!);
-				this.clickHandler(this.skillsButton!, [this.chatHistoryButton!, this.settingsButton!].filter(Boolean) as ButtonComponent[]);
-				if (!skillsContainerDiv!.isShown()) {
-					skillsContainerDiv!.show();
-					chatContainerDiv.hide();
-					chatHistoryContainerDiv.hide();
-					settingsContainerDiv.hide();
-					this.hideTitle();
-				} else {
-					chatContainerDiv.show();
-					skillsContainerDiv!.hide();
-					this.showTitle();
-				}
-			});
-		}
 
 		// Close (X) button
 		if (closeCallback) {
@@ -325,9 +288,7 @@ export class Header {
 		settingsContainerDiv: HTMLElement,
 		chatContainer: ChatContainer,
 		historyContainer: HistoryContainer,
-		settingsContainer: SettingsContainer,
-		skillsContainerDiv?: HTMLElement,
-		skillsContainer?: SkillsContainer
+		settingsContainer: SettingsContainer
 	) {
 		const leftButtonDiv = titleDiv.createDiv();
 		leftButtonDiv.addClass("llm-left-buttons-div", "llm-flex");
@@ -339,12 +300,9 @@ export class Header {
 		const rightButtonsDiv = titleDiv.createDiv();
 		rightButtonsDiv.addClass("llm-right-buttons-div", "llm-flex");
 
-		// Right buttons in order: chat history → settings → skills → new chat
+		// Right buttons in order: chat history → settings → new chat
 		this.chatHistoryButton = new ButtonComponent(rightButtonsDiv);
 		this.settingsButton = new ButtonComponent(rightButtonsDiv);
-		if (skillsContainerDiv && skillsContainer) {
-			this.skillsButton = new ButtonComponent(rightButtonsDiv);
-		}
 		this.newChatButton = new ButtonComponent(rightButtonsDiv);
 
 		this.chatHistoryButton.setTooltip("Chats");
@@ -357,14 +315,10 @@ export class Header {
 				chatContainer,
 				this
 			);
-			this.clickHandler(this.chatHistoryButton!, [
-				this.settingsButton!,
-				...(this.skillsButton ? [this.skillsButton] : []),
-			]);
+			this.clickHandler(this.chatHistoryButton!, [this.settingsButton!]);
 			if (!chatHistoryContainerDiv.isShown()) {
 				chatHistoryContainerDiv.show();
 				settingsContainerDiv.hide();
-				skillsContainerDiv?.hide();
 				chatContainerDiv.hide();
 				this.hideTitle();
 			} else {
@@ -378,15 +332,11 @@ export class Header {
 		this.settingsButton.onClick(() => {
 			settingsContainer.resetSettings(settingsContainerDiv);
 			settingsContainer.generateSettingsContainer(settingsContainerDiv);
-			this.clickHandler(this.settingsButton!, [
-				this.chatHistoryButton!,
-				...(this.skillsButton ? [this.skillsButton] : []),
-			]);
+			this.clickHandler(this.settingsButton!, [this.chatHistoryButton!]);
 			if (!settingsContainerDiv.isShown()) {
 				settingsContainerDiv.show();
 				chatContainerDiv.hide();
 				chatHistoryContainerDiv.hide();
-				skillsContainerDiv?.hide();
 				this.hideTitle();
 			} else {
 				chatContainerDiv.show();
@@ -395,37 +345,12 @@ export class Header {
 			}
 		});
 
-		// Skills button
-		if (skillsContainerDiv && skillsContainer && this.skillsButton) {
-			this.skillsButton.setTooltip("Skills");
-			this.skillsButton.onClick(() => {
-				skillsContainer.resetSkills(skillsContainerDiv!);
-				skillsContainer.generateSkillsContainer(skillsContainerDiv!);
-				this.clickHandler(this.skillsButton!, [
-					this.chatHistoryButton!,
-					this.settingsButton!,
-				]);
-				if (!skillsContainerDiv!.isShown()) {
-					skillsContainerDiv!.show();
-					chatContainerDiv.hide();
-					chatHistoryContainerDiv.hide();
-					settingsContainerDiv.hide();
-					this.hideTitle();
-				} else {
-					chatContainerDiv.show();
-					skillsContainerDiv!.hide();
-					this.showTitle();
-				}
-			});
-		}
-
 		this.newChatButton.setTooltip("New chat");
 		this.newChatButton.onClick(() => {
 			const { modelName } = getViewInfo(this.plugin, this.viewType);
 			this.clickHandler(this.newChatButton!, [
 				this.settingsButton!,
 				this.chatHistoryButton!,
-				...(this.skillsButton ? [this.skillsButton] : []),
 			]);
 			this.setHeader(modelName);
 			this.setTitle("");
@@ -433,7 +358,6 @@ export class Header {
 			chatContainerDiv.show();
 			settingsContainerDiv.hide();
 			chatHistoryContainerDiv.hide();
-			skillsContainerDiv?.hide();
 			chatContainer.newChat();
 			chatContainer.resetMessages();
 			setHistoryIndex(this.plugin, this.viewType);
@@ -443,10 +367,6 @@ export class Header {
 
 		this.chatHistoryButton.buttonEl.addClass("clickable-icon", "chat-history");
 		this.settingsButton.buttonEl.addClass("clickable-icon", "settings-button");
-		if (this.skillsButton) {
-			this.skillsButton.buttonEl.addClass("clickable-icon", "skills-button");
-			this.skillsButton.setIcon("scroll-text");
-		}
 		this.newChatButton.buttonEl.addClass("clickable-icon", "new-chat-button");
 		this.chatHistoryButton.setIcon("messages-square");
 		this.settingsButton.setIcon("settings-2");

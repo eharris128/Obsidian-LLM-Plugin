@@ -329,7 +329,6 @@ button.llm-send-button:disabled {
 /* Chat input two-section layout */
 .llm-input-section {
 	display: flex;
-	align-items: center;
 }
 
 .llm-input-section textarea {
@@ -1713,51 +1712,6 @@ details[open] .llm-tool-calls-chevron {
 }
 
 /* ── Slash command skill token (shown inside the input area) ─────────────── */
-
-.llm-slash-token {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--size-2-1);
-	flex-shrink: 0;
-	margin-left: var(--size-4-2);
-	padding: var(--size-2-1) var(--size-2-2) var(--size-2-1) var(--size-2-1);
-	background: hsla(var(--accent-h), var(--accent-s), var(--accent-l), 0.15);
-	color: var(--interactive-accent);
-	border-radius: var(--radius-s);
-	font-size: var(--font-ui-smaller);
-	font-weight: var(--font-semibold);
-	cursor: default;
-	user-select: none;
-	white-space: nowrap;
-	max-width: 180px;
-}
-
-.llm-slash-token-icon {
-	display: flex;
-	align-items: center;
-	flex-shrink: 0;
-	width: var(--icon-xs);
-	height: var(--icon-xs);
-}
-
-.llm-slash-token-label {
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.llm-slash-token-remove {
-	display: flex;
-	align-items: center;
-	flex-shrink: 0;
-	width: var(--icon-xs);
-	height: var(--icon-xs);
-	opacity: 0.6;
-	cursor: pointer;
-}
-
-.llm-slash-token-remove:hover {
-	opacity: 1;
-}
 
 /* ── Slash command picker menu ────────────────────────────────────────────── */
 /* Mounted on document.body; position: fixed is set via JS so it clears any

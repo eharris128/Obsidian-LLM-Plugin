@@ -2,7 +2,6 @@ import { ChatContainer } from "Plugin/Components/ChatContainer";
 import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
 import { SettingsContainer } from "Plugin/Components/SettingsContainer";
-import { SkillsContainer } from "Plugin/Components/SkillsContainer";
 import LLMPlugin from "main";
 import { Notice, setIcon } from "obsidian";
 import { getViewInfo, getSettingType, setView, setHistoryFilePath } from "utils/utils";
@@ -73,11 +72,6 @@ export class StatusBarButton {
 			this.plugin,
 			"floating-action-button"
 		);
-		const skillsContainer = new SkillsContainer(
-			this.plugin,
-			"floating-action-button"
-		);
-
 		// Resize handle sits outside contentArea so it can straddle the top
 		// border (mirrors FAB's implementation).
 		const resizeHandle = this.popoverEl.createDiv();
@@ -91,7 +85,6 @@ export class StatusBarButton {
 		const chatContainerDiv = this.chatContainerDiv;
 		const chatHistoryContainer = this.chatHistoryContainer;
 		const settingsContainerDiv = contentArea.createDiv();
-		const skillsContainerDiv = contentArea.createDiv();
 
 		// Wire the title callback and close callback into the FAB-style header.
 		this.chatContainer.headerTitleCallback = (title: string) =>
@@ -105,20 +98,13 @@ export class StatusBarButton {
 			this.chatContainer,
 			historyContainer,
 			settingsContainer,
-			() => this.hidePopover(),
-			skillsContainerDiv,
-			skillsContainer
+			() => this.hidePopover()
 		);
-
-		// The status bar popover uses the FAB header which has a chevron menu
-		// instead of a dedicated history button — no button to hide here.
 
 		settingsContainerDiv.setAttr("style", "display: none");
 		settingsContainerDiv.addClass("fab-settings-container", "llm-flex");
 		chatHistoryContainer.setAttr("style", "display: none");
 		chatHistoryContainer.addClass("fab-chat-history-container", "llm-flex");
-		skillsContainerDiv.setAttr("style", "display: none");
-		skillsContainerDiv.addClass("fab-skills-container", "llm-flex");
 		chatContainerDiv.addClass("fab-chat-container", "llm-flex");
 
 		const history = this.plugin.settings.promptHistory;

@@ -5,7 +5,6 @@ import { ChatContainer } from "../Components/ChatContainer";
 import { Header } from "../Components/Header";
 import { HistoryContainer } from "../Components/HistoryContainer";
 import { SettingsContainer } from "../Components/SettingsContainer";
-import { SkillsContainer } from "../Components/SkillsContainer";
 import { setHistoryIndex, setView } from "utils/utils";
 
 export class ChatModal2 extends Modal {
@@ -34,13 +33,11 @@ export class ChatModal2 extends Modal {
 		const chatContainer = this.chatContainer;
 		const historyContainer = new HistoryContainer(this.plugin, "modal");
 		const settingsContainer = new SettingsContainer(this.plugin, "modal");
-		const skillsContainer = new SkillsContainer(this.plugin, "modal");
 
 		const lineBreak = contentEl.createDiv();
 		const chatContainerDiv = contentEl.createDiv();
 		const chatHistoryContainer = contentEl.createDiv();
 		const settingsContainerDiv = contentEl.createDiv();
-		const skillsContainerDiv = contentEl.createDiv();
 		header.generateHeader(
 			contentEl,
 			chatContainerDiv,
@@ -48,10 +45,7 @@ export class ChatModal2 extends Modal {
 			settingsContainerDiv,
 			chatContainer,
 			historyContainer,
-			settingsContainer,
-			undefined,
-			skillsContainerDiv,
-			skillsContainer
+			settingsContainer
 		);
 		let history = this.plugin.settings.promptHistory;
 
@@ -59,8 +53,6 @@ export class ChatModal2 extends Modal {
 		settingsContainerDiv.addClass("llm-modal-settings-container", "llm-flex");
 		chatHistoryContainer.setAttr("style", "display: none");
 		chatHistoryContainer.addClass("llm-modal-chat-history-container", "llm-flex");
-		skillsContainerDiv.setAttr("style", "display: none");
-		skillsContainerDiv.addClass("llm-modal-skills-container", "llm-flex");
 		lineBreak.className = classNames["modal"]["title-border"];
 		chatContainerDiv.addClass("llm-modal-chat-container", "llm-flex");
 

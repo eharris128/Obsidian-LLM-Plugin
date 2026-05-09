@@ -143,15 +143,22 @@ argument-hint: "[target-note]"
 #### Key files
 
 - **`src/Skills/SkillRegistry.ts`** — discovers and parses `SKILL.md` files; hot-reloads on vault `create/modify/delete/rename` events registered in `main.ts`.
-- **`src/Plugin/Components/SkillsContainer.ts`** — the Skills tab UI panel with per-skill enable/disable toggles.
-- **`src/Settings/LLMSettingsModal.ts`** — "Skills" nav item under Features; lets the user configure the skills folder.
+- **`src/Plugin/Components/SkillsContainer.ts`** — per-skill enable/disable toggles (accessible via LLMSettingsModal → Skills, not from the chat header).
+- **`src/Settings/LLMSettingsModal.ts`** — "Skills" nav item under Core Settings; lets the user configure the skills folder and global enable/disable toggles.
 
 #### Invocation
 
-Two ways to activate a skill:
+Three ways to activate a skill:
 
-1. **Slash command**: type `/skill-id [args]` at the start of the chat prompt. The prefix is stripped and the skill's instructions are prepended as system context for that single generation.
-2. **Global enable**: toggle a skill on in the Skills tab. Enabled skills' instructions are injected into every message across all views; their `allowed-tools` are unioned.
+1. **Slash command**: type `/skill-id` in the chat input. A floating picker appears listing all skills; selecting one inserts `/skill-id ` as inline text in the textarea. The prefix is parsed by `handleGenerateClick` and stripped before the API call. The picker only shows while the input matches `^\/[a-zA-Z0-9_-]*$` (no trailing space or message text).
+2. **Plus button menu**: clicking the `+` button opens an Obsidian `Menu` with "Add file as context" and (if skills exist) "Add a skill". The "Add a skill" item opens a second Menu listing all skills; selecting one inserts `/skill-id ` into the textarea.
+3. **Global enable**: toggle a skill on in Settings → Skills. Enabled skills' instructions are injected into every message across all views; their `allowed-tools` are unioned.
+
+#### Slash menu implementation notes
+
+- `ChatContainer.slashMenuEl` — the floating menu div, mounted on `document.body` with `position: fixed`. Stored as an instance variable so each `ChatContainer` only removes its own previous menu (not other views' menus). Cleaned up in `destroy()`.
+- Menu is positioned via `requestAnimationFrame` after layout, using `promptContainer.getBoundingClientRect()` to compute `top = rect.top - menuHeight - 6px`.
+- Do NOT use `document.querySelectorAll(".llm-slash-menu").forEach(el => el.remove())` — this would destroy other views' menus.
 
 #### Skill call display in chat UI and chat files
 
@@ -168,7 +175,7 @@ When a skill is active for a generation, it is recorded and shown:
 
 #### Icon convention
 
-All skills-related UI uses the `scroll-text` lucide icon (previously `wand-sparkles`). This applies to the skill item rows in `SkillsContainer`, the Skills header button in `Header.ts`, the "Skills" nav item in `LLMSettingsModal`, and the `llm-skill-panel` indicator in chat messages.
+All skills-related UI uses the `scroll-text` lucide icon (previously `wand-sparkles`). This applies to skill item rows in `SkillsContainer`, the "Skills" nav item in `LLMSettingsModal`, the slash picker menu items, the `+` button's "Add a skill" menu item, and the `llm-skill-panel` indicator in chat messages. The Skills tab has been removed from the chat header — skill selection is via the slash command or `+` button instead.
 
 #### AgentLoop integration
 

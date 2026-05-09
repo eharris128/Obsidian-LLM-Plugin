@@ -3,6 +3,7 @@ import {
 	ButtonComponent,
 	DropdownComponent,
 	MarkdownRenderer,
+	Menu,
 	Notice,
 	setIcon,
 	TextAreaComponent,
@@ -1513,36 +1514,9 @@ export class ChatContainer {
 		this.chipContainer.addClass("llm-context-chip-container");
 		this.chipContainer.style.display = "none";
 
-		// Top section: textarea + slash token
+		// Input area (textarea only — skill prefix is inserted as inline text)
 		const inputSection = promptContainer.createDiv();
 		inputSection.addClass("llm-input-section");
-
-		// Skill slash token — shown inside the input area when a skill is selected
-		const skillTokenEl = inputSection.createDiv({ cls: "llm-slash-token" });
-		skillTokenEl.style.display = "none";
-		const skillTokenIcon = skillTokenEl.createSpan({ cls: "llm-slash-token-icon" });
-		setIcon(skillTokenIcon, "scroll-text");
-		const skillTokenLabel = skillTokenEl.createSpan({ cls: "llm-slash-token-label" });
-		const skillTokenRemove = skillTokenEl.createSpan({ cls: "llm-slash-token-remove" });
-		setIcon(skillTokenRemove, "x");
-
-		let selectedSlashSkillId: string | null = null;
-
-		const setSkillToken = (skillId: string | null) => {
-			selectedSlashSkillId = skillId;
-			if (skillId) {
-				const skill = this.plugin.skillRegistry?.getSkill(skillId);
-				skillTokenLabel.textContent = `/${skill?.name ?? skillId}`;
-				skillTokenEl.style.display = "";
-			} else {
-				skillTokenEl.style.display = "none";
-			}
-		};
-
-		skillTokenRemove.addEventListener("click", () => {
-			setSkillToken(null);
-			promptField.inputEl.focus();
-		});
 
 		const promptField = new TextAreaComponent(inputSection);
 		promptField.inputEl.className = classNames[this.viewType]["text-area"];
@@ -1640,16 +1614,20 @@ export class ChatContainer {
 		};
 
 		const selectSkillFromMenu = (skill: ParsedSkill) => {
-			// Strip the typed slash prefix from the textarea, keep any trailing text
+			// Replace any typed slash prefix with "/skill-id " as inline text,
+			// preserving any content typed after the slash query.
 			const raw = promptField.getValue();
 			const after = raw.replace(/^\/[a-zA-Z0-9_-]*\s*/, "");
-			promptField.setValue(after);
-			this.prompt = after;
+			const newVal = `/${skill.id} ${after}`;
+			promptField.setValue(newVal);
+			this.prompt = newVal;
 			// updateSendButton is defined later in this closure — safe to call at runtime
-			updateSendButton(after);
-			setSkillToken(skill.id);
+			updateSendButton(newVal);
 			hideSlashMenu();
 			promptField.inputEl.focus();
+			// Place cursor right after the inserted "/skill-id " prefix
+			const cursorPos = skill.id.length + 2;
+			promptField.inputEl.setSelectionRange(cursorPos, cursorPos);
 		};
 
 		// Bottom toolbar: model selector (left) + send button (right)
@@ -1707,24 +1685,65 @@ export class ChatContainer {
 		this.addFilesButton = new ButtonComponent(toolbarRight);
 		const addFilesButton = this.addFilesButton;
 		addFilesButton.setIcon("plus");
-		addFilesButton.setTooltip("Add files as context");
+		addFilesButton.setTooltip("Add context");
 		addFilesButton.buttonEl.addClass("llm-scan-button");
 
-		addFilesButton.onClick(() => {
+		addFilesButton.onClick((evt: MouseEvent) => {
 			const settingType = getSettingType(this.viewType);
 			const contextSettings = this.plugin.settings[settingType].contextSettings;
+			const skills = this.plugin.skillRegistry?.getSkills() ?? [];
 
-			new FileSelector(
-				this.plugin.app,
-				this.plugin,
-				this.viewType,
-				contextSettings.selectedFiles,
-				(files: string[]) => {
-					contextSettings.selectedFiles = files;
-					this.plugin.saveSettings();
-					this.syncChips();
-				}
-			).open();
+			const menu = new Menu();
+
+			menu.addItem((item) => {
+				item.setTitle("Add file as context")
+					.setIcon("file-plus-2")
+					.onClick(() => {
+						new FileSelector(
+							this.plugin.app,
+							this.plugin,
+							this.viewType,
+							contextSettings.selectedFiles,
+							(files: string[]) => {
+								contextSettings.selectedFiles = files;
+								this.plugin.saveSettings();
+								this.syncChips();
+							}
+						).open();
+					});
+			});
+
+			if (skills.length > 0) {
+				menu.addItem((item) => {
+					item.setTitle("Add a skill")
+						.setIcon("scroll-text")
+						.onClick((skillEvt: MouseEvent | KeyboardEvent) => {
+							const skillsMenu = new Menu();
+							for (const skill of skills) {
+								skillsMenu.addItem((si) => {
+									si.setTitle(skill.name)
+										.setIcon("scroll-text")
+										.onClick(() => {
+											// Insert /skill-id into the textarea
+											const raw = promptField.getValue();
+											// Strip any existing slash prefix first
+											const after = raw.replace(/^\/[a-zA-Z0-9_-]*\s*/, "");
+											const newVal = `/${skill.id} ${after}`;
+											promptField.setValue(newVal);
+											this.prompt = newVal;
+											updateSendButton(newVal);
+											promptField.inputEl.focus();
+											const cursorPos = skill.id.length + 2;
+											promptField.inputEl.setSelectionRange(cursorPos, cursorPos);
+										});
+								});
+							}
+							skillsMenu.showAtMouseEvent(skillEvt as MouseEvent);
+						});
+				});
+			}
+
+			menu.showAtMouseEvent(evt);
 		});
 
 		// Scan / use-file-as-context button (FAB and Modal only — not widget)
@@ -1825,22 +1844,22 @@ export class ChatContainer {
 		// keystroke without going through Obsidian's onChange abstraction layer.
 		promptField.inputEl.addEventListener("input", () => {
 			const value = promptField.inputEl.value;
-			if (!selectedSlashSkillId) {
-				const slashMatch = value.match(/^\/([a-zA-Z0-9_-]*)/);
-				if (slashMatch) {
-					const query = slashMatch[1].toLowerCase();
-					const allSkills = this.plugin.skillRegistry?.getSkills() ?? [];
-					const filtered = query
-						? allSkills.filter(
-							(s) =>
-								s.id.toLowerCase().startsWith(query) ||
-								s.name.toLowerCase().startsWith(query)
-						  )
-						: allSkills;
-					renderSlashMenu(filtered);
-				} else {
-					hideSlashMenu();
-				}
+			// Only show the picker while the user is actively typing a /command
+			// (no trailing space or extra text — those mean a skill was already selected).
+			const slashMatch = value.match(/^\/([a-zA-Z0-9_-]*)$/);
+			if (slashMatch) {
+				const query = slashMatch[1].toLowerCase();
+				const allSkills = this.plugin.skillRegistry?.getSkills() ?? [];
+				const filtered = query
+					? allSkills.filter(
+						(s) =>
+							s.id.toLowerCase().startsWith(query) ||
+							s.name.toLowerCase().startsWith(query)
+					  )
+					: allSkills;
+				renderSlashMenu(filtered);
+			} else {
+				hideSlashMenu();
 			}
 		});
 
@@ -1851,7 +1870,6 @@ export class ChatContainer {
 			// the catch block (error) both clear this.prompt when the call ends.
 			promptField.setValue("");
 			updateSendButton("");
-			setSkillToken(null);
 		};
 
 		promptField.inputEl.addEventListener("keydown", (event) => {
@@ -1887,19 +1905,11 @@ export class ChatContainer {
 
 			if (event.code === "Enter") {
 				event.preventDefault();
-				// Inject selected skill prefix into prompt before sending
-				if (selectedSlashSkillId) {
-					this.prompt = `/${selectedSlashSkillId} ${this.prompt}`.trim();
-				}
 				this.handleGenerateClick(header, sendButton);
 				clearPromptField();
 			}
 		});
 		sendButton.onClick(() => {
-			// Inject selected skill prefix into prompt before sending
-			if (selectedSlashSkillId) {
-				this.prompt = `/${selectedSlashSkillId} ${this.prompt}`.trim();
-			}
 			this.handleGenerateClick(header, sendButton);
 			clearPromptField();
 		});

@@ -342,8 +342,10 @@ export class StatusBarButton {
 		// Load the file-based conversation
 		this.plugin.chatHistory
 			.load(filePath)
-			.then(({ meta, messages }) => {
+			.then(({ meta, messages, toolCallsByTurn, skillsByTurn }) => {
 				this.chatContainer!.resetChat();
+				this.chatContainer!.setToolCallsByTurn(toolCallsByTurn);
+				this.chatContainer!.setSkillsByTurn(skillsByTurn);
 				this.chatContainer!.messageStore.setMessages(messages);
 				this.chatContainer!.generateIMLikeMessages(messages);
 

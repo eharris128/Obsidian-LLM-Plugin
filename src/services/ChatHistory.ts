@@ -18,6 +18,7 @@ export interface LoadedChat {
 	messages: Message[];
 	filePath: string;
 	toolCallsByTurn: Map<number, ToolCallRecord[]>;
+	skillsByTurn: Map<number, string>;
 }
 
 /**
@@ -96,7 +97,8 @@ export class ChatHistory {
 	private messagesToMarkdown(
 		messages: Message[],
 		selectedText?: string,
-		toolCallsByTurn?: Map<number, ToolCallRecord[]>
+		toolCallsByTurn?: Map<number, ToolCallRecord[]>,
+		skillsByTurn?: Map<number, string>
 	): string {
 		let body = "";
 		let assistantIdx = 0;
@@ -114,6 +116,10 @@ export class ChatHistory {
 			if (msg.role === "system") continue;
 			if (msg.role === "assistant") {
 				body += `## Assistant\n\n`;
+				const skillId = skillsByTurn?.get(assistantIdx);
+				if (skillId) {
+					body += this.renderSkillBlock(skillId);
+				}
 				const toolCalls = toolCallsByTurn?.get(assistantIdx);
 				if (toolCalls?.length) {
 					body += this.renderToolCallBlock(toolCalls);
@@ -126,6 +132,11 @@ export class ChatHistory {
 		}
 
 		return body.trimEnd();
+	}
+
+	/** Render a single-line callout recording which skill was used for this turn. */
+	private renderSkillBlock(skillId: string): string {
+		return `> [!tip]- Skill: ${skillId}\n\n`;
 	}
 
 	/** Render a collapsible callout listing the tool calls for one agent turn. */
@@ -172,9 +183,14 @@ export class ChatHistory {
 		for (let i = 1; i < parts.length; i += 2) {
 			const role = parts[i] === "User" ? "user" : "assistant";
 			let content = (parts[i + 1] ?? "").trim();
-			// Strip any leading tool-call callout blocks (written by renderToolCallBlock)
-			// so they don't pollute re-submitted conversation context.
+			// Strip any leading skill or tool-call callout blocks so they don't
+			// pollute re-submitted conversation context.
 			if (role === "assistant") {
+				// Strip skill callout: "> [!tip]- Skill: <id>"
+				content = content
+					.replace(/^> \[!tip\]-? Skill: [^\n]+\n\n?/, "")
+					.trim();
+				// Strip tool-call callout: "> [!info]- N tool call(s)"
 				content = content
 					.replace(/^> \[!info\]-? \d+ tool calls?\n(?:>[ \t]?[^\n]*\n)*\n?/, "")
 					.trim();
@@ -190,10 +206,11 @@ export class ChatHistory {
 		meta: ChatFileMeta,
 		messages: Message[],
 		selectedText?: string,
-		toolCallsByTurn?: Map<number, ToolCallRecord[]>
+		toolCallsByTurn?: Map<number, ToolCallRecord[]>,
+		skillsByTurn?: Map<number, string>
 	): string {
 		const fm = this.buildFrontmatter(meta);
-		const body = this.messagesToMarkdown(messages, selectedText, toolCallsByTurn);
+		const body = this.messagesToMarkdown(messages, selectedText, toolCallsByTurn, skillsByTurn);
 		return `---\n${fm}\n---\n\n${body}`;
 	}
 
@@ -211,7 +228,8 @@ export class ChatHistory {
 		messages: Message[],
 		item: ChatHistoryItem,
 		vaultContext?: VaultContext,
-		toolCallsByTurn?: Map<number, ToolCallRecord[]>
+		toolCallsByTurn?: Map<number, ToolCallRecord[]>,
+		skillsByTurn?: Map<number, string>
 	): Promise<string> {
 		await this.ensureFolder();
 
@@ -233,7 +251,7 @@ export class ChatHistory {
 			};
 			await this.plugin.app.vault.modify(
 				file,
-				this.buildFileContent(meta, messages, selectedText, toolCallsByTurn)
+				this.buildFileContent(meta, messages, selectedText, toolCallsByTurn, skillsByTurn)
 			);
 			return filePath;
 		} else {
@@ -252,7 +270,7 @@ export class ChatHistory {
 			};
 			await this.plugin.app.vault.create(
 				newPath,
-				this.buildFileContent(meta, messages, selectedText, toolCallsByTurn)
+				this.buildFileContent(meta, messages, selectedText, toolCallsByTurn, skillsByTurn)
 			);
 			return newPath;
 		}
@@ -271,8 +289,9 @@ export class ChatHistory {
 		const rawBody = fmMatch[2].trim();
 		const { messages } = this.markdownToMessages(rawBody);
 		const toolCallsByTurn = this.parseToolCallsFromBody(rawBody);
+		const skillsByTurn = this.parseSkillsFromBody(rawBody);
 
-		return { meta, messages, filePath, toolCallsByTurn };
+		return { meta, messages, filePath, toolCallsByTurn, skillsByTurn };
 	}
 
 	/**
@@ -296,6 +315,27 @@ export class ChatHistory {
 				}
 				const toolCalls = this.parseToolCallCallout(calloutLines);
 				if (toolCalls.length > 0) result.set(assistantIdx, toolCalls);
+			}
+			assistantIdx++;
+		}
+		return result;
+	}
+
+	/**
+	 * Parse skill callout blocks from the raw markdown body.
+	 * Returns a map of assistant-turn-index → skill id.
+	 */
+	private parseSkillsFromBody(rawBody: string): Map<number, string> {
+		const result = new Map<number, string>();
+		// Use the same split as markdownToMessages so indices stay in sync.
+		const parts = rawBody.split(/\n?## (User|Assistant)\n\n?/);
+		let assistantIdx = 0;
+		for (let i = 1; i < parts.length; i += 2) {
+			if (parts[i] !== "Assistant") continue;
+			const section = (parts[i + 1] ?? "").trimStart();
+			const skillMatch = section.match(/^> \[!tip\]-? Skill: ([^\n]+)/);
+			if (skillMatch) {
+				result.set(assistantIdx, skillMatch[1].trim());
 			}
 			assistantIdx++;
 		}

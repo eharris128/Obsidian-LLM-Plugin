@@ -289,7 +289,7 @@ export class Header {
 			this.skillsButton = new ButtonComponent(rightButtonsDiv);
 			this.skillsButton.setTooltip("Skills");
 			this.skillsButton.buttonEl.addClass("clickable-icon", "skills-button");
-			this.skillsButton.setIcon("wand-sparkles");
+			this.skillsButton.setIcon("scroll-text");
 			this.skillsButton.onClick(() => {
 				skillsContainer.resetSkills(skillsContainerDiv!);
 				skillsContainer.generateSkillsContainer(skillsContainerDiv!);
@@ -445,7 +445,7 @@ export class Header {
 		this.settingsButton.buttonEl.addClass("clickable-icon", "settings-button");
 		if (this.skillsButton) {
 			this.skillsButton.buttonEl.addClass("clickable-icon", "skills-button");
-			this.skillsButton.setIcon("wand-sparkles");
+			this.skillsButton.setIcon("scroll-text");
 		}
 		this.newChatButton.buttonEl.addClass("clickable-icon", "new-chat-button");
 		this.chatHistoryButton.setIcon("messages-square");

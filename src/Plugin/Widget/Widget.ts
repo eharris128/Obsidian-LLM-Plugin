@@ -86,10 +86,11 @@ export class WidgetView extends ItemView {
 		const settingType = getSettingType("widget");
 
 		try {
-			const { meta, messages, toolCallsByTurn } = await this.plugin.chatHistory.load(filePath);
+			const { meta, messages, toolCallsByTurn, skillsByTurn } = await this.plugin.chatHistory.load(filePath);
 
 			this.chatContainer.resetChat();
 			this.chatContainer.setToolCallsByTurn(toolCallsByTurn);
+			this.chatContainer.setSkillsByTurn(skillsByTurn);
 			this.chatContainer.messageStore.setMessages(messages);
 			this.chatContainer.generateIMLikeMessages(messages);
 

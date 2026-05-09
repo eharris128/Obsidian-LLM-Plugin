@@ -96,7 +96,7 @@ export class LLMSettingsModal extends Modal {
 			label: "Features",
 			items: [
 				{ id: "vault-search", label: "Vault Search", icon: "search" },
-				{ id: "skills", label: "Skills", icon: "wand-sparkles" },
+				{ id: "skills", label: "Skills", icon: "scroll-text" },
 			],
 		},
 	];

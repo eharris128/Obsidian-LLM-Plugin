@@ -52,7 +52,7 @@ export class SkillsContainer {
 
 			// Icon
 			const iconEl = row.createDiv({ cls: "llm-skill-icon" });
-			setIcon(iconEl, "wand-sparkles");
+			setIcon(iconEl, "scroll-text");
 
 			// Info column
 			const info = row.createDiv({ cls: "llm-skill-info" });

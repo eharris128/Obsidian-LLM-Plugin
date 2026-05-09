@@ -1679,3 +1679,33 @@ details[open] .llm-tool-calls-chevron {
 	word-break: break-all;
 	white-space: pre-wrap;
 }
+
+/* ── Active skill indicator (shown above an assistant message) ────────────── */
+
+.llm-skill-panel {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-bottom: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-2);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.llm-skill-panel-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.llm-skill-panel-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 200px;
+}

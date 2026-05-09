@@ -113,10 +113,21 @@ export class ChatContainer {
 	 * Cleared on newChat(). Populated by runAgentMode (live) or setToolCallsByTurn (from file load).
 	 */
 	allToolCallsByTurn: Map<number, ToolCallRecord[]> = new Map();
+	/**
+	 * Skill id active per assistant-message turn (0-based).
+	 * Entry i holds the skill id used when the i-th assistant response was generated.
+	 * Cleared on newChat(). Populated by handleGenerateClick / runAgentMode.
+	 */
+	allSkillsByTurn: Map<number, string> = new Map();
 
 	/** Restore tool-call data when loading a conversation from a file. */
 	setToolCallsByTurn(map: Map<number, ToolCallRecord[]>): void {
 		this.allToolCallsByTurn = map;
+	}
+
+	/** Restore skill-usage data when loading a conversation from a file. */
+	setSkillsByTurn(map: Map<number, string>): void {
+		this.allSkillsByTurn = map;
 	}
 	/** Resolves when the most recent generateIMLikeMessages render is complete. */
 	private renderingPromise: Promise<void> = Promise.resolve();
@@ -854,6 +865,11 @@ export class ChatContainer {
 		// is appended before the user message and appears at the top of the chat.
 		await this.renderingPromise;
 		const params = this.getParams(modelEndpoint, model, modelType);
+		// Snapshot the assistant-message count before generation so we can key
+		// skill usage (and tool calls on the non-agent path) to the right turn.
+		const preTurnAssistantCount = this.getMessages().filter(
+			(m) => m.role === assistant
+		).length;
 		try {
 			this.previewText = "";
 			if (modelEndpoint !== images) {
@@ -867,6 +883,11 @@ export class ChatContainer {
 					);
 				} else {
 					await this.handleGenerate();
+					// For non-agent mode, runAgentMode hasn't run, so record the
+					// active skill here (agent mode records it inside runAgentMode).
+					if (this.activeSkillId) {
+						this.allSkillsByTurn.set(preTurnAssistantCount, this.activeSkillId);
+					}
 				}
 				// Append cited sources panel if vault search was used
 				if (this.pendingRagSources.length > 0) {
@@ -1127,6 +1148,11 @@ export class ChatContainer {
 			this.pendingToolCalls = [];
 		}
 
+		// Record which skill was active for this turn (if any)
+		if (this.activeSkillId) {
+			this.allSkillsByTurn.set(turnIndex, this.activeSkillId);
+		}
+
 		const messageContext = {
 			...(params as ChatParams),
 			messages: this.getMessages(),
@@ -1222,7 +1248,8 @@ export class ChatContainer {
 				messages,
 				params,
 				vaultContext,
-				this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined
+				this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined,
+				this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined
 			);
 			return;
 		}
@@ -1255,7 +1282,8 @@ export class ChatContainer {
 			messages,
 			params,
 			vaultContext,
-			this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined
+			this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined,
+			this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined
 		);
 
 		this.currentHistoryFilePath = filePath;
@@ -1988,7 +2016,8 @@ export class ChatContainer {
 		index: number,
 		finalMessage: Boolean,
 		assistant: Boolean = false,
-		toolCalls?: ToolCallRecord[]
+		toolCalls?: ToolCallRecord[],
+		skillId?: string
 	): Promise<void> {
 		// Outer wrapper carries the alignment class so CSS selectors like
 		// .llm-message-wrapper.llm-flex-start (bubble background) fire correctly.
@@ -2009,6 +2038,13 @@ export class ChatContainer {
 
 			const contentWrap = imLikeMessageContainer.createDiv();
 			contentWrap.addClass("llm-flex-column");
+
+			// Skill indicator panel — shown when a skill was active for this turn
+			if (skillId) {
+				const skillName =
+					this.plugin.skillRegistry?.getSkill(skillId)?.name ?? skillId;
+				this.appendSkillPanel(contentWrap, skillName);
+			}
 
 			// Collapsible tool call panel — shown when the agent used tools this turn
 			if (toolCalls?.length) {
@@ -2062,7 +2098,8 @@ export class ChatContainer {
 			if (index === messages.length - 1) finalMessage = true;
 			if (role === "assistant") {
 				const toolCalls = this.allToolCallsByTurn.get(assistantIdx);
-				await this.createMessage(content, index, finalMessage, true, toolCalls);
+				const skillId = this.allSkillsByTurn.get(assistantIdx);
+				await this.createMessage(content, index, finalMessage, true, toolCalls, skillId);
 				assistantIdx++;
 			} else {
 				await this.createMessage(content, index, finalMessage);
@@ -2180,6 +2217,17 @@ export class ChatContainer {
 	}
 
 	/**
+	 * Append a skill indicator row above the response, showing which skill
+	 * was active when this assistant message was generated.
+	 */
+	private appendSkillPanel(container: HTMLElement, skillName: string): void {
+		const panel = container.createDiv({ cls: "llm-skill-panel" });
+		const iconEl = panel.createSpan({ cls: "llm-skill-panel-icon" });
+		setIcon(iconEl, "scroll-text");
+		panel.createSpan({ cls: "llm-skill-panel-label", text: skillName });
+	}
+
+	/**
 	 * Append a collapsible tool-call disclosure panel above the response,
 	 * showing which tools the agent invoked during this turn.
 	 */
@@ -2235,6 +2283,7 @@ export class ChatContainer {
 		this.claudeCodeSessionId = null;
 		this.pendingToolCalls = [];
 		this.allToolCallsByTurn = new Map();
+		this.allSkillsByTurn = new Map();
 		this.displayNoChatView(this.historyMessages);
 
 		// Reset active file chip state, then re-evaluate from the current setting.

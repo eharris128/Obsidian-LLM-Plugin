@@ -153,6 +153,23 @@ Two ways to activate a skill:
 1. **Slash command**: type `/skill-id [args]` at the start of the chat prompt. The prefix is stripped and the skill's instructions are prepended as system context for that single generation.
 2. **Global enable**: toggle a skill on in the Skills tab. Enabled skills' instructions are injected into every message across all views; their `allowed-tools` are unioned.
 
+#### Skill call display in chat UI and chat files
+
+When a skill is active for a generation, it is recorded and shown:
+
+- **In the chat UI**: a small `llm-skill-panel` banner (with `scroll-text` icon and skill name) appears above the assistant message, before any tool-call panel.
+- **In saved chat files**: a `> [!tip]- Skill: <id>` callout is written immediately after the `## Assistant` heading (before tool-call callouts). Stripped by `markdownToMessages` before messages are re-submitted to the model.
+
+**Data flow:**
+- `ChatContainer.allSkillsByTurn: Map<number, string>` — turn index → skill id. Populated by `runAgentMode` (agent path) and `handleGenerateClick` (non-agent path). Cleared in `newChat()`.
+- `ChatContainer.setSkillsByTurn(map)` — restores skill data when loading a conversation from a file. Called alongside `setToolCallsByTurn` in `Widget.ts`, `HistoryContainer.ts`, and `StatusBarButton.ts`.
+- `ChatHistory.save()` accepts an optional `skillsByTurn?: Map<number, string>` 7th argument and serializes it via `renderSkillBlock`.
+- `ChatHistory.load()` calls `parseSkillsFromBody()` to reconstruct the map and returns it as `skillsByTurn` on `LoadedChat`.
+
+#### Icon convention
+
+All skills-related UI uses the `scroll-text` lucide icon (previously `wand-sparkles`). This applies to the skill item rows in `SkillsContainer`, the Skills header button in `Header.ts`, the "Skills" nav item in `LLMSettingsModal`, and the `llm-skill-panel` indicator in chat messages.
+
 #### AgentLoop integration
 
 `AgentLoop` accepts an optional `allowedTools: string[]` 5th constructor argument. When non-empty, only tools in that list are exposed to the model. `ChatContainer.runAgentMode` passes `skillAllowedTools` built during skill resolution.

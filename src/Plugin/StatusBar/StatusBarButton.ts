@@ -15,6 +15,7 @@ export class StatusBarButton {
 	private header: Header | null = null;
 	private chatContainerDiv: HTMLElement | null = null;
 	private chatHistoryContainer: HTMLElement | null = null;
+	private boundRepositionHandler: (() => void) | null = null;
 
 	constructor(plugin: LLMPlugin) {
 		this.plugin = plugin;
@@ -44,6 +45,15 @@ export class StatusBarButton {
 		this.popoverEl = document.body.createDiv();
 		this.popoverEl.addClass("llm-status-bar-popover");
 		this.popoverEl.style.display = "none";
+
+		// Reposition whenever the window is resized or the Obsidian frame is
+		// moved (which fires a "resize" event on the window object).
+		this.boundRepositionHandler = () => {
+			if (this.popoverEl && this.popoverEl.style.display !== "none") {
+				this.repositionPopover();
+			}
+		};
+		window.addEventListener("resize", this.boundRepositionHandler);
 
 		const savedHeight = this.plugin.settings.fabViewHeight ?? 600;
 		this.popoverEl.style.height = `${savedHeight}px`;
@@ -364,6 +374,10 @@ export class StatusBarButton {
 
 	remove() {
 		this.hidePopover();
+		if (this.boundRepositionHandler) {
+			window.removeEventListener("resize", this.boundRepositionHandler);
+			this.boundRepositionHandler = null;
+		}
 		this.chatContainer?.destroy();
 		this.chatContainer = null;
 		this.header = null;

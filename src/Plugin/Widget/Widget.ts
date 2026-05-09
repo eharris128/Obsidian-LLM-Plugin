@@ -2,6 +2,7 @@ import { ChatContainer } from "Plugin/Components/ChatContainer";
 import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
 import { SettingsContainer } from "Plugin/Components/SettingsContainer";
+import { SkillsContainer } from "Plugin/Components/SkillsContainer";
 import LLMPlugin from "main";
 import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import { classNames } from "utils/classNames";
@@ -145,6 +146,7 @@ export class WidgetView extends ItemView {
 		chatContainer.headerTitleCallback = (title: string) => header.setTitle(title);
 		const historyContainer = new HistoryContainer(this.plugin, "widget");
 		const settingsContainer = new SettingsContainer(this.plugin, "widget");
+		const skillsContainer = new SkillsContainer(this.plugin, "widget");
 
 		const lineBreak = container.createDiv();
 		this.chatContainerDiv = container.createDiv();
@@ -152,6 +154,7 @@ export class WidgetView extends ItemView {
 		const chatContainerDiv = this.chatContainerDiv;
 		const chatHistoryContainer = this.chatHistoryContainer;
 		const settingsContainerDiv = container.createDiv();
+		const skillsContainerDiv = container.createDiv();
 
 		settingsContainerDiv.setAttr("style", "display: none");
 		settingsContainerDiv.addClass(
@@ -163,6 +166,8 @@ export class WidgetView extends ItemView {
 			"llm-widget-chat-history-container",
 			"llm-flex"
 		);
+		skillsContainerDiv.setAttr("style", "display: none");
+		skillsContainerDiv.addClass("llm-widget-skills-container", "llm-flex");
 		lineBreak.className = classNames["widget"]["title-border"];
 		chatContainerDiv.addClass("llm-widget-chat-container", "llm-flex");
 
@@ -173,7 +178,10 @@ export class WidgetView extends ItemView {
 			settingsContainerDiv,
 			chatContainer,
 			historyContainer,
-			settingsContainer
+			settingsContainer,
+			undefined,
+			skillsContainerDiv,
+			skillsContainer
 		);
 		chatContainer.generateChatContainer(chatContainerDiv, header);
 		historyContainer.generateHistoryContainer(

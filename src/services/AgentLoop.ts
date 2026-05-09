@@ -35,14 +35,28 @@ export interface AgentCallbacks {
 
 export class AgentLoop {
 	private registry: ObsidianToolRegistry;
+	/**
+	 * When set, only tools whose names appear in this list are exposed to the
+	 * model. An empty array means "all tools allowed" (no restriction).
+	 */
+	private allowedTools: string[];
 
 	constructor(
 		private app: App,
 		private permissionMode: PermissionMode,
 		private showPermissionUI: ShowPermissionUI,
 		vaultIndexer?: VaultIndexer | null,
+		allowedTools?: string[],
 	) {
 		this.registry = new ObsidianToolRegistry(app, vaultIndexer ?? undefined);
+		this.allowedTools = allowedTools ?? [];
+	}
+
+	/** Return registry tools, filtered by allowedTools when a skill is active. */
+	private getFilteredTools(): ReturnType<ObsidianToolRegistry["getTools"]> {
+		const all = this.registry.getTools();
+		if (this.allowedTools.length === 0) return all;
+		return all.filter((t) => this.allowedTools.includes(t.name));
 	}
 
 	// ---------------------------------------------------------------------------
@@ -80,7 +94,7 @@ export class AgentLoop {
 		callbacks: AgentCallbacks
 	): Promise<string> {
 		const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-		const tools = toAnthropicTools(this.registry.getTools());
+		const tools = toAnthropicTools(this.getFilteredTools());
 
 		type ClaudeMsg = { role: "user" | "assistant"; content: any };
 		const messages: ClaudeMsg[] = params.messages
@@ -206,7 +220,7 @@ export class AgentLoop {
 		client: OpenAI,
 		callbacks: AgentCallbacks
 	): Promise<string> {
-		const tools = toOpenAITools(this.registry.getTools());
+		const tools = toOpenAITools(this.getFilteredTools());
 
 		const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
 			params.messages.map((m) => ({

@@ -114,6 +114,53 @@ The plugin supports semantic search over the user's vault via three classes in `
 
 `ChatHistory.save()` accepts an optional `toolCallsByTurn` map. When present, `messagesToMarkdown` injects a collapsible `> [!tool-use]-` callout immediately after each `## Assistant` heading. `markdownToMessages` strips these callouts before returning message content so they never pollute re-submitted conversation context.
 
+### Skills System
+
+The plugin supports a vault-native Skills feature. Each skill is a folder inside the configurable `skillsSettings.folder` (default `LLM-Skills`) containing a `SKILL.md` file.
+
+#### SKILL.md format
+
+```yaml
+---
+name: My Skill
+description: What this skill does
+allowed-tools:
+  - obsidian_read_note
+  - obsidian_search
+disable-model-invocation: false
+argument-hint: "[target-note]"
+---
+
+## Instructions
+
+<instruction body injected as system context when the skill is active>
+```
+
+- **`allowed-tools`**: restricts which ObsidianToolRegistry tools the AgentLoop can call. Empty = all tools allowed.
+- **`disable-model-invocation`**: parsed but not yet enforced (reserved for future pure-prompt skills).
+- **`argument-hint`**: shown in the Skills tab badge next to the slash command.
+
+#### Key files
+
+- **`src/Skills/SkillRegistry.ts`** — discovers and parses `SKILL.md` files; hot-reloads on vault `create/modify/delete/rename` events registered in `main.ts`.
+- **`src/Plugin/Components/SkillsContainer.ts`** — the Skills tab UI panel with per-skill enable/disable toggles.
+- **`src/Settings/LLMSettingsModal.ts`** — "Skills" nav item under Features; lets the user configure the skills folder.
+
+#### Invocation
+
+Two ways to activate a skill:
+
+1. **Slash command**: type `/skill-id [args]` at the start of the chat prompt. The prefix is stripped and the skill's instructions are prepended as system context for that single generation.
+2. **Global enable**: toggle a skill on in the Skills tab. Enabled skills' instructions are injected into every message across all views; their `allowed-tools` are unioned.
+
+#### AgentLoop integration
+
+`AgentLoop` accepts an optional `allowedTools: string[]` 5th constructor argument. When non-empty, only tools in that list are exposed to the model. `ChatContainer.runAgentMode` passes `skillAllowedTools` built during skill resolution.
+
+#### Settings persistence
+
+`LLMPluginSettings.skillsSettings: SkillsSettings` — deep-merged on load with defaults `{ folder: "LLM-Skills", enabledSkills: {} }`.
+
 ### Key Files
 
 - `src/Types/types.ts` - TypeScript interfaces (ChatParams, ImageParams, RAGSettings, etc.)

@@ -96,6 +96,7 @@ export class LLMSettingsModal extends Modal {
 			label: "Features",
 			items: [
 				{ id: "vault-search", label: "Vault Search", icon: "search" },
+				{ id: "skills", label: "Skills", icon: "wand-sparkles" },
 			],
 		},
 	];
@@ -247,6 +248,7 @@ export class LLMSettingsModal extends Modal {
 			case "lmstudio":      this.renderLMStudio();    break;
 			case "chat":          this.renderChat();         break;
 			case "vault-search":  this.renderVaultSearch();  break;
+		case "skills":        this.renderSkills();        break;
 		}
 	}
 
@@ -856,6 +858,70 @@ export class LLMSettingsModal extends Modal {
 					}
 				});
 			});
+	}
+
+	private renderSkills() {
+		const el = this.mainContentEl;
+		this.addTabHeader(el, "Skills");
+
+		const rag = this.plugin.settings.skillsSettings ?? { folder: "LLM-Skills", enabledSkills: {} };
+
+		new Setting(el)
+			.setName("Skills folder")
+			.setDesc(
+				"Vault-root-relative folder where skill sub-folders live. " +
+				"Each skill should have its own sub-folder with a SKILL.md file."
+			)
+			.addText((text) => {
+				text.setPlaceholder("LLM-Skills");
+				text.setValue(rag.folder ?? "LLM-Skills");
+				text.onChange(async (value) => {
+					this.plugin.settings.skillsSettings.folder = value.trim() || "LLM-Skills";
+					await this.plugin.saveSettings();
+					await this.plugin.reinitSkillRegistry();
+				});
+			});
+
+		// Show the skills discovered in the current folder
+		const skills = this.plugin.skillRegistry?.getSkills() ?? [];
+		if (skills.length === 0) {
+			el.createDiv({
+				cls: "setting-item-description",
+				text: `No skills found in "${rag.folder ?? "LLM-Skills"}". Create sub-folders with SKILL.md files to get started.`,
+			});
+			return;
+		}
+
+		el.createEl("p", {
+			text: `${skills.length} skill${skills.length === 1 ? "" : "s"} discovered:`,
+			cls: "setting-item-description",
+		});
+
+		for (const skill of skills) {
+			new Setting(el)
+				.setName(skill.name)
+				.setDesc(
+					[
+						skill.description,
+						`Invoke with /${skill.id}`,
+						skill.allowedTools.length > 0
+							? `Tools: ${skill.allowedTools.join(", ")}`
+							: "All tools allowed",
+					]
+						.filter(Boolean)
+						.join(" · ")
+				)
+				.addToggle((toggle) => {
+					toggle.setValue(
+						!!(this.plugin.settings.skillsSettings?.enabledSkills?.[skill.id])
+					);
+					toggle.onChange(async (value) => {
+						if (!this.plugin.settings.skillsSettings) return;
+						this.plugin.settings.skillsSettings.enabledSkills[skill.id] = value;
+						await this.plugin.saveSettings();
+					});
+				});
+		}
 	}
 
 	// ── Helpers ────────────────────────────────────────────────────────────────

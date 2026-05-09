@@ -2,6 +2,7 @@ import { ChatContainer } from "Plugin/Components/ChatContainer";
 import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
 import { SettingsContainer } from "Plugin/Components/SettingsContainer";
+import { SkillsContainer } from "Plugin/Components/SkillsContainer";
 import LLMPlugin from "main";
 import { ButtonComponent } from "obsidian";
 import { classNames } from "utils/classNames";
@@ -58,6 +59,10 @@ export class FAB {
 			this.plugin,
 			"floating-action-button"
 		);
+		const skillsContainer = new SkillsContainer(
+			this.plugin,
+			"floating-action-button"
+		);
 
 		// Resize handle lives directly on viewArea (outside contentArea) so it
 		// can straddle the top border with a negative top offset. overflow:hidden
@@ -75,6 +80,7 @@ export class FAB {
 		const chatContainerDiv = contentArea.createDiv();
 		const chatHistoryContainer = contentArea.createDiv();
 		const settingsContainerDiv = contentArea.createDiv();
+		const skillsContainerDiv = contentArea.createDiv();
 		header.generateHeader(
 			contentArea,
 			chatContainerDiv,
@@ -83,7 +89,9 @@ export class FAB {
 			chatContainer,
 			historyContainer,
 			settingsContainer,
-			() => { viewArea.style.display = "none"; }
+			() => { viewArea.style.display = "none"; },
+			skillsContainerDiv,
+			skillsContainer
 		);
 
 		resizeHandle.addEventListener("pointerdown", (e: PointerEvent) => {
@@ -136,6 +144,8 @@ export class FAB {
 		settingsContainerDiv.addClass("fab-settings-container", "llm-flex");
 		chatHistoryContainer.setAttr("style", "display: none");
 		chatHistoryContainer.addClass("fab-chat-history-container", "llm-flex");
+		skillsContainerDiv.setAttr("style", "display: none");
+		skillsContainerDiv.addClass("fab-skills-container", "llm-flex");
 		lineBreak.className =
 			classNames["floating-action-button"]["title-border"];
 		chatContainerDiv.addClass("fab-chat-container", "llm-flex");

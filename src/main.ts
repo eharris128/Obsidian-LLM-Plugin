@@ -5,8 +5,10 @@ import {
 	ImageSize,
 	RAGSettings,
 	ResponseFormat,
+	SkillsSettings,
 	ViewSettings,
 } from "./Types/types";
+import { SkillRegistry } from "Skills/SkillRegistry";
 import { VaultIndexer } from "RAG/VaultIndexer";
 import { VectorStore } from "RAG/VectorStore";
 import { EmbeddingService, DEFAULT_EMBEDDING_MODELS } from "RAG/EmbeddingService";
@@ -80,6 +82,7 @@ export interface LLMPluginSettings {
 	fabViewHeight?: number;
 	showStatusBarButton: boolean;
 	ragSettings: RAGSettings;
+	skillsSettings: SkillsSettings;
 }
 
 const defaultSettings = {
@@ -163,6 +166,10 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		lastIndexed: null,
 		indexedFileCount: 0,
 	},
+	skillsSettings: {
+		folder: "LLM-Skills",
+		enabledSkills: {},
+	},
 };
 
 export default class LLMPlugin extends Plugin {
@@ -184,6 +191,8 @@ export default class LLMPlugin extends Plugin {
 	vaultIndexer: VaultIndexer | null = null;
 	/** Debounce timers keyed by file path — prevents hammering the embedding API on rapid saves. */
 	private ragDebounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+	/** Skills registry — always initialized; folder is configurable in settings. */
+	skillRegistry: SkillRegistry;
 
 	async onload() {
 		this.fileSystem = Platform.isDesktop
@@ -195,6 +204,12 @@ export default class LLMPlugin extends Plugin {
 		await this.loadSettings();
 		this.initVaultIndexer();
 		this.registerRagVaultEvents();
+		this.skillRegistry = new SkillRegistry(this.app);
+		// Skills are in the vault — wait for the vault to finish loading before scanning
+		this.app.workspace.onLayoutReady(async () => {
+			await this.skillRegistry.setFolder(this.settings.skillsSettings.folder);
+			this.registerSkillVaultEvents();
+		});
 		this.registerOllamaModels();
 		this.registerLMStudioModels();
 		await this.checkForAPIKeyBasedModel();
@@ -402,6 +417,62 @@ export default class LLMPlugin extends Plugin {
 		this.vaultIndexer = new VaultIndexer(this.app, store, embeddingService);
 	}
 
+	/**
+	 * Re-initialise the SkillRegistry from current settings.
+	 * Call after the skills folder setting changes.
+	 */
+	async reinitSkillRegistry(): Promise<void> {
+		await this.skillRegistry.setFolder(this.settings.skillsSettings.folder);
+	}
+
+	/**
+	 * Register vault events to keep the SkillRegistry hot-reloaded whenever
+	 * SKILL.md files inside the skills folder are created, modified, or deleted.
+	 */
+	private registerSkillVaultEvents(): void {
+		this.registerEvent(
+			this.app.vault.on("create", async (file) => {
+				if (!(file instanceof (await import("obsidian")).TFile)) return;
+				if (this.skillRegistry.isSkillFile(file.path)) {
+					await this.skillRegistry.loadSkillFile(file as any);
+				}
+			})
+		);
+
+		this.registerEvent(
+			this.app.vault.on("modify", async (file) => {
+				if (!(file instanceof (await import("obsidian")).TFile)) return;
+				if (this.skillRegistry.isSkillFile(file.path)) {
+					await this.skillRegistry.loadSkillFile(file as any);
+				}
+			})
+		);
+
+		this.registerEvent(
+			this.app.vault.on("delete", (file) => {
+				if (this.skillRegistry.isSkillFile(file.path)) {
+					this.skillRegistry.removeByPath(file.path);
+				}
+			})
+		);
+
+		this.registerEvent(
+			this.app.vault.on("rename", async (file, oldPath) => {
+				// Remove old entry if it was a skill file
+				if (this.skillRegistry.isSkillFile(oldPath)) {
+					this.skillRegistry.removeByPath(oldPath);
+				}
+				// Register new path if it's now a skill file
+				if (
+					this.skillRegistry.isSkillFile(file.path) &&
+					file instanceof (await import("obsidian")).TFile
+				) {
+					await this.skillRegistry.loadSkillFile(file as any);
+				}
+			})
+		);
+	}
+
 	onunload() {
 		this.fab.removeFab();
 		this.statusBarButton.remove();
@@ -556,6 +627,16 @@ export default class LLMPlugin extends Plugin {
 			this.settings.ragSettings = {
 				...DEFAULT_SETTINGS.ragSettings,
 				...(dataJSON.ragSettings ?? {}),
+			};
+
+			// Deep-merge skillsSettings
+			this.settings.skillsSettings = {
+				...DEFAULT_SETTINGS.skillsSettings,
+				...(dataJSON.skillsSettings ?? {}),
+				enabledSkills: {
+					...DEFAULT_SETTINGS.skillsSettings.enabledSkills,
+					...(dataJSON.skillsSettings?.enabledSkills ?? {}),
+				},
 			};
 
 			// Ensure emptyChatAvatar is a valid known value; fall back to default

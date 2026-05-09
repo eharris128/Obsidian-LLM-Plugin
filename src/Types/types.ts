@@ -162,6 +162,16 @@ type GeminiSettings = {
 
 type GPT4AllSettings = {};
 
+export type SkillsSettings = {
+	/** Vault-root-relative folder where skill sub-folders live (e.g. "LLM-Skills"). */
+	folder: string;
+	/**
+	 * Per-skill enabled state keyed by skill id (folder name).
+	 * When true the skill's instructions are injected for every message in all views.
+	 */
+	enabledSkills: Record<string, boolean>;
+};
+
 export type RAGSettings = {
 	/** Whether RAG / vault semantic search is enabled at all. */
 	enabled: boolean;

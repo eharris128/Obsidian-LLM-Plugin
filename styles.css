@@ -175,14 +175,16 @@
 .llm-modal-chat-container,
 .llm-modal-chat-history-container,
 .llm-modal-settings-container,
-.llm-modal-assistants-container {
+.llm-modal-assistants-container,
+.llm-modal-skills-container {
 	min-height: 50vh;
 }
 
 .llm-modal-chat-container,
 .llm-modal-chat-history-container,
 .llm-modal-settings-container,
-.llm-modal-assistants-container {
+.llm-modal-assistants-container,
+.llm-modal-skills-container {
 	max-height: var(--modal-view-max-height);
 }
 
@@ -190,14 +192,17 @@
 .llm-modal-chat-history-container,
 .llm-modal-settings-container,
 .llm-modal-assistants-container,
+.llm-modal-skills-container,
 .llm-widget-chat-container,
 .llm-widget-settings-container,
 .llm-widget-chat-history-container,
 .llm-widget-assistant-container,
+.llm-widget-skills-container,
 .fab-chat-container,
 .fab-settings-container,
 .fab-chat-history-container,
-.fab-assistants-container {
+.fab-assistants-container,
+.fab-skills-container {
 	flex-direction: column;
 	width: calc(100% - var(--size-4-1));
 	padding: 0 var(--size-2-1);
@@ -1089,6 +1094,125 @@ button.llm-scan-button.is-active {
 	color: var(--icon-color);
 	background-color: var(--background-modifier-hover);
 	box-shadow: none;
+}
+
+/* ── SKILLS TAB ─────────────────────────────────────────────────── */
+
+/* Top-level padding (mirrors llm-modal-settings-container) */
+.llm-modal-skills-container.llm-flex,
+.llm-widget-skills-container.llm-flex,
+.fab-skills-container.llm-flex {
+	padding-top: var(--size-4-4);
+}
+
+/* Empty-state message when no skills are found */
+.llm-skills-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	text-align: center;
+	padding: var(--size-4-4) var(--size-4-2);
+}
+
+/* Header row above the skills list */
+.llm-skills-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 var(--size-2-1) var(--size-4-2);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+	margin-bottom: var(--size-4-2);
+}
+
+.llm-skills-header-title {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.llm-skills-folder-hint {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+}
+
+/* Individual skill row */
+.llm-skill-item {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2);
+	border-radius: var(--radius-s);
+	transition: background-color 80ms ease;
+}
+
+.llm-skill-item:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+/* Left column: icon */
+.llm-skill-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: var(--size-4-6);
+	height: var(--size-4-6);
+	border-radius: var(--radius-s);
+	background-color: var(--background-modifier-form-field);
+	color: var(--text-muted);
+	--icon-size: var(--icon-s);
+	--icon-stroke: var(--icon-s-stroke-width);
+}
+
+/* Centre column: name + description + metadata */
+.llm-skill-info {
+	flex: 1;
+	min-width: 0;
+}
+
+.llm-skill-name {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.llm-skill-description {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	margin-top: var(--size-2-1);
+	line-height: 1.4;
+}
+
+/* Badge row: slash command + allowed tools */
+.llm-skill-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-1);
+	margin-top: var(--size-4-1);
+}
+
+.llm-skill-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 1px var(--size-4-1);
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	background-color: var(--background-modifier-form-field);
+	border: var(--border-width) solid var(--background-modifier-border);
+	font-family: var(--font-monospace);
+}
+
+/* Right column: toggle */
+.llm-skill-toggle {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
 }
 
 button.llm-scan-button.is-active:hover {

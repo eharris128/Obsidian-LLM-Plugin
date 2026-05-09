@@ -132,6 +132,11 @@ export class ChatContainer {
 	activeFileForChip: { name: string; path: string } | null = null;
 	/** Stored so StatusBarButton (and FAB) can re-sync the displayed model after settings change. */
 	private modelDropdown: DropdownComponent | null = null;
+	/**
+	 * Skill id that is active for the current generation — set by /slash invocation
+	 * or by globally-enabled skills. Cleared after each generation.
+	 */
+	private activeSkillId: string | null = null;
 
 	constructor(
 		private plugin: LLMPlugin,
@@ -788,6 +793,60 @@ export class ChatContainer {
 			}
 		}
 
+		// ── Skill resolution ────────────────────────────────────────────────────
+		// 1. Check for /skill-name prefix in the prompt (slash invocation).
+		// 2. If no slash invocation, apply any globally-enabled skills.
+		this.activeSkillId = null;
+		let skillInstructions: string | null = null;
+		let skillAllowedTools: string[] = [];
+
+		const slashMatch = this.prompt.match(/^\/([a-zA-Z0-9_-]+)\s*/);
+		if (slashMatch) {
+			const slashId = slashMatch[1];
+			const skill = this.plugin.skillRegistry?.getSkill(slashId);
+			if (skill) {
+				this.activeSkillId = skill.id;
+				// Strip the /skill-name prefix from the prompt so the model
+				// doesn't see it as part of the user's message.
+				this.prompt = this.prompt.slice(slashMatch[0].length).trim();
+				skillInstructions = skill.instructions || null;
+				skillAllowedTools = skill.allowedTools;
+			}
+		}
+
+		// If no slash invocation, collect all globally-enabled skill instructions
+		if (!this.activeSkillId) {
+			const enabledSkills = this.plugin.settings.skillsSettings?.enabledSkills ?? {};
+			const activeSkills = (this.plugin.skillRegistry?.getSkills() ?? []).filter(
+				(s) => enabledSkills[s.id]
+			);
+			if (activeSkills.length > 0) {
+				const instructionBlocks = activeSkills
+					.filter((s) => s.instructions)
+					.map((s) => `## Skill: ${s.name}\n\n${s.instructions}`)
+					.join("\n\n---\n\n");
+				if (instructionBlocks) skillInstructions = instructionBlocks;
+				// Union of all enabled skills' allowed tools (empty list = no restriction)
+				const toolSets = activeSkills.map((s) => s.allowedTools);
+				if (toolSets.every((t) => t.length > 0)) {
+					// All skills have restrictions — intersect is too limiting; take union
+					const union = new Set<string>();
+					toolSets.forEach((t) => t.forEach((name) => union.add(name)));
+					skillAllowedTools = Array.from(union);
+				}
+				// If any skill has empty allowedTools it means "all tools" — keep skillAllowedTools empty (unrestricted)
+			}
+		}
+
+		// Inject skill instructions into the pending context
+		if (skillInstructions) {
+			const block = `# Skill Instructions\n\n${skillInstructions}`;
+			this.pendingContextString = this.pendingContextString
+				? block + "\n\n---\n\n" + this.pendingContextString
+				: block;
+		}
+		// ── End skill resolution ─────────────────────────────────────────────────
+
 		const userMessage = { role: "user" as const, content: this.prompt };
 		this.messageStore.addMessage(userMessage);
 		// Wait for the async DOM render triggered by addMessage to complete before
@@ -803,7 +862,8 @@ export class ChatContainer {
 						params as ChatParams,
 						model,
 						modelType,
-						modelName
+						modelName,
+						skillAllowedTools
 					);
 				} else {
 					await this.handleGenerate();
@@ -813,9 +873,10 @@ export class ChatContainer {
 					this.appendSourcesPanel(this.loadingDivContainer, this.pendingRagSources);
 					this.pendingRagSources = [];
 				}
-				// Clear context after generation
+				// Clear context and active skill after generation
 				this.currentVaultContext = null;
 				this.pendingContextString = null;
+				this.activeSkillId = null;
 			}
 			if (modelEndpoint === images) {
 				this.setDiv(false);
@@ -861,6 +922,7 @@ export class ChatContainer {
 			this.plugin.settings.GPT4AllStreaming = false;
 			this.prompt = "";
 			this.pendingRagSources = [];
+			this.activeSkillId = null;
 			errorMessages(error, params);
 			if (this.getMessages().length > 0) {
 				setTimeout(() => {
@@ -984,7 +1046,8 @@ export class ChatContainer {
 		params: ChatParams,
 		model: string,
 		modelType: string,
-		modelName: string
+		modelName: string,
+		allowedTools: string[] = []
 	): Promise<void> {
 		const settingType = getSettingType(this.viewType);
 		const permissionMode =
@@ -1000,6 +1063,7 @@ export class ChatContainer {
 			permissionMode,
 			this.showPermissionUI.bind(this),
 			this.plugin.vaultIndexer,
+			allowedTools.length > 0 ? allowedTools : undefined,
 		);
 
 		const callbacks: AgentCallbacks = {

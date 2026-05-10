@@ -78,6 +78,8 @@ export class LLMSettingsModal extends Modal {
 				{ id: "interface", label: "Interface",  icon: "layout-dashboard" },
 				{ id: "chat",      label: "Chat",       icon: "message-square" },
 				{ id: "skills",    label: "Skills",     icon: "scroll-text" },
+				{ id: "memory",    label: "Memory",     icon: "brain" },
+				{ id: "projects",  label: "Projects",   icon: "folder-open" },
 			],
 		},
 		{
@@ -97,8 +99,6 @@ export class LLMSettingsModal extends Modal {
 			label: "Features",
 			items: [
 				{ id: "vault-search", label: "Vault Search", icon: "search" },
-				{ id: "memory",       label: "Memory",       icon: "brain" },
-				{ id: "projects",     label: "Projects",     icon: "folder-open" },
 			],
 		},
 	];

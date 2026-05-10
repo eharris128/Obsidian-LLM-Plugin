@@ -3,11 +3,13 @@ import {
 	HistoryItem,
 	ImageQuality,
 	ImageSize,
+	MemorySettings,
 	RAGSettings,
 	ResponseFormat,
 	SkillsSettings,
 	ViewSettings,
 } from "./Types/types";
+import { MemoryService } from "Memory/MemoryService";
 import { SkillRegistry } from "Skills/SkillRegistry";
 import { VaultIndexer } from "RAG/VaultIndexer";
 import { VectorStore } from "RAG/VectorStore";
@@ -83,6 +85,7 @@ export interface LLMPluginSettings {
 	showStatusBarButton: boolean;
 	ragSettings: RAGSettings;
 	skillsSettings: SkillsSettings;
+	memorySettings: MemorySettings;
 	/**
 	 * Root vault folder for all AI feature data (default "AI").
 	 * Skills live at <rootVaultFolder>/Skills/<skill-name>/SKILL.md.
@@ -176,6 +179,11 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	skillsSettings: {
 		enabledSkills: {},
 	},
+	memorySettings: {
+		enabled: false,
+		extractionTrigger: "manual" as const,
+		recallTopK: 5,
+	},
 	rootVaultFolder: "AI",
 };
 
@@ -196,6 +204,8 @@ export default class LLMPlugin extends Plugin {
 	pendingWidgetFilePath: string | null = null;
 	/** RAG vault indexer — initialized after settings load, null if RAG is disabled or misconfigured. */
 	vaultIndexer: VaultIndexer | null = null;
+	/** Memory service — initialized after settings load, null if memory is disabled. */
+	memoryService: MemoryService | null = null;
 	/** Debounce timers keyed by file path — prevents hammering the embedding API on rapid saves. */
 	private ragDebounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 	/** Skills registry — always initialized; folder is configurable in settings. */
@@ -210,6 +220,7 @@ export default class LLMPlugin extends Plugin {
 			: new MobileOperatingSystem();
 		await this.loadSettings();
 		this.initVaultIndexer();
+		this.initMemoryService();
 		this.registerRagVaultEvents();
 		this.skillRegistry = new SkillRegistry(this.app);
 		// Skills are in the vault — wait for the vault to finish loading before scanning
@@ -433,6 +444,40 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	/**
+	 * Derived path to the global Memories folder: "<rootVaultFolder>/Memories".
+	 */
+	get memoriesFolder(): string {
+		return (this.settings.rootVaultFolder || "AI") + "/Memories";
+	}
+
+	/**
+	 * Build (or rebuild) the MemoryService from current settings.
+	 * Safe to call after any settings change that affects memory or RAG configuration.
+	 */
+	initMemoryService(): void {
+		const mem = this.settings.memorySettings;
+		const rag = this.settings.ragSettings;
+		if (!mem?.enabled || !rag?.enabled) {
+			this.memoryService = null;
+			return;
+		}
+		// MemoryService reuses the RAG embedding provider already configured
+		const embeddingService = new EmbeddingService({
+			provider: rag.embeddingProvider,
+			model: rag.embeddingModel,
+			openAIKey: this.settings.openAIAPIKey,
+			geminiKey: this.settings.geminiAPIKey,
+			ollamaHost: this.settings.ollamaHost,
+			lmStudioHost: this.settings.lmStudioHost,
+		});
+		this.memoryService = new MemoryService(
+			this.app,
+			embeddingService,
+			this.settings.rootVaultFolder || "AI",
+		);
+	}
+
+	/**
 	 * Re-initialise the SkillRegistry from current settings.
 	 * Call after the root vault folder setting changes.
 	 */
@@ -644,6 +689,12 @@ export default class LLMPlugin extends Plugin {
 					...DEFAULT_SETTINGS.skillsSettings.enabledSkills,
 					...(dataJSON.skillsSettings?.enabledSkills ?? {}),
 				},
+			};
+
+			// Deep-merge memorySettings so new fields get defaults if missing from saved data
+			this.settings.memorySettings = {
+				...DEFAULT_SETTINGS.memorySettings,
+				...(dataJSON.memorySettings ?? {}),
 			};
 
 			// Ensure rootVaultFolder has a value (new field — may be absent in old saves)

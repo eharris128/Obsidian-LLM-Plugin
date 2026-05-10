@@ -190,9 +190,71 @@ All skills-related UI uses the `scroll-text` lucide icon (previously `wand-spark
 
 `LLMPluginSettings.rootVaultFolder: string` — top-level setting (default `"AI"`) shared across all AI features. Skills live at `<rootVaultFolder>/Skills`. Future features (Assistants, Projects, Memories, Chats) will use `<rootVaultFolder>/<FeatureName>`. Configurable via Settings → General → "Root vault folder". After changing it, `plugin.reinitSkillRegistry()` is called to hot-reload from the new path.
 
+### Memory System
+
+The plugin supports a cross-session Memory feature. Memories are plain markdown files stored in the vault so users can read, edit, and delete them directly in Obsidian.
+
+#### Vault hierarchy
+
+```
+<rootVaultFolder>/
+  Memories/                          ← global (always recalled)
+    <uuid>.md
+  Assistants/<name>/memories/        ← recalled when assistant is active
+    <uuid>.md
+  Projects/<name>/memories/          ← recalled when project is active
+    <uuid>.md
+```
+
+#### Memory file format
+
+```yaml
+---
+created: <ISO date>
+source: <"global" | assistant name | project name>
+type: <"fact" | "preference" | "context">
+---
+<one-sentence memory content>
+```
+
+#### Key files
+
+- **`src/Memory/MemoryService.ts`** — core service:
+  - `extractAndSave(messages, scope, scopeName, callModel)` — calls the active model with a structured extraction prompt, writes individual `.md` files to the correct scope folder, skips duplicates (cosine similarity ≥ 0.92).
+  - `recall(query, ctx, topK, indexer)` — queries the VaultIndexer restricted to active scope folders, returns a formatted context block.
+  - `isMemoryFile(path)` — returns true for any path inside a memories folder (used for hot-reloading).
+  - `loadMemoriesFromFolder(folder)` — reads and parses all `.md` files from a folder via adapter (bypasses Obsidian TFile cache).
+
+#### Extraction
+
+Extraction runs a single model call with a structured JSON prompt. The model returns `[{ type, content }]` objects. Each item is checked for semantic similarity against existing memories in the same scope before writing. Extraction is provider-agnostic — `ChatContainer.buildMemoryCallModel()` builds the right wrapper for the active provider (Claude, Gemini, OpenAI-compatible).
+
+#### Recall
+
+Before each send in `handleGenerateClick`, `MemoryService.recall()` searches the VaultIndexer (hybrid search, 70% cosine + 30% BM25) restricted to the active scope folders. Results are deduped by filePath and the top-k block is prepended to `pendingContextString` before the API call. A `llm-memory-panel` indicator appears under the assistant message when memories were injected.
+
+#### Settings
+
+`LLMPluginSettings.memorySettings: MemorySettings` — deep-merged on load:
+- `enabled: boolean` — gates the entire feature (requires RAG to be enabled for recall).
+- `extractionTrigger: "end-of-chat" | "manual"` — when to run extraction.
+- `recallTopK: number` — how many memory chunks to inject per send.
+
+#### UI integration in ChatContainer
+
+- `useMemory: boolean` — per-view toggle, persists within the session. Toggled via the brain-icon toolbar button.
+- `extractMemories()` — called by the toolbar extract button or automatically at `newChat()` when trigger is `"end-of-chat"`.
+- `appendMemoryIndicator(container)` — renders a `llm-memory-panel` banner on the assistant message when memories were recalled.
+- `buildMemoryCallModel()` — builds a provider-specific `(system, user) => Promise<string>` wrapper for the extraction call.
+
+#### Memory + RAG dependency
+
+Memory recall requires `plugin.vaultIndexer` to be non-null (i.e. RAG must be enabled). Memory files are indexed automatically by the existing `vault.on('modify')` watcher in `main.ts`. `plugin.initMemoryService()` rebuilds the `MemoryService` using the same `EmbeddingService` configuration as RAG.
+
 ### Key Files
 
-- `src/Types/types.ts` - TypeScript interfaces (ChatParams, ImageParams, RAGSettings, etc.)
+- `src/Memory/MemoryService.ts` - Memory extraction, deduplication, recall, and vault persistence
+- `src/Types/types.ts` - TypeScript interfaces (ChatParams, ImageParams, RAGSettings, MemorySettings, etc.)
 - `src/utils/constants.ts` - Provider/model/endpoint constants (includes `images`, `chat`, `messages`, `assistant`, `claudeCodeEndpoint`, etc.)
 - `src/utils/models.ts` - Model configuration definitions
 - `src/utils/utils.ts` - API validation and helper functions

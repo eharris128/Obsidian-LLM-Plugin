@@ -171,6 +171,19 @@ export type SkillsSettings = {
 	enabledSkills: Record<string, boolean>;
 };
 
+export type MemorySettings = {
+	/** Whether the memory feature is enabled at all. */
+	enabled: boolean;
+	/**
+	 * When to run memory extraction:
+	 * - "end-of-chat": automatically after newChat() or view close
+	 * - "manual": only when user clicks "Extract memories now"
+	 */
+	extractionTrigger: "end-of-chat" | "manual";
+	/** How many recalled memory chunks to inject as system context before each send. */
+	recallTopK: number;
+};
+
 export type RAGSettings = {
 	/** Whether RAG / vault semantic search is enabled at all. */
 	enabled: boolean;

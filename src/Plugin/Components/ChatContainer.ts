@@ -78,6 +78,7 @@ import llmGuyLogo from "assets/llm-guy.svg";
 import llmGalLogo from "assets/llm-gal.svg";
 import { ContextBuilder } from "services/ContextBuilder";
 import { ParsedSkill } from "Skills/SkillRegistry";
+import { MemoryContext } from "Memory/MemoryService";
 
 const avatarSvgs: Record<string, string> = {
 	"llm-gal": llmGalLogo,
@@ -157,6 +158,16 @@ export class ChatContainer {
 	 * prevents other views' generateChatContainer calls from removing it.
 	 */
 	private slashMenuEl: HTMLElement | null = null;
+
+	/**
+	 * When true, memories are recalled before each send and (if extraction
+	 * trigger is "end-of-chat") extracted when a new chat starts.
+	 */
+	useMemory: boolean = false;
+	/** Whether memories were injected for the current generation (drives UI indicator). */
+	private memoriesInjectedThisTurn: boolean = false;
+	/** Stored reference so we can update the memory button's active state. */
+	private memoryButton: import("obsidian").ButtonComponent | null = null;
 
 	constructor(
 		private plugin: LLMPlugin,
@@ -878,6 +889,35 @@ export class ChatContainer {
 		}
 		// ── End skill resolution ─────────────────────────────────────────────────
 
+		// ── Memory recall ─────────────────────────────────────────────────────────
+		this.memoriesInjectedThisTurn = false;
+		if (
+			this.useMemory &&
+			this.plugin.settings.memorySettings?.enabled &&
+			this.plugin.memoryService &&
+			this.plugin.vaultIndexer &&
+			modelEndpoint !== images
+		) {
+			try {
+				const memCtx: MemoryContext = {};  // Future: pass active assistant/project
+				const recalled = await this.plugin.memoryService.recall(
+					this.prompt,
+					memCtx,
+					this.plugin.settings.memorySettings.recallTopK ?? 5,
+					this.plugin.vaultIndexer,
+				);
+				if (recalled) {
+					// Prepend memories before everything else so the model sees them first
+					this.pendingContextString = recalled +
+						(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
+					this.memoriesInjectedThisTurn = true;
+				}
+			} catch (e) {
+				console.error("[Memory] Recall failed:", e);
+			}
+		}
+		// ── End memory recall ─────────────────────────────────────────────────────
+
 		const userMessage = { role: "user" as const, content: this.prompt };
 		this.messageStore.addMessage(userMessage);
 		// Wait for the async DOM render triggered by addMessage to complete before
@@ -943,6 +983,11 @@ export class ChatContainer {
 				if (this.pendingRagSources.length > 0) {
 					this.appendSourcesPanel(this.loadingDivContainer, this.pendingRagSources);
 					this.pendingRagSources = [];
+				}
+				// Show memory indicator if memories were recalled this turn
+				if (this.memoriesInjectedThisTurn) {
+					this.appendMemoryIndicator(this.loadingDivContainer);
+					this.memoriesInjectedThisTurn = false;
 				}
 				// Clear context and active skill after generation
 				this.currentVaultContext = null;
@@ -1917,6 +1962,34 @@ export class ChatContainer {
 			});
 		}
 
+		// Memory toggle button — only shown when the Memory feature is enabled
+		if (this.plugin.settings.memorySettings?.enabled) {
+			this.memoryButton = new ButtonComponent(toolbarRight);
+			this.memoryButton.setIcon("brain");
+			this.memoryButton.setTooltip("Memory: recall past conversations");
+			this.memoryButton.buttonEl.addClass("llm-scan-button");
+
+			// Initialise from instance state (survives re-renders within a session)
+			this.memoryButton.buttonEl.toggleClass("is-active", this.useMemory);
+
+			this.memoryButton.onClick(() => {
+				this.useMemory = !this.useMemory;
+				this.memoryButton?.buttonEl.toggleClass("is-active", this.useMemory);
+				if (this.useMemory) {
+					new Notice("Memory recall enabled for this conversation.");
+				}
+			});
+
+			// "Extract memories" button — triggers manual extraction from current conversation
+			const extractButton = new ButtonComponent(toolbarRight);
+			extractButton.setIcon("download");
+			extractButton.setTooltip("Extract and save memories from this conversation");
+			extractButton.buttonEl.addClass("llm-scan-button");
+			extractButton.onClick(async () => {
+				await this.extractMemories();
+			});
+		}
+
 		// Sync file-context button visibility based on the current setting
 		this.syncFileContextButtons();
 
@@ -2607,7 +2680,129 @@ export class ChatContainer {
 		}
 	}
 
+	// ── Memory helpers ────────────────────────────────────────────────────────
+
+	/**
+	 * Append a small indicator to the assistant message container showing that
+	 * recalled memories were injected for this generation.
+	 */
+	private appendMemoryIndicator(container: HTMLElement): void {
+		const panel = container.createDiv({ cls: "llm-memory-panel" });
+		const iconEl = panel.createSpan({ cls: "llm-memory-panel-icon" });
+		setIcon(iconEl, "brain");
+		panel.createSpan({ cls: "llm-memory-panel-label", text: "Memory recalled" });
+	}
+
+	/**
+	 * Build a callModel wrapper for the active provider, used by MemoryService
+	 * to run the extraction prompt.
+	 */
+	private buildMemoryCallModel(): ((system: string, user: string) => Promise<string>) | null {
+		const { model, modelType, modelEndpoint } = getViewInfo(this.plugin, this.viewType);
+
+		if (modelType === claude) {
+			return async (system: string, user: string) => {
+				const client = new Anthropic({
+					apiKey: this.plugin.settings.claudeAPIKey,
+					dangerouslyAllowBrowser: true,
+				});
+				const resp = await client.messages.create({
+					model,
+					max_tokens: 1024,
+					system,
+					messages: [{ role: "user", content: user }],
+				});
+				const block = resp.content[0];
+				return block.type === "text" ? block.text : "";
+			};
+		}
+
+		if (modelType === gemini) {
+			return async (system: string, user: string) => {
+				const client = new GoogleGenAI({ apiKey: this.plugin.settings.geminiAPIKey });
+				const resp = await client.models.generateContent({
+					model,
+					contents: [{ role: "user", parts: [{ text: user }] }],
+					config: { systemInstruction: system },
+				});
+				return resp.text?.trim() ?? "";
+			};
+		}
+
+		// OpenAI-compatible (openAI, mistral, ollama, lmStudio)
+		if (
+			modelType === openAI ||
+			modelType === mistral ||
+			modelType === ollama ||
+			modelType === lmStudio
+		) {
+			return async (system: string, user: string) => {
+				const client = this.createOpenAIClient(modelType);
+				const resp = await client.chat.completions.create({
+					model,
+					max_tokens: 1024,
+					temperature: 0.3,
+					messages: [
+						{ role: "system", content: system },
+						{ role: "user", content: user },
+					],
+				});
+				return resp.choices[0]?.message?.content?.trim() ?? "";
+			};
+		}
+
+		return null;
+	}
+
+	/**
+	 * Run memory extraction from the current conversation and write to vault.
+	 * Called manually (extract button) or automatically at end-of-chat.
+	 */
+	async extractMemories(): Promise<void> {
+		const messages = this.getMessages();
+		if (messages.length === 0) {
+			new Notice("No conversation to extract memories from.");
+			return;
+		}
+		if (!this.plugin.memoryService) {
+			new Notice("Memory is not enabled. Enable it in Settings → Memory.");
+			return;
+		}
+		const callModel = this.buildMemoryCallModel();
+		if (!callModel) {
+			new Notice("Memory extraction is not supported for the current provider.");
+			return;
+		}
+		new Notice("Extracting memories…");
+		try {
+			await this.plugin.memoryService.extractAndSave(
+				messages,
+				"global",
+				undefined,
+				callModel,
+			);
+		} catch (e) {
+			console.error("[Memory] Extraction failed:", e);
+			new Notice("Memory extraction failed — see console for details.");
+		}
+	}
+
 	newChat() {
+		// Auto-extract memories at end-of-chat if the feature and trigger are configured
+		const memSettings = this.plugin.settings.memorySettings;
+		if (
+			this.useMemory &&
+			memSettings?.enabled &&
+			memSettings.extractionTrigger === "end-of-chat" &&
+			this.plugin.memoryService &&
+			this.getMessages().length > 0
+		) {
+			// Fire-and-forget — don't block the UI
+			this.extractMemories().catch((e) =>
+				console.error("[Memory] End-of-chat extraction failed:", e)
+			);
+		}
+
 		this.historyMessages.empty();
 		this.claudeCodeSessionId = null;
 		this.pendingToolCalls = [];

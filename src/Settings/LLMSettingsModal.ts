@@ -97,6 +97,7 @@ export class LLMSettingsModal extends Modal {
 			label: "Features",
 			items: [
 				{ id: "vault-search", label: "Vault Search", icon: "search" },
+				{ id: "memory",       label: "Memory",       icon: "brain" },
 			],
 		},
 	];
@@ -248,7 +249,8 @@ export class LLMSettingsModal extends Modal {
 			case "lmstudio":      this.renderLMStudio();    break;
 			case "chat":          this.renderChat();         break;
 			case "vault-search":  this.renderVaultSearch();  break;
-		case "skills":        this.renderSkills();        break;
+			case "skills":        this.renderSkills();        break;
+			case "memory":        this.renderMemory();        break;
 		}
 	}
 
@@ -930,6 +932,94 @@ export class LLMSettingsModal extends Modal {
 					});
 				});
 		}
+	}
+
+	private renderMemory() {
+		const el = this.mainContentEl;
+		this.addTabHeader(el, "Memory");
+
+		const toggleItems = this.addSettingGroup(el);
+
+		new Setting(toggleItems)
+			.setName("Enable memory")
+			.setDesc(
+				"Remember facts, preferences, and context across conversations. " +
+				"Requires Vault Search (RAG) to be enabled for recall."
+			)
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.memorySettings?.enabled ?? false)
+					.onChange(async (value) => {
+						if (!this.plugin.settings.memorySettings) {
+							this.plugin.settings.memorySettings = {
+								enabled: false,
+								extractionTrigger: "manual",
+								recallTopK: 5,
+							};
+						}
+						this.plugin.settings.memorySettings.enabled = value;
+						await this.plugin.saveSettings();
+						this.plugin.initMemoryService();
+						this.renderTab("memory");
+					});
+			});
+
+		const mem = this.plugin.settings.memorySettings;
+		if (!mem?.enabled) return;
+
+		if (!this.plugin.settings.ragSettings?.enabled) {
+			el.createDiv({
+				cls: "setting-item-description",
+				text: "⚠️ Memory recall requires Vault Search to be enabled. Enable it in the Vault Search tab.",
+			});
+		}
+
+		const extractionItems = this.addSettingGroup(el, "Extraction");
+
+		new Setting(extractionItems)
+			.setName("Extraction trigger")
+			.setDesc(
+				"When to extract and save memories from conversations."
+			)
+			.addDropdown((dropdown) => {
+				dropdown.addOption("manual", "Manual only (button in chat)");
+				dropdown.addOption("end-of-chat", "Automatically at end of chat");
+				dropdown.setValue(mem.extractionTrigger ?? "manual");
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.memorySettings.extractionTrigger =
+						value as "manual" | "end-of-chat";
+					await this.plugin.saveSettings();
+				});
+			});
+
+		const recallItems = this.addSettingGroup(el, "Recall");
+
+		new Setting(recallItems)
+			.setName("Recalled memories per query")
+			.setDesc("How many memory chunks to retrieve and inject as context before each message (1–10).")
+			.addSlider((slider) => {
+				slider
+					.setLimits(1, 10, 1)
+					.setValue(mem.recallTopK ?? 5)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.memorySettings.recallTopK = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		const folderItems = this.addSettingGroup(el, "Storage");
+
+		const root = this.plugin.settings.rootVaultFolder || "AI";
+		folderItems.createDiv({
+			cls: "setting-item-description",
+			text:
+				`Memories are stored in your vault under:\n` +
+				`  ${root}/Memories/           (global — always recalled)\n` +
+				`  ${root}/Assistants/<name>/memories/  (recalled when assistant is active)\n` +
+				`  ${root}/Projects/<name>/memories/    (recalled when project is active)\n\n` +
+				`Files are plain Markdown — you can read, edit, and delete them directly in Obsidian.`,
+		});
 	}
 
 	// ── Helpers ────────────────────────────────────────────────────────────────

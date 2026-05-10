@@ -83,6 +83,13 @@ export interface LLMPluginSettings {
 	showStatusBarButton: boolean;
 	ragSettings: RAGSettings;
 	skillsSettings: SkillsSettings;
+	/**
+	 * Root vault folder for all AI feature data (default "AI").
+	 * Skills live at <rootVaultFolder>/Skills/<skill-name>/SKILL.md.
+	 * Future features (Assistants, Projects, Memories, Chats) will also
+	 * live under this root.
+	 */
+	rootVaultFolder: string;
 }
 
 const defaultSettings = {
@@ -167,9 +174,9 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		indexedFileCount: 0,
 	},
 	skillsSettings: {
-		folder: "LLM-Skills",
 		enabledSkills: {},
 	},
+	rootVaultFolder: "AI",
 };
 
 export default class LLMPlugin extends Plugin {
@@ -207,7 +214,7 @@ export default class LLMPlugin extends Plugin {
 		this.skillRegistry = new SkillRegistry(this.app);
 		// Skills are in the vault — wait for the vault to finish loading before scanning
 		this.app.workspace.onLayoutReady(async () => {
-			await this.skillRegistry.setFolder(this.settings.skillsSettings.folder);
+			await this.skillRegistry.setFolder(this.skillsFolder);
 			this.registerSkillVaultEvents();
 		});
 		this.registerOllamaModels();
@@ -418,11 +425,19 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	/**
+	 * Derived path to the Skills folder: "<rootVaultFolder>/Skills".
+	 * All code that needs the skills folder path should use this getter.
+	 */
+	get skillsFolder(): string {
+		return (this.settings.rootVaultFolder || "AI") + "/Skills";
+	}
+
+	/**
 	 * Re-initialise the SkillRegistry from current settings.
-	 * Call after the skills folder setting changes.
+	 * Call after the root vault folder setting changes.
 	 */
 	async reinitSkillRegistry(): Promise<void> {
-		await this.skillRegistry.setFolder(this.settings.skillsSettings.folder);
+		await this.skillRegistry.setFolder(this.skillsFolder);
 	}
 
 	/**
@@ -622,15 +637,19 @@ export default class LLMPlugin extends Plugin {
 				...(dataJSON.ragSettings ?? {}),
 			};
 
-			// Deep-merge skillsSettings
+			// Deep-merge skillsSettings (folder field removed — path now derived from rootVaultFolder)
 			this.settings.skillsSettings = {
 				...DEFAULT_SETTINGS.skillsSettings,
-				...(dataJSON.skillsSettings ?? {}),
 				enabledSkills: {
 					...DEFAULT_SETTINGS.skillsSettings.enabledSkills,
 					...(dataJSON.skillsSettings?.enabledSkills ?? {}),
 				},
 			};
+
+			// Ensure rootVaultFolder has a value (new field — may be absent in old saves)
+			if (!this.settings.rootVaultFolder) {
+				this.settings.rootVaultFolder = DEFAULT_SETTINGS.rootVaultFolder;
+			}
 
 			// Ensure emptyChatAvatar is a valid known value; fall back to default
 			// if the saved value is missing or was corrupted (e.g. from a partial write).

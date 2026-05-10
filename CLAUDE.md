@@ -186,7 +186,9 @@ All skills-related UI uses the `scroll-text` lucide icon (previously `wand-spark
 
 #### Settings persistence
 
-`LLMPluginSettings.skillsSettings: SkillsSettings` — deep-merged on load with defaults `{ folder: "LLM-Skills", enabledSkills: {} }`.
+`LLMPluginSettings.skillsSettings: SkillsSettings` — deep-merged on load with defaults `{ enabledSkills: {} }`. The skills folder is **not** stored in `skillsSettings`; it is derived as `plugin.skillsFolder` (getter): `plugin.settings.rootVaultFolder + "/Skills"`.
+
+`LLMPluginSettings.rootVaultFolder: string` — top-level setting (default `"AI"`) shared across all AI features. Skills live at `<rootVaultFolder>/Skills`. Future features (Assistants, Projects, Memories, Chats) will use `<rootVaultFolder>/<FeatureName>`. Configurable via Settings → General → "Root vault folder". After changing it, `plugin.reinitSkillRegistry()` is called to hot-reload from the new path.
 
 ### Key Files
 

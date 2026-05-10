@@ -2,7 +2,7 @@
  * SkillRegistry — discovers, parses, and hot-reloads SKILL.md files from a
  * configurable vault folder.
  *
- * Each skill lives at: <skillsFolder>/<skill-name>/SKILL.md
+ * Each skill lives at: <rootVaultFolder>/Skills/<skill-name>/SKILL.md (default: AI/Skills)
  *
  * NOTE: We use `vault.adapter` for all file I/O rather than `vault.getMarkdownFiles()`
  * because Obsidian does not always index plugin-adjacent or non-standard folders into
@@ -47,7 +47,7 @@ export interface ParsedSkill {
 
 export class SkillRegistry {
 	private skills: Map<string, ParsedSkill> = new Map();
-	private skillsFolder: string = "LLM-Skills";
+	private skillsFolder: string = "AI/Skills";
 
 	constructor(private app: App) {}
 
@@ -213,10 +213,10 @@ export class SkillRegistry {
 		};
 	}
 
-	/** Derive a skill id from its SKILL.md path. E.g. "LLM-Skills/my-skill/SKILL.md" → "my-skill". */
+	/** Derive a skill id from its SKILL.md path. E.g. "AI/Skills/my-skill/SKILL.md" → "my-skill". */
 	private static idFromPath(filePath: string, skillsFolder: string): string | null {
-		// filePath: LLM-Skills/my-skill/SKILL.md
-		// prefix:   LLM-Skills/
+		// filePath: AI/Skills/my-skill/SKILL.md
+		// prefix:   AI/Skills/
 		const prefix = skillsFolder.endsWith("/") ? skillsFolder : skillsFolder + "/";
 		if (!filePath.startsWith(prefix)) return null;
 		const relative = filePath.slice(prefix.length); // "my-skill/SKILL.md"

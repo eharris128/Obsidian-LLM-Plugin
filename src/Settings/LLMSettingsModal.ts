@@ -344,6 +344,24 @@ export class LLMSettingsModal extends Modal {
 					await this.plugin.saveSettings();
 				});
 			});
+
+		// Root vault folder
+		new Setting(items)
+			.setName("Root vault folder")
+			.setDesc(
+				"Vault folder used as the root for all AI feature data. " +
+				"Skills live at <root>/Skills, with future features (Assistants, Projects, Memories, Chats) " +
+				"following the same pattern."
+			)
+			.addText((text) => {
+				text.setPlaceholder("AI");
+				text.setValue(this.plugin.settings.rootVaultFolder ?? "AI");
+				text.onChange(async (value) => {
+					this.plugin.settings.rootVaultFolder = value.trim() || "AI";
+					await this.plugin.saveSettings();
+					await this.plugin.reinitSkillRegistry();
+				});
+			});
 	}
 
 	private renderInterface() {
@@ -864,30 +882,20 @@ export class LLMSettingsModal extends Modal {
 		const el = this.mainContentEl;
 		this.addTabHeader(el, "Skills");
 
-		const rag = this.plugin.settings.skillsSettings ?? { folder: "LLM-Skills", enabledSkills: {} };
+		const skillsFolder = this.plugin.skillsFolder;
 
-		new Setting(el)
-			.setName("Skills folder")
-			.setDesc(
-				"Vault-root-relative folder where skill sub-folders live. " +
-				"Each skill should have its own sub-folder with a SKILL.md file."
-			)
-			.addText((text) => {
-				text.setPlaceholder("LLM-Skills");
-				text.setValue(rag.folder ?? "LLM-Skills");
-				text.onChange(async (value) => {
-					this.plugin.settings.skillsSettings.folder = value.trim() || "LLM-Skills";
-					await this.plugin.saveSettings();
-					await this.plugin.reinitSkillRegistry();
-				});
-			});
+		// Read-only info: show where skills are expected, linking to root folder setting
+		el.createDiv({
+			cls: "setting-item-description",
+			text: `Skills are loaded from "${skillsFolder}". To change the root, update the Root vault folder in General settings.`,
+		});
 
 		// Show the skills discovered in the current folder
 		const skills = this.plugin.skillRegistry?.getSkills() ?? [];
 		if (skills.length === 0) {
 			el.createDiv({
 				cls: "setting-item-description",
-				text: `No skills found in "${rag.folder ?? "LLM-Skills"}". Create sub-folders with SKILL.md files to get started.`,
+				text: `No skills found in "${skillsFolder}". Create a sub-folder with a SKILL.md file to add one (e.g. "${skillsFolder}/my-skill/SKILL.md").`,
 			});
 			return;
 		}

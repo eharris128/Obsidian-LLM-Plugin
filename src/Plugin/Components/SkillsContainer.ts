@@ -24,7 +24,7 @@ export class SkillsContainer {
 		this.resetSkills(parentContainer);
 
 		const skills = this.plugin.skillRegistry?.getSkills() ?? [];
-		const folder = this.plugin.settings.skillsSettings?.folder ?? "LLM-Skills";
+		const skillsFolder = this.plugin.skillsFolder;
 
 		// Header row
 		const headerRow = parentContainer.createDiv({ cls: "llm-skills-header" });
@@ -34,13 +34,13 @@ export class SkillsContainer {
 		});
 		headerRow.createSpan({
 			cls: "llm-skills-folder-hint",
-			text: folder,
+			text: skillsFolder,
 		});
 
 		if (skills.length === 0) {
 			parentContainer.createDiv({
 				cls: "llm-skills-empty",
-				text: `No skills found. Add SKILL.md files inside vault folder: ${folder}`,
+				text: `No skills found. Add SKILL.md files inside vault folder: ${skillsFolder}`,
 			});
 			return;
 		}

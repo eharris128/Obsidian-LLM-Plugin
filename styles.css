@@ -331,9 +331,54 @@ button.llm-send-button:disabled {
 	display: flex;
 }
 
+/* Wrapper that stacks the mirror div and textarea on top of each other */
+.llm-prompt-wrapper {
+	position: relative;
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
 .llm-input-section textarea {
 	flex: 1;
 	min-width: 0;
+}
+
+/* Mirror overlay — rendered on top of the textarea (pointer-events:none).
+   Copies the textarea's text, but the skill prefix span is accent-colored. */
+.llm-input-mirror {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	pointer-events: none;
+	white-space: pre-wrap;
+	word-wrap: break-word;
+	overflow-y: auto;
+	overflow-x: hidden;
+	box-sizing: border-box;
+	color: var(--text-normal);
+	background: transparent;
+	border: 1px solid transparent; /* match textarea border thickness */
+	z-index: 1;
+}
+
+/* Accent color for the leading "/skill-id " portion */
+.llm-skill-prefix {
+	color: var(--interactive-accent);
+}
+
+/* The rest of the message text in the mirror (normal color) */
+.llm-mirror-rest {
+	color: var(--text-normal);
+}
+
+/* When the mirror is active, hide the textarea's text (keep caret visible) */
+textarea.llm-input-with-mirror {
+	color: transparent !important;
+	caret-color: var(--text-normal) !important;
 }
 
 .llm-input-toolbar {

@@ -1518,7 +1518,17 @@ export class ChatContainer {
 		const inputSection = promptContainer.createDiv();
 		inputSection.addClass("llm-input-section");
 
-		const promptField = new TextAreaComponent(inputSection);
+		// Wrapper for the textarea + mirror overlay (accent-colored skill prefix).
+		const promptWrapper = inputSection.createDiv();
+		promptWrapper.addClass("llm-prompt-wrapper");
+
+		// Mirror div — overlays the textarea with styled text. pointer-events:none
+		// keeps it invisible to mouse/keyboard so the real textarea handles all input.
+		const mirrorDiv = promptWrapper.createDiv();
+		mirrorDiv.addClass("llm-input-mirror");
+		mirrorDiv.style.display = "none";
+
+		const promptField = new TextAreaComponent(promptWrapper);
 		promptField.inputEl.className = classNames[this.viewType]["text-area"];
 		promptField.inputEl.id = "chat-prompt-text-area";
 		promptField.inputEl.tabIndex = 0;
@@ -1621,6 +1631,7 @@ export class ChatContainer {
 			const newVal = `/${skill.id} ${after}`;
 			promptField.setValue(newVal);
 			this.prompt = newVal;
+			syncMirror(newVal);
 			// updateSendButton is defined later in this closure — safe to call at runtime
 			updateSendButton(newVal);
 			hideSlashMenu();
@@ -1629,6 +1640,39 @@ export class ChatContainer {
 			const cursorPos = skill.id.length + 2;
 			promptField.inputEl.setSelectionRange(cursorPos, cursorPos);
 		};
+
+		// Mirror overlay — renders the skill prefix in accent color.
+		// When active: mirror is shown, textarea text is made transparent so only
+		// the mirror is visible, but the real textarea still handles all input/focus.
+		const syncMirror = (value: string) => {
+			// Match a leading "/skill-id " (slash + alphanumeric/dash/underscore + space)
+			const match = value.match(/^(\/[a-zA-Z0-9_-]+ )([\s\S]*)$/);
+			if (match) {
+				const prefix = match[1];
+				const rest = match[2];
+				mirrorDiv.empty();
+				const prefixSpan = mirrorDiv.createSpan({ cls: "llm-skill-prefix" });
+				prefixSpan.textContent = prefix;
+				const restSpan = mirrorDiv.createSpan({ cls: "llm-mirror-rest" });
+				restSpan.textContent = rest;
+				// Trailing sentinel keeps last-line height correct when rest ends in \n
+				mirrorDiv.createSpan().textContent = "​";
+				mirrorDiv.style.display = "";
+				promptField.inputEl.addClass("llm-input-with-mirror");
+				// Keep mirror scroll in sync
+				mirrorDiv.scrollTop = promptField.inputEl.scrollTop;
+			} else {
+				mirrorDiv.style.display = "none";
+				promptField.inputEl.removeClass("llm-input-with-mirror");
+			}
+		};
+
+		// Sync mirror scroll whenever the textarea scrolls
+		promptField.inputEl.addEventListener("scroll", () => {
+			if (mirrorDiv.style.display !== "none") {
+				mirrorDiv.scrollTop = promptField.inputEl.scrollTop;
+			}
+		});
 
 		// Bottom toolbar: model selector (left) + send button (right)
 		const toolbarSection = promptContainer.createDiv();
@@ -1716,30 +1760,28 @@ export class ChatContainer {
 			if (skills.length > 0) {
 				menu.addItem((item) => {
 					item.setTitle("Add a skill")
-						.setIcon("scroll-text")
-						.onClick((skillEvt: MouseEvent | KeyboardEvent) => {
-							const skillsMenu = new Menu();
-							for (const skill of skills) {
-								skillsMenu.addItem((si) => {
-									si.setTitle(skill.name)
-										.setIcon("scroll-text")
-										.onClick(() => {
-											// Insert /skill-id into the textarea
-											const raw = promptField.getValue();
-											// Strip any existing slash prefix first
-											const after = raw.replace(/^\/[a-zA-Z0-9_-]*\s*/, "");
-											const newVal = `/${skill.id} ${after}`;
-											promptField.setValue(newVal);
-											this.prompt = newVal;
-											updateSendButton(newVal);
-											promptField.inputEl.focus();
-											const cursorPos = skill.id.length + 2;
-											promptField.inputEl.setSelectionRange(cursorPos, cursorPos);
-										});
+						.setIcon("scroll-text");
+					// setSubmenu() is available at runtime in Obsidian 1.4+ but not
+					// reflected in the TypeScript types — cast to any to access it.
+					const submenu = (item as any).setSubmenu() as Menu;
+					for (const skill of skills) {
+						submenu.addItem((si) => {
+							si.setTitle(skill.name)
+								.setIcon("scroll-text")
+								.onClick(() => {
+									const raw = promptField.getValue();
+									const after = raw.replace(/^\/[a-zA-Z0-9_-]*\s*/, "");
+									const newVal = `/${skill.id} ${after}`;
+									promptField.setValue(newVal);
+									this.prompt = newVal;
+									syncMirror(newVal);
+									updateSendButton(newVal);
+									promptField.inputEl.focus();
+									const cursorPos = skill.id.length + 2;
+									promptField.inputEl.setSelectionRange(cursorPos, cursorPos);
 								});
-							}
-							skillsMenu.showAtMouseEvent(skillEvt as MouseEvent);
 						});
+					}
 				});
 			}
 
@@ -1861,6 +1903,7 @@ export class ChatContainer {
 			} else {
 				hideSlashMenu();
 			}
+			syncMirror(value);
 		});
 
 		const clearPromptField = () => {
@@ -1869,6 +1912,7 @@ export class ChatContainer {
 			// read it after clearPromptField fires. historyPush (success) and
 			// the catch block (error) both clear this.prompt when the call ends.
 			promptField.setValue("");
+			syncMirror("");
 			updateSendButton("");
 		};
 
@@ -1925,6 +1969,21 @@ export class ChatContainer {
 				this.scanButton?.buttonEl.addClass("is-active");
 			}
 		}
+
+		// Copy textarea metrics to the mirror once the browser has laid out the element,
+		// so the mirror text renders pixel-for-pixel on top of the textarea text.
+		requestAnimationFrame(() => {
+			const cs = getComputedStyle(promptField.inputEl);
+			mirrorDiv.style.paddingTop = cs.paddingTop;
+			mirrorDiv.style.paddingRight = cs.paddingRight;
+			mirrorDiv.style.paddingBottom = cs.paddingBottom;
+			mirrorDiv.style.paddingLeft = cs.paddingLeft;
+			mirrorDiv.style.fontSize = cs.fontSize;
+			mirrorDiv.style.fontFamily = cs.fontFamily;
+			mirrorDiv.style.lineHeight = cs.lineHeight;
+			mirrorDiv.style.letterSpacing = cs.letterSpacing;
+			mirrorDiv.style.wordSpacing = cs.wordSpacing;
+		});
 
 		// Restore any chips that were persisted in settings before this session
 		this.syncChips();

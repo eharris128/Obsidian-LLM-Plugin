@@ -955,6 +955,7 @@ export class LLMSettingsModal extends Modal {
 								enabled: false,
 								extractionTrigger: "manual",
 								recallTopK: 5,
+								recallAlways: false,
 							};
 						}
 						this.plugin.settings.memorySettings.enabled = value;
@@ -977,26 +978,43 @@ export class LLMSettingsModal extends Modal {
 		const extractionItems = this.addSettingGroup(el, "Extraction");
 
 		new Setting(extractionItems)
-			.setName("Extraction trigger")
+			.setName("Auto-extract at end of chat")
 			.setDesc(
-				"When to extract and save memories from conversations."
+				"When enabled, memories are automatically extracted from the conversation " +
+				"when you start a new chat. When disabled, use the download button in the " +
+				"chat toolbar to extract manually."
 			)
-			.addDropdown((dropdown) => {
-				dropdown.addOption("manual", "Manual only (button in chat)");
-				dropdown.addOption("end-of-chat", "Automatically at end of chat");
-				dropdown.setValue(mem.extractionTrigger ?? "manual");
-				dropdown.onChange(async (value) => {
-					this.plugin.settings.memorySettings.extractionTrigger =
-						value as "manual" | "end-of-chat";
-					await this.plugin.saveSettings();
-				});
+			.addToggle((toggle) => {
+				toggle
+					.setValue((mem.extractionTrigger ?? "manual") === "end-of-chat")
+					.onChange(async (value) => {
+						this.plugin.settings.memorySettings.extractionTrigger =
+							value ? "end-of-chat" : "manual";
+						await this.plugin.saveSettings();
+					});
 			});
 
 		const recallItems = this.addSettingGroup(el, "Recall");
 
 		new Setting(recallItems)
+			.setName("Always recall memories")
+			.setDesc(
+				"When enabled, memory recall is active by default in every conversation — " +
+				"no need to click the brain button each time. " +
+				"You can still toggle it off per-conversation in the chat toolbar."
+			)
+			.addToggle((toggle) => {
+				toggle
+					.setValue(mem.recallAlways ?? false)
+					.onChange(async (value) => {
+						this.plugin.settings.memorySettings.recallAlways = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(recallItems)
 			.setName("Recalled memories per query")
-			.setDesc("How many memory chunks to retrieve and inject as context before each message (1–10).")
+			.setDesc("How many memories to retrieve and inject as context before each message (1–10).")
 			.addSlider((slider) => {
 				slider
 					.setLimits(1, 10, 1)

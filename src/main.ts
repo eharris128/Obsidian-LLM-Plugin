@@ -183,6 +183,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		enabled: false,
 		extractionTrigger: "manual" as const,
 		recallTopK: 5,
+		recallAlways: false,
 	},
 	rootVaultFolder: "AI",
 };

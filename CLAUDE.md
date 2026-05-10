@@ -237,8 +237,13 @@ Before each send in `handleGenerateClick`, `MemoryService.recall()` searches the
 
 `LLMPluginSettings.memorySettings: MemorySettings` — deep-merged on load:
 - `enabled: boolean` — gates the entire feature (requires RAG to be enabled for recall).
-- `extractionTrigger: "end-of-chat" | "manual"` — when to run extraction.
+- `extractionTrigger: "end-of-chat" | "manual"` — when to run extraction; surfaced as a toggle in the Memory settings tab.
 - `recallTopK: number` — how many memory chunks to inject per send.
+- `recallAlways: boolean` — when true, `useMemory` initialises as `true` in every new `ChatContainer` and resets to `true` on `newChat()`, making recall opt-out rather than opt-in.
+
+#### /remember command
+
+Typing `/remember [content]` in the chat input saves that exact string as a `fact` memory without a model call. The command is intercepted in `handleGenerateClick` before skill resolution. A confirmation message is shown in the chat. Also accessible via the `+` button menu as "Save a memory…" (only visible when memory is enabled). Duplicate check still runs — if the content is semantically similar to an existing memory it is skipped with a "already in memory" response.
 
 #### UI integration in ChatContainer
 

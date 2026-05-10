@@ -118,6 +118,40 @@ export class MemoryService {
 		return name ?? scope;
 	}
 
+	// ── Direct save (user-supplied content) ─────────────────────────────────────
+
+	/**
+	 * Save a single user-supplied string as a memory without a model call.
+	 * Used by the /remember command. Skips dedup check and writes immediately.
+	 *
+	 * @returns The file path written, or null if the write failed.
+	 */
+	async saveDirectly(
+		content: string,
+		type: MemoryType = "fact",
+		scope: MemoryScope = "global",
+		scopeName?: string,
+	): Promise<string | null> {
+		const folder = this.folderForScope(scope, scopeName);
+		await this.ensureFolder(folder);
+
+		// Still check for duplicates so repeated /remember calls don't pile up
+		const isDuplicate = await this.isDuplicate(content, folder);
+		if (isDuplicate) {
+			console.log(`[Memory] /remember duplicate skipped: "${content.slice(0, 60)}"`);
+			return null;
+		}
+
+		const id = crypto.randomUUID();
+		const created = new Date().toISOString();
+		const source = this.sourceLabel(scope, scopeName);
+		const fileContent = `---\ncreated: ${created}\nsource: ${source}\ntype: ${type}\n---\n\n${content}\n`;
+		const filePath = `${folder}/${id}.md`;
+		await this.app.vault.adapter.write(filePath, fileContent);
+		console.log(`[Memory] Direct save: ${filePath}`);
+		return filePath;
+	}
+
 	// ── Extraction ──────────────────────────────────────────────────────────────
 
 	/**

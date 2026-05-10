@@ -182,6 +182,12 @@ export type MemorySettings = {
 	extractionTrigger: "end-of-chat" | "manual";
 	/** How many recalled memory chunks to inject as system context before each send. */
 	recallTopK: number;
+	/**
+	 * When true, memory recall is active by default in every new conversation
+	 * (equivalent to the brain button starting as enabled).
+	 * When false (default), the user must toggle recall on per-conversation.
+	 */
+	recallAlways: boolean;
 };
 
 export type RAGSettings = {

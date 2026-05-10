@@ -184,6 +184,12 @@ export class ChatContainer {
 		this.boundUpdateMessages = this.updateMessages.bind(this);
 		this.messageStore.subscribe(this.boundUpdateMessages);
 		this.contextBuilder = new ContextBuilder(this.plugin.app);
+		// Honour the "always recall" setting so the brain button starts active
+		// when the user has opted in globally.
+		this.useMemory = !!(
+			this.plugin.settings.memorySettings?.enabled &&
+			this.plugin.settings.memorySettings?.recallAlways
+		);
 	}
 
 	/**
@@ -825,6 +831,55 @@ export class ChatContainer {
 				}
 			}
 		}
+
+		// ── /remember built-in command ───────────────────────────────────────────
+		// Intercept "/remember [content]" before skill resolution.
+		// Saves the content directly as a memory without a model call.
+		const rememberMatch = this.prompt.match(/^\/remember\s+([\s\S]+)/);
+		if (rememberMatch) {
+			const content = rememberMatch[1].trim();
+			header.enableButtons();
+			sendButton.setDisabled(false);
+
+			if (!this.plugin.memoryService) {
+				new Notice("Memory is not enabled. Enable it in Settings → Memory.");
+				return;
+			}
+			if (!content) {
+				new Notice("Usage: /remember [what to remember]");
+				return;
+			}
+
+			// Show the user's message in the chat
+			this.messageStore.addMessage({ role: "user" as const, content: this.prompt });
+			await this.renderingPromise;
+			this.setDiv(true);
+
+			try {
+				const filePath = await this.plugin.memoryService.saveDirectly(content);
+				const response = filePath
+					? `✓ Saved to memory: "${content}"`
+					: `This is already in my memory: "${content}"`;
+
+				await MarkdownRenderer.render(
+					this.plugin.app,
+					response,
+					this.streamingDiv,
+					"",
+					this.plugin
+				);
+				this.messageStore.addMessage({ role: assistant, content: response });
+			} catch (e) {
+				console.error("[Memory] /remember save failed:", e);
+				new Notice("Failed to save memory — see console for details.");
+			}
+
+			this.prompt = "";
+			this.pendingContextString = null;
+			this.loadingDivContainer.querySelector(".llm-assistant-buttons")?.removeClass("llm-hide");
+			return;
+		}
+		// ── End /remember ────────────────────────────────────────────────────────
 
 		// ── Skill resolution ────────────────────────────────────────────────────
 		// 1. Check for /skill-name prefix in the prompt (slash invocation).
@@ -1866,6 +1921,23 @@ export class ChatContainer {
 					});
 			});
 
+			// "Save a memory" shortcut — only when memory is enabled
+			if (this.plugin.settings.memorySettings?.enabled && this.plugin.memoryService) {
+				menu.addItem((item) => {
+					item.setTitle("Save a memory")
+						.setIcon("brain")
+						.onClick(() => {
+							const newVal = "/remember ";
+							promptField.setValue(newVal);
+							this.prompt = newVal;
+							syncMirror(newVal);
+							updateSendButton(newVal);
+							promptField.inputEl.focus();
+							promptField.inputEl.setSelectionRange(newVal.length, newVal.length);
+						});
+				});
+			}
+
 			if (skills.length > 0) {
 				menu.addItem((item) => {
 					item.setTitle("Add a skill")
@@ -2830,6 +2902,14 @@ export class ChatContainer {
 		}
 
 		this.syncChips();
+
+		// Re-apply the always-recall preference for the new conversation,
+		// then sync the brain button's visual state to match.
+		this.useMemory = !!(
+			this.plugin.settings.memorySettings?.enabled &&
+			this.plugin.settings.memorySettings?.recallAlways
+		);
+		this.memoryButton?.buttonEl.toggleClass("is-active", this.useMemory);
 	}
 }
 

@@ -7,6 +7,7 @@ import {
 	Notice,
 	setIcon,
 	TextAreaComponent,
+	TFile,
 } from "obsidian";
 import { ChatCompletionChunk } from "openai/resources";
 import { Stream } from "openai/streaming";
@@ -820,6 +821,7 @@ export class ChatContainer {
 		this.activeSkillId = null;
 		let skillInstructions: string | null = null;
 		let skillAllowedTools: string[] = [];
+		let activeSkillDisableModelInvocation = false;
 
 		const slashMatch = this.prompt.match(/^\/([a-zA-Z0-9_-]+)\s*/);
 		if (slashMatch) {
@@ -827,11 +829,19 @@ export class ChatContainer {
 			const skill = this.plugin.skillRegistry?.getSkill(slashId);
 			if (skill) {
 				this.activeSkillId = skill.id;
+				// Capture args — everything after "/skill-id " — before stripping prefix.
+				const args = this.prompt.slice(slashMatch[0].length).trim();
 				// Strip the /skill-name prefix from the prompt so the model
 				// doesn't see it as part of the user's message.
-				this.prompt = this.prompt.slice(slashMatch[0].length).trim();
-				skillInstructions = skill.instructions || null;
+				this.prompt = args;
+				// Substitute {{args}} in the skill instructions with the captured argument text.
+				let instructions = skill.instructions || null;
+				if (instructions && args) {
+					instructions = instructions.replace(/\{\{args\}\}/g, args);
+				}
+				skillInstructions = instructions;
 				skillAllowedTools = skill.allowedTools;
+				activeSkillDisableModelInvocation = skill.disableModelInvocation;
 			}
 		}
 
@@ -882,6 +892,36 @@ export class ChatContainer {
 		).length;
 		try {
 			this.previewText = "";
+
+			// Pure-prompt skill: render the skill instructions directly as the
+			// assistant reply — no API call is made.
+			if (activeSkillDisableModelInvocation && modelEndpoint !== images) {
+				const response =
+					skillInstructions ??
+					`*(Skill **${this.activeSkillId}** applied — no instruction body defined)*`;
+				this.previewText = response;
+				this.setDiv(true);
+				await MarkdownRenderer.render(
+					this.plugin.app,
+					response,
+					this.streamingDiv,
+					"",
+					this.plugin
+				);
+				this.messageStore.addMessage({ role: assistant, content: response });
+				if (this.activeSkillId) {
+					this.allSkillsByTurn.set(preTurnAssistantCount, this.activeSkillId);
+				}
+				this.pendingContextString = null;
+				this.activeSkillId = null;
+				header.enableButtons();
+				sendButton.setDisabled(false);
+				this.loadingDivContainer
+					.querySelector(".llm-assistant-buttons")
+					?.removeClass("llm-hide");
+				return;
+			}
+
 			if (modelEndpoint !== images) {
 				if (this.supportsAgentMode(modelType)) {
 					await this.runAgentMode(
@@ -1594,10 +1634,34 @@ export class ChatContainer {
 				setIcon(iconEl, "scroll-text");
 
 				const textEl = item.createDiv({ cls: "llm-slash-menu-item-text" });
-				textEl.createDiv({ cls: "llm-slash-menu-item-name", text: skill.name });
+
+				// Name + optional argument hint on the same line
+				const nameRow = textEl.createDiv({ cls: "llm-slash-menu-item-name-row" });
+				nameRow.createSpan({ cls: "llm-slash-menu-item-name", text: skill.name });
+				if (skill.argumentHint) {
+					nameRow.createSpan({
+						cls: "llm-slash-menu-item-hint",
+						text: " " + skill.argumentHint,
+					});
+				}
+
 				if (skill.description) {
 					textEl.createDiv({ cls: "llm-slash-menu-item-desc", text: skill.description });
 				}
+
+				// Edit button — opens the SKILL.md file in Obsidian
+				const editBtn = item.createSpan({ cls: "llm-slash-menu-item-edit" });
+				setIcon(editBtn, "pencil");
+				editBtn.setAttr("aria-label", "Edit skill");
+				editBtn.addEventListener("mousedown", (e: MouseEvent) => {
+					e.preventDefault();
+					e.stopPropagation();
+					hideSlashMenu();
+					const file = this.plugin.app.vault.getAbstractFileByPath(skill.filePath);
+					if (file instanceof TFile) {
+						this.plugin.app.workspace.getLeaf(false).openFile(file);
+					}
+				});
 
 				item.addEventListener("mousedown", (e: MouseEvent) => {
 					e.preventDefault(); // keep textarea focused

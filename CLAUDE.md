@@ -137,8 +137,9 @@ argument-hint: "[target-note]"
 ```
 
 - **`allowed-tools`**: restricts which ObsidianToolRegistry tools the AgentLoop can call. Empty = all tools allowed.
-- **`disable-model-invocation`**: parsed but not yet enforced (reserved for future pure-prompt skills).
-- **`argument-hint`**: shown in the Skills tab badge next to the slash command.
+- **`disable-model-invocation`**: when `true`, the skill's instruction body is rendered directly as the assistant reply — no API call is made. Useful for template/canned-response skills.
+- **`argument-hint`**: displayed grayed-out next to the skill name in the slash picker (e.g., `[target-note]`).
+- **`{{args}}` substitution**: any `{{args}}` placeholder in the instruction body is replaced at send time with the text typed after the skill prefix (e.g., `/summarize-note My Note` → `{{args}}` becomes `"My Note"`). Applies to slash-invoked skills only (globally-enabled skills have no per-message args).
 
 #### Key files
 
@@ -159,6 +160,8 @@ Three ways to activate a skill:
 - `ChatContainer.slashMenuEl` — the floating menu div, mounted on `document.body` with `position: fixed`. Stored as an instance variable so each `ChatContainer` only removes its own previous menu (not other views' menus). Cleaned up in `destroy()`.
 - Menu is positioned via `requestAnimationFrame` after layout, using `promptContainer.getBoundingClientRect()` to compute `top = rect.top - menuHeight - 6px`.
 - Do NOT use `document.querySelectorAll(".llm-slash-menu").forEach(el => el.remove())` — this would destroy other views' menus.
+- Each item shows: icon | name + argument hint (`.llm-slash-menu-item-hint`, grayed out) | description | edit pencil button.
+- The edit button uses `stopPropagation()` on its `mousedown` to prevent the parent item's selection handler from firing. It opens the skill's `SKILL.md` via `app.workspace.getLeaf(false).openFile(file)`.
 
 #### Skill call display in chat UI and chat files
 

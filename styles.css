@@ -1819,12 +1819,30 @@ details[open] .llm-tool-calls-chevron {
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
+	flex: 1;
+}
+
+/* Row containing skill name + argument hint */
+.llm-slash-menu-item-name-row {
+	display: flex;
+	align-items: baseline;
+	min-width: 0;
+	overflow: hidden;
 }
 
 .llm-slash-menu-item-name {
 	font-size: var(--font-ui-small);
 	font-weight: var(--font-semibold);
 	color: var(--text-normal);
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+/* Argument hint — grayed out, shown next to the name */
+.llm-slash-menu-item-hint {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-normal);
+	color: var(--text-faint);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1836,4 +1854,30 @@ details[open] .llm-tool-calls-chevron {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* Edit (pencil) icon on each slash menu item — hidden until hover */
+.llm-slash-menu-item-edit {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 24px;
+	height: 24px;
+	border-radius: var(--radius-s);
+	color: var(--text-faint);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.1s ease, color 0.1s ease, background 0.1s ease;
+	--icon-size: var(--icon-xs);
+}
+
+.llm-slash-menu-item:hover .llm-slash-menu-item-edit,
+.llm-slash-menu-item-selected .llm-slash-menu-item-edit {
+	opacity: 1;
+}
+
+.llm-slash-menu-item-edit:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
 }

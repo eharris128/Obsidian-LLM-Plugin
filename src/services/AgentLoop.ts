@@ -40,6 +40,10 @@ export class AgentLoop {
 	 * model. An empty array means "all tools allowed" (no restriction).
 	 */
 	private allowedTools: string[];
+	/** Tools that are permanently disabled in Settings → Tools and never offered to the model. */
+	private disabledTools: string[];
+	/** Maximum tool-call/execute cycles per agent turn before the loop stops. */
+	private maxToolCalls: number;
 
 	constructor(
 		private app: App,
@@ -47,16 +51,23 @@ export class AgentLoop {
 		private showPermissionUI: ShowPermissionUI,
 		vaultIndexer?: VaultIndexer | null,
 		allowedTools?: string[],
+		disabledTools?: string[],
+		maxToolCalls?: number,
 	) {
 		this.registry = new ObsidianToolRegistry(app, vaultIndexer ?? undefined);
 		this.allowedTools = allowedTools ?? [];
+		this.disabledTools = disabledTools ?? [];
+		this.maxToolCalls = maxToolCalls ?? 10;
 	}
 
-	/** Return registry tools, filtered by allowedTools when a skill is active. */
+	/** Return registry tools, filtered by allowedTools (skill restriction) and disabledTools (settings). */
 	private getFilteredTools(): ReturnType<ObsidianToolRegistry["getTools"]> {
 		const all = this.registry.getTools();
-		if (this.allowedTools.length === 0) return all;
-		return all.filter((t) => this.allowedTools.includes(t.name));
+		return all.filter((t) => {
+			if (this.disabledTools.includes(t.name)) return false;
+			if (this.allowedTools.length > 0 && !this.allowedTools.includes(t.name)) return false;
+			return true;
+		});
 	}
 
 	// ---------------------------------------------------------------------------
@@ -105,6 +116,7 @@ export class AgentLoop {
 		let fullText = "";
 		let firstCall = true;
 		const toolSummaries: string[] = [];
+		let toolCallCount = 0;
 
 		while (true) {
 			if (!firstCall) callbacks.onThinking();
@@ -175,6 +187,14 @@ export class AgentLoop {
 			}
 
 			if (stopReason !== "tool_use") break;
+			if (toolCallCount >= this.maxToolCalls) {
+				// Synthesize a stop notice so the user knows why the agent halted.
+				if (fullText === "") {
+					fullText = `Agent stopped after reaching the maximum of ${this.maxToolCalls} tool call(s). You can raise this limit in Settings → Tools.`;
+					callbacks.onChunk(fullText);
+				}
+				break;
+			}
 
 			// Execute tool calls and collect results
 			const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -198,6 +218,7 @@ export class AgentLoop {
 
 			messages.push({ role: "assistant", content: assistantContent });
 			messages.push({ role: "user", content: toolResults });
+			toolCallCount++;
 		}
 
 		// If the model never produced any text (e.g. it only called tools and
@@ -232,6 +253,7 @@ export class AgentLoop {
 		let fullText = "";
 		let firstCall = true;
 		const toolSummaries: string[] = [];
+		let toolCallCount = 0;
 
 		while (true) {
 			if (!firstCall) callbacks.onThinking();
@@ -288,6 +310,13 @@ export class AgentLoop {
 
 			const toolCalls = Object.values(toolCallsAcc);
 			if (finishReason !== "tool_calls" || toolCalls.length === 0) break;
+			if (toolCallCount >= this.maxToolCalls) {
+				if (fullText === "") {
+					fullText = `Agent stopped after reaching the maximum of ${this.maxToolCalls} tool call(s). You can raise this limit in Settings → Tools.`;
+					callbacks.onChunk(fullText);
+				}
+				break;
+			}
 
 			// Build the assistant message (required before tool result messages)
 			const assistantMsg: OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam = {
@@ -321,6 +350,7 @@ export class AgentLoop {
 
 			messages.push(assistantMsg);
 			messages.push(...toolResults);
+			toolCallCount++;
 		}
 
 		// If the model never produced any text (e.g. it only called tools and

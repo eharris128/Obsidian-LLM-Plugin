@@ -1555,6 +1555,28 @@ button.llm-permission-allow {
 	border-inline-end: var(--border-width) solid var(--divider-color);
 }
 
+/* The modal is pinned via fixed top/bottom, but .modal-content and the flex
+   container must explicitly fill that height — otherwise flex children can
+   grow unbounded and overflow-y never activates. */
+.llm-dedicated-settings-modal .modal-content {
+	height: 100%;
+	overflow: hidden;
+}
+
+.llm-dedicated-settings-modal .vertical-tabs-container {
+	height: 100%;
+	overflow: hidden;
+}
+
+/* Allow the content pane to scroll independently when tab content is taller
+   than the modal. min-height: 0 is required so a flex child can shrink below
+   its content size and let overflow-y kick in. */
+.llm-dedicated-settings-modal .vertical-tab-content-container {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+
 /* Tab section header — sits above the first setting-group card. */
 .llm-dedicated-settings-tab-header {
 	margin-bottom: var(--size-4-4);
@@ -1724,6 +1746,42 @@ details[open] .llm-tool-calls-chevron {
 	border-radius: var(--radius-s);
 	word-break: break-all;
 	white-space: pre-wrap;
+}
+
+/* ── Settings → Tools: risk tier badges and tool name code ───────────────── */
+
+.llm-tool-badge {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	vertical-align: middle;
+	line-height: 1.6;
+}
+
+.llm-tool-badge-safe {
+	background: hsla(var(--color-green-hsl), 0.15);
+	color: var(--color-green);
+}
+
+.llm-tool-badge-write {
+	background: hsla(var(--color-yellow-hsl), 0.15);
+	color: var(--color-yellow);
+}
+
+.llm-tool-badge-danger {
+	background: hsla(var(--color-red-hsl), 0.15);
+	color: var(--color-red);
+}
+
+.llm-tool-name-code {
+	margin-top: var(--size-4-1);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
 }
 
 /* ── Active skill indicator (shown above an assistant message) ────────────── */

@@ -1260,12 +1260,17 @@ export class ChatContainer {
 		const turnIndex = this.getMessages().filter((m) => m.role === assistant).length;
 		this.pendingToolCalls = [];
 
+		const disabledTools = this.plugin.settings.toolSettings?.disabledTools ?? [];
+		const maxToolCalls = this.plugin.settings.toolSettings?.maxToolCalls ?? 10;
+
 		const agentLoop = new AgentLoop(
 			this.plugin.app,
 			permissionMode,
 			this.showPermissionUI.bind(this),
 			this.plugin.vaultIndexer,
 			allowedTools.length > 0 ? allowedTools : undefined,
+			disabledTools,
+			maxToolCalls,
 		);
 
 		const callbacks: AgentCallbacks = {

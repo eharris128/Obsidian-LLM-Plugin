@@ -4,6 +4,8 @@ import { VaultIndexer } from "RAG/VaultIndexer";
 
 export interface NeutralToolDefinition {
 	name: string;
+	/** Short human-readable label shown in the Settings → Tools list. */
+	displayName: string;
 	description: string;
 	parameters: {
 		type: "object";
@@ -11,139 +13,155 @@ export interface NeutralToolDefinition {
 		required?: string[];
 	};
 	risk: RiskTier;
+	/** When true, a note is shown in Settings that this tool requires Vault Search (RAG). */
+	requiresRag?: boolean;
 }
 
 export type ToolResult = { success: boolean; result?: string; error?: string };
 
+/** Canonical list of all available tools. Exported so Settings can render the tool list. */
+export const ALL_TOOL_DEFINITIONS: NeutralToolDefinition[] = [
+	{
+		name: "obsidian_create_note",
+		displayName: "Create note",
+		description: "Create a new note in the vault with the given path and content.",
+		parameters: {
+			type: "object",
+			properties: {
+				path: { type: "string", description: "File path relative to vault root, e.g. 'Notes/meeting.md'. Must end in .md." },
+				content: { type: "string", description: "Markdown content to write into the note." },
+			},
+			required: ["path", "content"],
+		},
+		risk: "write",
+	},
+	{
+		name: "obsidian_read_note",
+		displayName: "Read note",
+		description: "Read and return the full content of an existing note.",
+		parameters: {
+			type: "object",
+			properties: {
+				path: { type: "string", description: "File path relative to vault root." },
+			},
+			required: ["path"],
+		},
+		risk: "safe",
+	},
+	{
+		name: "obsidian_modify_note",
+		displayName: "Modify note",
+		description: "Overwrite the entire content of an existing note.",
+		parameters: {
+			type: "object",
+			properties: {
+				path: { type: "string", description: "File path relative to vault root." },
+				content: { type: "string", description: "New markdown content to write." },
+			},
+			required: ["path", "content"],
+		},
+		risk: "write",
+	},
+	{
+		name: "obsidian_append_note",
+		displayName: "Append to note",
+		description: "Append text to the end of an existing note without overwriting it.",
+		parameters: {
+			type: "object",
+			properties: {
+				path: { type: "string", description: "File path relative to vault root." },
+				content: { type: "string", description: "Text to append." },
+			},
+			required: ["path", "content"],
+		},
+		risk: "write",
+	},
+	{
+		name: "obsidian_search",
+		displayName: "Search notes",
+		description: "Search for notes in the vault by filename. Returns matching file paths.",
+		parameters: {
+			type: "object",
+			properties: {
+				query: { type: "string", description: "Search string matched against file names." },
+			},
+			required: ["query"],
+		},
+		risk: "safe",
+	},
+	{
+		name: "obsidian_list_notes",
+		displayName: "List notes",
+		description: "List all markdown files in the vault, optionally filtered to a subfolder.",
+		parameters: {
+			type: "object",
+			properties: {
+				folder: { type: "string", description: "Optional folder path to restrict the listing (e.g. 'Projects')." },
+			},
+		},
+		risk: "safe",
+	},
+	{
+		name: "obsidian_open_note",
+		displayName: "Open note",
+		description: "Open a note in the Obsidian workspace so the user can see it.",
+		parameters: {
+			type: "object",
+			properties: {
+				path: { type: "string", description: "File path relative to vault root." },
+			},
+			required: ["path"],
+		},
+		risk: "write",
+	},
+	{
+		name: "obsidian_execute_command",
+		displayName: "Execute command",
+		description: "Execute a built-in Obsidian command by its ID (e.g. 'editor:toggle-bold', 'global-search:open', 'daily-notes').",
+		parameters: {
+			type: "object",
+			properties: {
+				command_id: { type: "string", description: "The Obsidian command ID to execute." },
+			},
+			required: ["command_id"],
+		},
+		risk: "danger",
+	},
+	{
+		name: "search_vault_semantic",
+		displayName: "Semantic vault search",
+		description: "Semantically search the vault using vector similarity. Returns the most relevant note excerpts for a natural-language query.",
+		parameters: {
+			type: "object",
+			properties: {
+				query: { type: "string", description: "Natural language search query describing what to look for in the vault." },
+				limit: { type: "string", description: "Number of results to return (1–10, default 5)." },
+			},
+			required: ["query"],
+		},
+		risk: "safe",
+		requiresRag: true,
+	},
+	{
+		name: "grep_vault",
+		displayName: "Grep vault",
+		description: "Search all notes for lines matching a text pattern or regex. Returns file paths, line numbers, and surrounding context.",
+		parameters: {
+			type: "object",
+			properties: {
+				pattern: { type: "string", description: "Text or regular expression to search for across all notes. Examples: 'https?://' to find external links, 'TODO' to find todos, '\\[\\[' to find internal links." },
+				folder: { type: "string", description: "Optional vault-root folder path to restrict the search (e.g. 'Projects'). Leave empty to search all notes." },
+				context_lines: { type: "string", description: "Number of surrounding lines to include with each match for context (0–5, default 1)." },
+				max_results: { type: "string", description: "Maximum number of matching lines to return (1–200, default 50)." },
+			},
+			required: ["pattern"],
+		},
+		risk: "safe",
+	},
+];
+
 export class ObsidianToolRegistry {
-	private tools: NeutralToolDefinition[] = [
-		{
-			name: "obsidian_create_note",
-			description: "Create a new note in the vault with the given path and content.",
-			parameters: {
-				type: "object",
-				properties: {
-					path: { type: "string", description: "File path relative to vault root, e.g. 'Notes/meeting.md'. Must end in .md." },
-					content: { type: "string", description: "Markdown content to write into the note." },
-				},
-				required: ["path", "content"],
-			},
-			risk: "write",
-		},
-		{
-			name: "obsidian_read_note",
-			description: "Read and return the full content of an existing note.",
-			parameters: {
-				type: "object",
-				properties: {
-					path: { type: "string", description: "File path relative to vault root." },
-				},
-				required: ["path"],
-			},
-			risk: "safe",
-		},
-		{
-			name: "obsidian_modify_note",
-			description: "Overwrite the entire content of an existing note.",
-			parameters: {
-				type: "object",
-				properties: {
-					path: { type: "string", description: "File path relative to vault root." },
-					content: { type: "string", description: "New markdown content to write." },
-				},
-				required: ["path", "content"],
-			},
-			risk: "write",
-		},
-		{
-			name: "obsidian_append_note",
-			description: "Append text to the end of an existing note without overwriting it.",
-			parameters: {
-				type: "object",
-				properties: {
-					path: { type: "string", description: "File path relative to vault root." },
-					content: { type: "string", description: "Text to append." },
-				},
-				required: ["path", "content"],
-			},
-			risk: "write",
-		},
-		{
-			name: "obsidian_search",
-			description: "Search for notes in the vault by filename. Returns matching file paths.",
-			parameters: {
-				type: "object",
-				properties: {
-					query: { type: "string", description: "Search string matched against file names." },
-				},
-				required: ["query"],
-			},
-			risk: "safe",
-		},
-		{
-			name: "obsidian_list_notes",
-			description: "List all markdown files in the vault, optionally filtered to a subfolder.",
-			parameters: {
-				type: "object",
-				properties: {
-					folder: { type: "string", description: "Optional folder path to restrict the listing (e.g. 'Projects')." },
-				},
-			},
-			risk: "safe",
-		},
-		{
-			name: "obsidian_open_note",
-			description: "Open a note in the Obsidian workspace so the user can see it.",
-			parameters: {
-				type: "object",
-				properties: {
-					path: { type: "string", description: "File path relative to vault root." },
-				},
-				required: ["path"],
-			},
-			risk: "write",
-		},
-		{
-			name: "obsidian_execute_command",
-			description: "Execute a built-in Obsidian command by its ID (e.g. 'editor:toggle-bold', 'global-search:open', 'daily-notes').",
-			parameters: {
-				type: "object",
-				properties: {
-					command_id: { type: "string", description: "The Obsidian command ID to execute." },
-				},
-				required: ["command_id"],
-			},
-			risk: "danger",
-		},
-		{
-			name: "search_vault_semantic",
-			description: "Semantically search the user's Obsidian vault using vector similarity. Use this when the user's question might be answered by information in their notes, or when they ask about something they may have written down. Returns the most relevant note excerpts.",
-			parameters: {
-				type: "object",
-				properties: {
-					query: { type: "string", description: "Natural language search query describing what to look for in the vault." },
-					limit: { type: "string", description: "Number of results to return (1–10, default 5)." },
-				},
-				required: ["query"],
-			},
-			risk: "safe",
-		},
-		{
-			name: "grep_vault",
-			description: "Search all notes in the vault for lines matching a text pattern or regex. Use this for structural queries like 'find notes with external links', 'find notes containing a URL', 'find notes that mention X'. Returns matching file paths, line numbers, and surrounding context. Prefer this over listing all files and reading each one individually.",
-			parameters: {
-				type: "object",
-				properties: {
-					pattern: { type: "string", description: "Text or regular expression to search for across all notes. Examples: 'https?://' to find external links, 'TODO' to find todos, '\\[\\[' to find internal links." },
-					folder: { type: "string", description: "Optional vault-root folder path to restrict the search (e.g. 'Projects'). Leave empty to search all notes." },
-					context_lines: { type: "string", description: "Number of surrounding lines to include with each match for context (0–5, default 1)." },
-					max_results: { type: "string", description: "Maximum number of matching lines to return (1–200, default 50)." },
-				},
-				required: ["pattern"],
-			},
-			risk: "safe",
-		},
-	];
+	private tools: NeutralToolDefinition[] = ALL_TOOL_DEFINITIONS;
 
 	constructor(private app: App, private vaultIndexer?: VaultIndexer) {}
 

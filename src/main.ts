@@ -8,6 +8,7 @@ import {
 	RAGSettings,
 	ResponseFormat,
 	SkillsSettings,
+	ToolSettings,
 	ViewSettings,
 } from "./Types/types";
 import { ProjectManager } from "Projects/ProjectManager";
@@ -89,6 +90,7 @@ export interface LLMPluginSettings {
 	skillsSettings: SkillsSettings;
 	memorySettings: MemorySettings;
 	projectSettings: ProjectSettings;
+	toolSettings: ToolSettings;
 	/**
 	 * Root vault folder for all AI feature data (default "AI").
 	 * Skills live at <rootVaultFolder>/Skills/<skill-name>/SKILL.md.
@@ -190,6 +192,10 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	},
 	projectSettings: {
 		activeProjectId: null,
+	},
+	toolSettings: {
+		disabledTools: [],
+		maxToolCalls: 10,
 	},
 	rootVaultFolder: "AI",
 };

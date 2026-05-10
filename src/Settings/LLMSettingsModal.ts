@@ -14,6 +14,7 @@ import { GPT4All, ollama, lmStudio } from "utils/constants";
 import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
 import { DEFAULT_EMBEDDING_MODELS, EmbeddingProvider, OllamaModelNotFoundError } from "RAG/EmbeddingService";
+import { ALL_TOOL_DEFINITIONS } from "services/ObsidianToolRegistry";
 
 type APIKeyType = "claude" | "gemini" | "openai" | "mistral";
 
@@ -77,6 +78,7 @@ export class LLMSettingsModal extends Modal {
 				{ id: "general",   label: "General",   icon: "settings" },
 				{ id: "interface", label: "Interface",  icon: "layout-dashboard" },
 				{ id: "chat",      label: "Chat",       icon: "message-square" },
+				{ id: "tools",     label: "Tools",      icon: "wrench" },
 				{ id: "skills",    label: "Skills",     icon: "scroll-text" },
 				{ id: "memory",    label: "Memory",     icon: "brain" },
 				{ id: "projects",  label: "Projects",   icon: "folder-open" },
@@ -249,6 +251,7 @@ export class LLMSettingsModal extends Modal {
 			case "ollama":        this.renderOllama();      break;
 			case "lmstudio":      this.renderLMStudio();    break;
 			case "chat":          this.renderChat();         break;
+			case "tools":         this.renderTools();        break;
 			case "vault-search":  this.renderVaultSearch();  break;
 			case "skills":        this.renderSkills();        break;
 			case "memory":        this.renderMemory();        break;
@@ -321,31 +324,6 @@ export class LLMSettingsModal extends Modal {
 					this.plugin.settings.emptyChatAvatar = value;
 					await this.plugin.saveSettings();
 					this.plugin.refreshAllEmptyStates();
-				});
-			});
-
-		// Agent permission mode
-		new Setting(items)
-			.setName("Agent permission mode")
-			.setDesc(
-				"Controls when the agent asks for your approval before performing actions in your vault."
-			)
-			.addDropdown((dropdown: DropdownComponent) => {
-				dropdown.addOption("ask", "Ask (approve writes, auto-allow reads)");
-				dropdown.addOption("auto-approve", "Auto-approve all (no prompts)");
-				dropdown.addOption("ask-everything", "Ask for everything");
-				dropdown.addOption("read-only", "Read-only (deny any writes)");
-
-				const currentMode =
-					this.plugin.settings.modalSettings.agentSettings?.permissionMode ?? "ask";
-				dropdown.setValue(currentMode);
-
-				dropdown.onChange(async (value) => {
-					const mode = value as import("../Types/types").PermissionMode;
-					this.plugin.settings.modalSettings.agentSettings = { permissionMode: mode };
-					this.plugin.settings.widgetSettings.agentSettings = { permissionMode: mode };
-					this.plugin.settings.fabSettings.agentSettings = { permissionMode: mode };
-					await this.plugin.saveSettings();
 				});
 			});
 
@@ -729,6 +707,111 @@ export class LLMSettingsModal extends Modal {
 		};
 
 		renderHistorySection();
+	}
+
+	private renderTools() {
+		const el = this.mainContentEl;
+		this.addTabHeader(el, "Tools");
+
+		// Ensure toolSettings exists (deep-merge guard for existing installs)
+		if (!this.plugin.settings.toolSettings) {
+			this.plugin.settings.toolSettings = { disabledTools: [], maxToolCalls: 10 };
+		}
+
+		// ── Agent behaviour ───────────────────────────────────────────────────
+		const behaviourItems = this.addSettingGroup(el, "Agent Behaviour");
+
+		new Setting(behaviourItems)
+			.setName("Permission mode")
+			.setDesc(
+				"Controls when the agent asks for your approval before performing actions in your vault."
+			)
+			.addDropdown((dropdown: DropdownComponent) => {
+				dropdown.addOption("ask", "Ask — approve writes, auto-allow reads");
+				dropdown.addOption("auto-approve", "Auto-approve all (no prompts)");
+				dropdown.addOption("ask-everything", "Ask for everything");
+				dropdown.addOption("read-only", "Read-only (deny any writes)");
+
+				const currentMode =
+					this.plugin.settings.modalSettings.agentSettings?.permissionMode ?? "ask";
+				dropdown.setValue(currentMode);
+
+				dropdown.onChange(async (value) => {
+					const mode = value as import("../Types/types").PermissionMode;
+					this.plugin.settings.modalSettings.agentSettings = { permissionMode: mode };
+					this.plugin.settings.widgetSettings.agentSettings = { permissionMode: mode };
+					this.plugin.settings.fabSettings.agentSettings = { permissionMode: mode };
+					await this.plugin.saveSettings();
+				});
+			});
+
+		new Setting(behaviourItems)
+			.setName("Max tool calls per turn")
+			.setDesc(
+				"Maximum number of tool-call/execute cycles the agent can run in a single response before stopping. Prevents runaway loops (1–25)."
+			)
+			.addSlider((slider) => {
+				slider
+					.setLimits(1, 25, 1)
+					.setValue(this.plugin.settings.toolSettings.maxToolCalls ?? 10)
+					.setDynamicTooltip()
+					.onChange(async (value) => {
+						this.plugin.settings.toolSettings.maxToolCalls = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		// ── Available tools ───────────────────────────────────────────────────
+		const toolsItems = this.addSettingGroup(el, "Available Tools");
+
+		toolsItems.createDiv({
+			cls: "setting-item-description",
+			text: "Disable tools you don't want the AI to use. Disabled tools are never offered to the model, regardless of permission mode or active skill.",
+		});
+
+		const ragEnabled = this.plugin.settings.ragSettings?.enabled ?? false;
+		const disabledTools = this.plugin.settings.toolSettings.disabledTools;
+
+		for (const tool of ALL_TOOL_DEFINITIONS) {
+			const setting = new Setting(toolsItems);
+
+			// Build the name element: risk badge + display name
+			const nameFragment = document.createDocumentFragment();
+			const badge = nameFragment.createEl("span", {
+				cls: `llm-tool-badge llm-tool-badge-${tool.risk}`,
+				text: tool.risk,
+			});
+			nameFragment.appendChild(badge);
+			nameFragment.appendChild(document.createTextNode(" " + tool.displayName));
+			setting.nameEl.appendChild(nameFragment);
+
+			// Description: tool description + optional dependency note
+			let desc = tool.description;
+			if (tool.requiresRag && !ragEnabled) {
+				desc += " ⚠ Requires Vault Search to be enabled.";
+			}
+			setting.setDesc(desc);
+
+			// The tool name in small muted text below the description
+			const codeEl = setting.descEl.createEl("div", {
+				cls: "llm-tool-name-code",
+				text: tool.name,
+			});
+			setting.descEl.appendChild(codeEl);
+
+			setting.addToggle((toggle) => {
+				toggle.setValue(!disabledTools.includes(tool.name));
+				toggle.onChange(async (enabled) => {
+					const idx = this.plugin.settings.toolSettings.disabledTools.indexOf(tool.name);
+					if (enabled && idx !== -1) {
+						this.plugin.settings.toolSettings.disabledTools.splice(idx, 1);
+					} else if (!enabled && idx === -1) {
+						this.plugin.settings.toolSettings.disabledTools.push(tool.name);
+					}
+					await this.plugin.saveSettings();
+				});
+			});
+		}
 	}
 
 	private renderVaultSearch() {

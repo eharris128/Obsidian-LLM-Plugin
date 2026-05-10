@@ -214,6 +214,19 @@ export type ProjectSettings = {
 	activeProjectId: string | null;
 };
 
+export type ToolSettings = {
+	/**
+	 * Tool names that are permanently disabled and will never be offered to the
+	 * model, regardless of permission mode or active skill.
+	 */
+	disabledTools: string[];
+	/**
+	 * Maximum number of tool-call/execute cycles per agent turn before the loop
+	 * is forced to stop. Prevents runaway agents.
+	 */
+	maxToolCalls: number;
+};
+
 export type RAGSettings = {
 	/** Whether RAG / vault semantic search is enabled at all. */
 	enabled: boolean;

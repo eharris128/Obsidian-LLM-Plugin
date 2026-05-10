@@ -944,6 +944,35 @@ export class ChatContainer {
 		}
 		// ── End skill resolution ─────────────────────────────────────────────────
 
+		// ── Project context injection ─────────────────────────────────────────────
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
+		const activeProject = activeProjectId
+			? this.plugin.projectManager?.getProject(activeProjectId)
+			: null;
+
+		if (activeProject && modelEndpoint !== images) {
+			// Inject pinned notes as context
+			if (activeProject.pinnedNotes?.length > 0) {
+				try {
+					const pinnedContext = await this.buildPinnedNotesContext(activeProject.pinnedNotes);
+					if (pinnedContext) {
+						this.pendingContextString = pinnedContext +
+							(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
+					}
+				} catch (e) {
+					console.error("[Projects] Failed to build pinned notes context:", e);
+				}
+			}
+
+			// Inject project system instructions (at the front of context, after pinned notes)
+			if (activeProject.instructions) {
+				const block = `# Project Instructions: ${activeProject.name}\n\n${activeProject.instructions}`;
+				this.pendingContextString = block +
+					(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
+			}
+		}
+		// ── End project context injection ─────────────────────────────────────────
+
 		// ── Memory recall ─────────────────────────────────────────────────────────
 		this.memoriesInjectedThisTurn = false;
 		if (
@@ -954,7 +983,9 @@ export class ChatContainer {
 			modelEndpoint !== images
 		) {
 			try {
-				const memCtx: MemoryContext = {};  // Future: pass active assistant/project
+				const memCtx: MemoryContext = {
+					activeProject: activeProject?.name,
+				};
 				const recalled = await this.plugin.memoryService.recall(
 					this.prompt,
 					memCtx,
@@ -1426,6 +1457,11 @@ export class ChatContainer {
 			this.headerTitleCallback(title);
 		}
 
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
+		const activeProject = activeProjectId
+			? this.plugin.projectManager?.getProject(activeProjectId)
+			: null;
+
 		const filePath = await this.plugin.chatHistory.save(
 			null,
 			title,
@@ -1433,7 +1469,8 @@ export class ChatContainer {
 			params,
 			vaultContext,
 			this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined,
-			this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined
+			this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined,
+			activeProject?.name
 		);
 
 		this.currentHistoryFilePath = filePath;
@@ -1567,7 +1604,7 @@ export class ChatContainer {
 		llmGal.appendChild(svgElement);
 	}
 
-	/** Rebuild the chip strip from current state (active file + additional files). */
+	/** Rebuild the chip strip from current state (active file + additional files + pinned project notes). */
 	syncChips() {
 		if (!this.chipContainer) return;
 		const settingType = getSettingType(this.viewType);
@@ -1575,40 +1612,52 @@ export class ChatContainer {
 
 		this.chipContainer.empty();
 
-		// When file context is disabled, show nothing
-		if (!this.plugin.settings.enableFileContext) {
-			this.chipContainer.style.display = "none";
-			return;
-		}
+		// Resolve active project pinned notes (always shown, regardless of file context toggle)
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
+		const activeProject = activeProjectId
+			? this.plugin.projectManager?.getProject(activeProjectId)
+			: null;
+		const pinnedNotes = activeProject?.pinnedNotes ?? [];
 
-		const hasActiveFile = this.useActiveFileContext && this.activeFileForChip;
-		const hasAdditional = contextSettings.selectedFiles.length > 0;
+		// File context chips require file context to be enabled
+		const hasActiveFile = this.plugin.settings.enableFileContext && this.useActiveFileContext && this.activeFileForChip;
+		const hasAdditional = this.plugin.settings.enableFileContext && contextSettings.selectedFiles.length > 0;
+		const hasPinned = pinnedNotes.length > 0;
 
-		if (!hasActiveFile && !hasAdditional) {
+		if (!hasActiveFile && !hasAdditional && !hasPinned) {
 			this.chipContainer.style.display = "none";
 			return;
 		}
 
 		this.chipContainer.style.display = "flex";
 
-		if (hasActiveFile) {
-			this.buildChip(this.chipContainer, this.activeFileForChip!.name, () => {
-				this.useActiveFileContext = false;
-				this.activeFileForChip = null;
-				this.scanButton?.buttonEl.removeClass("is-active");
-				this.syncChips();
-			});
+		// Pinned project notes first
+		for (const notePath of pinnedNotes) {
+			const noteName = notePath.split("/").pop() || notePath;
+			this.buildPinnedChip(this.chipContainer, noteName);
 		}
 
-		for (const filePath of [...contextSettings.selectedFiles]) {
-			const fileName = filePath.split("/").pop() || filePath;
-			this.buildChip(this.chipContainer, fileName, () => {
-				contextSettings.selectedFiles = contextSettings.selectedFiles.filter(
-					(f) => f !== filePath
-				);
-				this.plugin.saveSettings();
-				this.syncChips();
-			});
+		// File context chips (only when enabled)
+		if (this.plugin.settings.enableFileContext) {
+			if (hasActiveFile) {
+				this.buildChip(this.chipContainer, this.activeFileForChip!.name, () => {
+					this.useActiveFileContext = false;
+					this.activeFileForChip = null;
+					this.scanButton?.buttonEl.removeClass("is-active");
+					this.syncChips();
+				});
+			}
+
+			for (const filePath of [...contextSettings.selectedFiles]) {
+				const fileName = filePath.split("/").pop() || filePath;
+				this.buildChip(this.chipContainer, fileName, () => {
+					contextSettings.selectedFiles = contextSettings.selectedFiles.filter(
+						(f) => f !== filePath
+					);
+					this.plugin.saveSettings();
+					this.syncChips();
+				});
+			}
 		}
 	}
 
@@ -1630,6 +1679,42 @@ export class ChatContainer {
 			onRemove();
 		});
 		return chip;
+	}
+
+	/** Build a non-removable pinned-note chip (for project pinned notes). */
+	private buildPinnedChip(container: HTMLElement, name: string): HTMLElement {
+		const chip = container.createDiv({ cls: "llm-context-chip llm-context-chip--pinned" });
+		const pinIcon = chip.createEl("span", { cls: "llm-context-chip-icon" });
+		setIcon(pinIcon, "pin");
+		chip.createEl("span", { text: name, cls: "llm-context-chip-name" });
+		return chip;
+	}
+
+	/**
+	 * Read each pinned note from the vault and return a formatted context block,
+	 * or null if there are no pinned notes or they are all unreadable.
+	 */
+	private async buildPinnedNotesContext(paths: string[]): Promise<string | null> {
+		if (!paths || paths.length === 0) return null;
+
+		const blocks: string[] = [];
+		for (const notePath of paths) {
+			try {
+				const file = this.plugin.app.vault.getAbstractFileByPath(notePath);
+				if (!file) {
+					console.warn(`[Projects] Pinned note not found: ${notePath}`);
+					continue;
+				}
+				const content = await this.plugin.app.vault.read(file as TFile);
+				const name = notePath.split("/").pop() ?? notePath;
+				blocks.push(`### ${name}\nPath: \`${notePath}\`\n\n${content}`);
+			} catch (e) {
+				console.warn(`[Projects] Failed to read pinned note ${notePath}:`, e);
+			}
+		}
+
+		if (blocks.length === 0) return null;
+		return `# Pinned Project Notes\n\n${blocks.join("\n\n---\n\n")}`;
 	}
 
 	async generateChatContainer(parentElement: Element, header: Header) {

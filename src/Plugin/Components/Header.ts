@@ -1,5 +1,5 @@
 import LLMPlugin from "main";
-import { ButtonComponent, Menu } from "obsidian";
+import { ButtonComponent, Menu, setIcon } from "obsidian";
 import { ChatContainer } from "./ChatContainer";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { HistoryContainer } from "./HistoryContainer";
@@ -18,6 +18,8 @@ export class Header {
 	chatHistoryButton?: ButtonComponent;
 	newChatButton?: ButtonComponent;
 	settingsButton?: ButtonComponent;
+	/** Reference to the project switcher pill element so it can be updated. */
+	private projectSwitcherEl: HTMLElement | null = null;
 
 	setHeader(_modelName: string) {
 		// Model name is now shown in the chat input toolbar dropdown
@@ -279,6 +281,130 @@ export class Header {
 			closeButton.setTooltip("Close");
 			closeButton.onClick(closeCallback);
 		}
+
+		// Project switcher — on the left, after the title
+		this.buildProjectSwitcher(
+			leftDiv,
+			chatContainerDiv,
+			settingsContainerDiv,
+			chatHistoryContainerDiv,
+			chatContainer
+		);
+	}
+
+	/**
+	 * Build the project switcher pill and append it to the given container.
+	 * Clicking opens a menu to switch projects (or clear the active project).
+	 * Switching auto-starts a new chat.
+	 */
+	private buildProjectSwitcher(
+		container: HTMLElement,
+		chatContainerDiv: HTMLElement,
+		settingsContainerDiv: HTMLElement,
+		chatHistoryContainerDiv: HTMLElement,
+		chatContainer: ChatContainer
+	): void {
+		this.projectSwitcherEl = container.createEl("button");
+		this.projectSwitcherEl.addClass("llm-project-switcher");
+		this.updateProjectSwitcher();
+
+		this.projectSwitcherEl.addEventListener("click", (evt: MouseEvent) => {
+			const menu = new Menu();
+			const projects = this.plugin.projectManager?.getProjects() ?? [];
+
+			// "No project" option
+			const activeId = this.plugin.settings.projectSettings?.activeProjectId;
+			menu.addItem((item) => {
+				item
+					.setTitle("No project")
+					.setIcon("x-circle")
+					.setChecked(!activeId)
+					.onClick(() => {
+						this.plugin.settings.projectSettings = {
+							...this.plugin.settings.projectSettings,
+							activeProjectId: null,
+						};
+						this.plugin.saveSettings();
+						this.updateProjectSwitcher();
+						// Auto-start new chat
+						this.setTitle("");
+						this.showTitle();
+						chatContainerDiv.show();
+						settingsContainerDiv.hide();
+						chatHistoryContainerDiv.hide();
+						chatContainer.newChat();
+						chatContainer.resetMessages();
+						setHistoryIndex(this.plugin, this.viewType);
+						this.plugin.settings.currentIndex = -1;
+						this.plugin.saveSettings();
+					});
+			});
+
+			if (projects.length > 0) {
+				menu.addSeparator();
+				for (const project of projects) {
+					menu.addItem((item) => {
+						item
+							.setTitle(project.name)
+							.setIcon("folder-open")
+							.setChecked(activeId === project.id)
+							.onClick(() => {
+								this.plugin.settings.projectSettings = {
+									...this.plugin.settings.projectSettings,
+									activeProjectId: project.id,
+								};
+								this.plugin.saveSettings();
+								this.updateProjectSwitcher();
+								// Auto-start new chat under the new project
+								this.setTitle("");
+								this.showTitle();
+								chatContainerDiv.show();
+								settingsContainerDiv.hide();
+								chatHistoryContainerDiv.hide();
+								chatContainer.newChat();
+								chatContainer.resetMessages();
+								setHistoryIndex(this.plugin, this.viewType);
+								this.plugin.settings.currentIndex = -1;
+								this.plugin.saveSettings();
+							});
+					});
+				}
+			}
+
+			if (projects.length === 0) {
+				menu.addItem((item) => {
+					item
+						.setTitle("No projects yet")
+						.setDisabled(true);
+				});
+			}
+
+			menu.showAtMouseEvent(evt);
+		});
+	}
+
+	/** Update the project switcher pill text/state to reflect the current active project. */
+	updateProjectSwitcher(): void {
+		if (!this.projectSwitcherEl) return;
+		const activeId = this.plugin.settings.projectSettings?.activeProjectId;
+		const project = activeId
+			? this.plugin.projectManager?.getProject(activeId)
+			: null;
+
+		this.projectSwitcherEl.empty();
+
+		const iconEl = this.projectSwitcherEl.createEl("span", { cls: "llm-project-switcher-icon" });
+		setIcon(iconEl, project ? "folder-open" : "folder");
+
+		this.projectSwitcherEl.createEl("span", {
+			text: project ? project.name : "No project",
+			cls: "llm-project-switcher-label",
+		});
+
+		const chevronEl = this.projectSwitcherEl.createEl("span", { cls: "llm-project-switcher-chevron" });
+		setIcon(chevronEl, "chevron-down");
+
+		this.projectSwitcherEl.toggleClass("llm-project-switcher--active", !!project);
 	}
 
 	private generateDefaultHeader(
@@ -371,5 +497,14 @@ export class Header {
 		this.chatHistoryButton.setIcon("messages-square");
 		this.settingsButton.setIcon("settings-2");
 		this.newChatButton.setIcon("plus");
+
+		// Project switcher — shown on the left, after the title
+		this.buildProjectSwitcher(
+			leftButtonDiv,
+			chatContainerDiv,
+			settingsContainerDiv,
+			chatHistoryContainerDiv,
+			chatContainer
+		);
 	}
 }

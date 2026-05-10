@@ -11,6 +11,8 @@ export interface ChatFileMeta {
 	provider: string;
 	tags: string[];
 	context?: string[];
+	/** Name of the active project when this chat was created, if any. */
+	project?: string;
 }
 
 export interface LoadedChat {
@@ -84,6 +86,9 @@ export class ChatHistory {
 			`tags:`,
 			...meta.tags.map((t) => `  - ${t}`),
 		];
+		if (meta.project) {
+			lines.push(`project: "${meta.project.replace(/"/g, '\\"')}"`);
+		}
 		if (meta.context?.length) {
 			lines.push("context:");
 			for (const link of meta.context) {
@@ -229,7 +234,8 @@ export class ChatHistory {
 		item: ChatHistoryItem,
 		vaultContext?: VaultContext,
 		toolCallsByTurn?: Map<number, ToolCallRecord[]>,
-		skillsByTurn?: Map<number, string>
+		skillsByTurn?: Map<number, string>,
+		projectName?: string
 	): Promise<string> {
 		await this.ensureFolder();
 
@@ -266,6 +272,7 @@ export class ChatHistory {
 				model: item.model,
 				provider,
 				tags: ["llm-chats"],
+				...(projectName ? { project: projectName } : {}),
 				...(contextLinks.length ? { context: contextLinks } : {}),
 			};
 			await this.plugin.app.vault.create(

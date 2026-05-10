@@ -98,6 +98,7 @@ export class LLMSettingsModal extends Modal {
 			items: [
 				{ id: "vault-search", label: "Vault Search", icon: "search" },
 				{ id: "memory",       label: "Memory",       icon: "brain" },
+				{ id: "projects",     label: "Projects",     icon: "folder-open" },
 			],
 		},
 	];
@@ -251,6 +252,7 @@ export class LLMSettingsModal extends Modal {
 			case "vault-search":  this.renderVaultSearch();  break;
 			case "skills":        this.renderSkills();        break;
 			case "memory":        this.renderMemory();        break;
+			case "projects":      this.renderProjects();      break;
 		}
 	}
 
@@ -362,6 +364,7 @@ export class LLMSettingsModal extends Modal {
 					this.plugin.settings.rootVaultFolder = value.trim() || "AI";
 					await this.plugin.saveSettings();
 					await this.plugin.reinitSkillRegistry();
+					await this.plugin.reinitProjectManager();
 				});
 			});
 	}
@@ -1038,6 +1041,151 @@ export class LLMSettingsModal extends Modal {
 				`  ${root}/Projects/<name>/memories/    (recalled when project is active)\n\n` +
 				`Files are plain Markdown — you can read, edit, and delete them directly in Obsidian.`,
 		});
+	}
+
+	private renderProjects() {
+		const el = this.mainContentEl;
+		this.addTabHeader(el, "Projects");
+
+		const projectsFolder = this.plugin.projectsFolder;
+		el.createDiv({
+			cls: "setting-item-description",
+			text: `Projects are loaded from "${projectsFolder}". Each project is a sub-folder containing a PROJECT.md file.`,
+		});
+
+		// ── Create new project form ───────────────────────────────────────────
+		const createGroup = this.addSettingGroup(el, "New Project");
+
+		let newProjectName = "";
+		let newProjectDescription = "";
+
+		new Setting(createGroup)
+			.setName("Project name")
+			.setDesc("Used as the display name and folder slug (spaces become hyphens).")
+			.addText((text) => {
+				text.setPlaceholder("e.g. My Research Project");
+				text.onChange((v) => { newProjectName = v; });
+			});
+
+		new Setting(createGroup)
+			.setName("Description")
+			.setDesc("One-line summary shown in the project switcher.")
+			.addText((text) => {
+				text.setPlaceholder("e.g. Notes and analysis for my research");
+				text.onChange((v) => { newProjectDescription = v; });
+			});
+
+		new Setting(createGroup)
+			.addButton((btn) => {
+				btn.setButtonText("Create project")
+					.setCta()
+					.onClick(async () => {
+						const name = newProjectName.trim();
+						if (!name) {
+							new Notice("Please enter a project name.");
+							return;
+						}
+						// Slugify the name for the folder
+						const id = name
+							.toLowerCase()
+							.replace(/[^\w\s-]/g, "")
+							.replace(/\s+/g, "-")
+							.replace(/-+/g, "-")
+							.replace(/^-|-$/g, "")
+							.slice(0, 60) || "project";
+
+						const filePath = await this.plugin.projectManager.createProject(
+							id,
+							name,
+							newProjectDescription.trim()
+						);
+						if (filePath) {
+							new Notice(`✓ Project "${name}" created.`);
+							// Open the PROJECT.md in the vault for editing
+							const file = this.plugin.app.vault.getFileByPath(filePath);
+							if (file) {
+								const leaf = this.plugin.app.workspace.getLeaf(false);
+								await leaf.openFile(file);
+							}
+							this.renderTab("projects");
+						} else {
+							new Notice("Failed to create project.");
+						}
+					});
+			});
+
+		// ── Existing projects ─────────────────────────────────────────────────
+		const projects = this.plugin.projectManager?.getProjects() ?? [];
+		if (projects.length === 0) {
+			el.createDiv({
+				cls: "setting-item-description",
+				text: "No projects yet. Create one above.",
+			});
+			return;
+		}
+
+		const listGroup = this.addSettingGroup(el, `${projects.length} Project${projects.length === 1 ? "" : "s"}`);
+		const activeId = this.plugin.settings.projectSettings?.activeProjectId;
+
+		for (const project of projects) {
+			const descParts: string[] = [];
+			if (project.description) descParts.push(project.description);
+			if (project.pinnedNotes.length > 0) {
+				descParts.push(`${project.pinnedNotes.length} pinned note${project.pinnedNotes.length === 1 ? "" : "s"}`);
+			}
+			if (activeId === project.id) descParts.push("● Active");
+
+			const setting = new Setting(listGroup)
+				.setName(project.name)
+				.setDesc(descParts.join(" · ") || project.id);
+
+			// Edit: open PROJECT.md in vault
+			setting.addButton((btn) => {
+				btn.setIcon("pencil")
+					.setTooltip("Edit PROJECT.md")
+					.onClick(async () => {
+						const file = this.plugin.app.vault.getFileByPath(project.filePath);
+						if (file) {
+							const leaf = this.plugin.app.workspace.getLeaf(false);
+							await leaf.openFile(file);
+						} else {
+							new Notice("PROJECT.md not found in vault.");
+						}
+					});
+			});
+
+			// Activate / deactivate
+			setting.addButton((btn) => {
+				const isActive = activeId === project.id;
+				btn.setButtonText(isActive ? "Deactivate" : "Activate")
+					.setTooltip(isActive ? "Clear active project" : "Set as active project")
+					.onClick(async () => {
+						this.plugin.settings.projectSettings = {
+							...this.plugin.settings.projectSettings,
+							activeProjectId: isActive ? null : project.id,
+						};
+						await this.plugin.saveSettings();
+						this.renderTab("projects");
+					});
+			});
+
+			// Delete
+			setting.addButton((btn) => {
+				btn.setIcon("trash")
+					.setTooltip("Delete project")
+					.setWarning()
+					.onClick(async () => {
+						// If deleting the active project, clear active
+						if (this.plugin.settings.projectSettings?.activeProjectId === project.id) {
+							this.plugin.settings.projectSettings.activeProjectId = null;
+							await this.plugin.saveSettings();
+						}
+						await this.plugin.projectManager.deleteProject(project.id);
+						new Notice(`Project "${project.name}" deleted.`);
+						this.renderTab("projects");
+					});
+			});
+		}
 	}
 
 	// ── Helpers ────────────────────────────────────────────────────────────────

@@ -190,6 +190,30 @@ export type MemorySettings = {
 	recallAlways: boolean;
 };
 
+export type Project = {
+	/** Unique key derived from the folder name. */
+	id: string;
+	/** Display name from frontmatter `name:`, or falls back to id. */
+	name: string;
+	/** One-line description from frontmatter `description:`. */
+	description: string;
+	/** Vault-relative paths to notes injected as context for every conversation. */
+	pinnedNotes: string[];
+	/** Optional default assistant name (for future Assistants feature). */
+	defaultAssistant?: string;
+	/** ISO date from frontmatter `created:`. */
+	created: string;
+	/** Vault path of the PROJECT.md file. */
+	filePath: string;
+	/** The system instructions body (everything below the --- frontmatter block). */
+	instructions: string;
+};
+
+export type ProjectSettings = {
+	/** The id of the currently active project, or null for "No project". */
+	activeProjectId: string | null;
+};
+
 export type RAGSettings = {
 	/** Whether RAG / vault semantic search is enabled at all. */
 	enabled: boolean;

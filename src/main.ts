@@ -4,11 +4,13 @@ import {
 	ImageQuality,
 	ImageSize,
 	MemorySettings,
+	ProjectSettings,
 	RAGSettings,
 	ResponseFormat,
 	SkillsSettings,
 	ViewSettings,
 } from "./Types/types";
+import { ProjectManager } from "Projects/ProjectManager";
 import { MemoryService } from "Memory/MemoryService";
 import { SkillRegistry } from "Skills/SkillRegistry";
 import { VaultIndexer } from "RAG/VaultIndexer";
@@ -86,6 +88,7 @@ export interface LLMPluginSettings {
 	ragSettings: RAGSettings;
 	skillsSettings: SkillsSettings;
 	memorySettings: MemorySettings;
+	projectSettings: ProjectSettings;
 	/**
 	 * Root vault folder for all AI feature data (default "AI").
 	 * Skills live at <rootVaultFolder>/Skills/<skill-name>/SKILL.md.
@@ -185,6 +188,9 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		recallTopK: 5,
 		recallAlways: false,
 	},
+	projectSettings: {
+		activeProjectId: null,
+	},
 	rootVaultFolder: "AI",
 };
 
@@ -211,6 +217,8 @@ export default class LLMPlugin extends Plugin {
 	private ragDebounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
 	/** Skills registry — always initialized; folder is configurable in settings. */
 	skillRegistry: SkillRegistry;
+	/** Projects registry — always initialized; folder derived from rootVaultFolder. */
+	projectManager: ProjectManager;
 
 	async onload() {
 		this.fileSystem = Platform.isDesktop
@@ -224,10 +232,13 @@ export default class LLMPlugin extends Plugin {
 		this.initMemoryService();
 		this.registerRagVaultEvents();
 		this.skillRegistry = new SkillRegistry(this.app);
-		// Skills are in the vault — wait for the vault to finish loading before scanning
+		this.projectManager = new ProjectManager(this.app);
+		// Skills and Projects are in the vault — wait for layout ready before scanning
 		this.app.workspace.onLayoutReady(async () => {
 			await this.skillRegistry.setFolder(this.skillsFolder);
 			this.registerSkillVaultEvents();
+			await this.projectManager.setFolder(this.projectsFolder);
+			this.registerProjectVaultEvents();
 		});
 		this.registerOllamaModels();
 		this.registerLMStudioModels();
@@ -449,6 +460,62 @@ export default class LLMPlugin extends Plugin {
 	 */
 	get memoriesFolder(): string {
 		return (this.settings.rootVaultFolder || "AI") + "/Memories";
+	}
+
+	/**
+	 * Derived path to the Projects folder: "<rootVaultFolder>/Projects".
+	 */
+	get projectsFolder(): string {
+		return (this.settings.rootVaultFolder || "AI") + "/Projects";
+	}
+
+	/**
+	 * Re-initialise the ProjectManager from current settings.
+	 * Call after the root vault folder setting changes.
+	 */
+	async reinitProjectManager(): Promise<void> {
+		await this.projectManager.setFolder(this.projectsFolder);
+	}
+
+	/**
+	 * Register vault events to keep the ProjectManager hot-reloaded whenever
+	 * PROJECT.md files inside the projects folder are created, modified, or deleted.
+	 */
+	private registerProjectVaultEvents(): void {
+		this.registerEvent(
+			this.app.vault.on("create", async (file) => {
+				if (this.projectManager.isProjectFile(file.path)) {
+					await this.projectManager.loadProjectByPath(file.path);
+				}
+			})
+		);
+
+		this.registerEvent(
+			this.app.vault.on("modify", async (file) => {
+				if (this.projectManager.isProjectFile(file.path)) {
+					await this.projectManager.loadProjectByPath(file.path);
+				}
+			})
+		);
+
+		this.registerEvent(
+			this.app.vault.on("delete", (file) => {
+				if (this.projectManager.isProjectFile(file.path)) {
+					this.projectManager.removeByPath(file.path);
+				}
+			})
+		);
+
+		this.registerEvent(
+			this.app.vault.on("rename", async (file, oldPath) => {
+				if (this.projectManager.isProjectFile(oldPath)) {
+					this.projectManager.removeByPath(oldPath);
+				}
+				if (this.projectManager.isProjectFile(file.path)) {
+					await this.projectManager.loadProjectByPath(file.path);
+				}
+			})
+		);
 	}
 
 	/**
@@ -696,6 +763,12 @@ export default class LLMPlugin extends Plugin {
 			this.settings.memorySettings = {
 				...DEFAULT_SETTINGS.memorySettings,
 				...(dataJSON.memorySettings ?? {}),
+			};
+
+			// Deep-merge projectSettings so new fields get defaults if missing from saved data
+			this.settings.projectSettings = {
+				...DEFAULT_SETTINGS.projectSettings,
+				...(dataJSON.projectSettings ?? {}),
 			};
 
 			// Ensure rootVaultFolder has a value (new field — may be absent in old saves)

@@ -188,7 +188,7 @@ All skills-related UI uses the `scroll-text` lucide icon (previously `wand-spark
 
 `LLMPluginSettings.skillsSettings: SkillsSettings` — deep-merged on load with defaults `{ enabledSkills: {} }`. The skills folder is **not** stored in `skillsSettings`; it is derived as `plugin.skillsFolder` (getter): `plugin.settings.rootVaultFolder + "/Skills"`.
 
-`LLMPluginSettings.rootVaultFolder: string` — top-level setting (default `"AI"`) shared across all AI features. Skills live at `<rootVaultFolder>/Skills`. Future features (Assistants, Projects, Memories, Chats) will use `<rootVaultFolder>/<FeatureName>`. Configurable via Settings → General → "Root vault folder". After changing it, `plugin.reinitSkillRegistry()` is called to hot-reload from the new path.
+`LLMPluginSettings.rootVaultFolder: string` — top-level setting (default `"AI"`) shared across all AI features. Skills live at `<rootVaultFolder>/Skills`, Projects at `<rootVaultFolder>/Projects`, Memories at `<rootVaultFolder>/Memories`. Configurable via Settings → General → "Root vault folder". After changing it, both `plugin.reinitSkillRegistry()` and `plugin.reinitProjectManager()` are called to hot-reload from the new path.
 
 ### Memory System
 
@@ -256,10 +256,65 @@ Typing `/remember [content]` in the chat input saves that exact string as a `fac
 
 Memory recall requires `plugin.vaultIndexer` to be non-null (i.e. RAG must be enabled). Memory files are indexed automatically by the existing `vault.on('modify')` watcher in `main.ts`. `plugin.initMemoryService()` rebuilds the `MemoryService` using the same `EmbeddingService` configuration as RAG.
 
+### Projects System
+
+The plugin supports a Projects feature. Projects are named workspaces that scope the chat context: system instructions, pinned notes, and memory recall.
+
+#### Vault hierarchy
+
+```
+<rootVaultFolder>/
+  Projects/
+    <project-id>/
+      PROJECT.md             ← project definition (frontmatter + system instructions)
+      memories/              ← project-scoped memory files (recalled alongside global)
+```
+
+#### PROJECT.md format
+
+```yaml
+---
+name: My Project
+description: One-line description
+pinned-notes:
+  - path/to/note.md
+default-assistant: <assistant name>   # optional, future Assistants feature
+created: <ISO date>
+---
+
+<system instructions — injected as system prompt prefix for every conversation>
+```
+
+#### Key files
+
+- **`src/Projects/ProjectManager.ts`** — discovers and parses `PROJECT.md` files; hot-reloads on vault `create/modify/delete/rename` events registered in `main.ts`. Same pattern as `SkillRegistry`.
+- **`src/Types/types.ts`** — `Project` and `ProjectSettings` types.
+
+#### How it integrates
+
+- `LLMPlugin.projectManager` is the singleton instance (always initialized, folder derived from `rootVaultFolder`).
+- `LLMPlugin.settings.projectSettings.activeProjectId` (persisted) holds the active project id or `null`.
+- `LLMPlugin.projectsFolder` getter returns `<rootVaultFolder>/Projects`.
+- Switching projects (via the header pill) calls `chatContainer.newChat()` to start fresh under the new project.
+- In `ChatContainer.handleGenerateClick()`, if a project is active:
+  1. Pinned notes are read from vault and injected into `pendingContextString` as `# Pinned Project Notes` block.
+  2. Project system instructions are injected as `# Project Instructions: <name>` block (prepended to context, after pinned notes).
+  3. Memory recall passes `activeProject: project.name` to `MemoryContext` so project-scoped memories are included.
+- Saved chat files get a `project: "<name>"` YAML field in frontmatter when a project is active.
+- Project pinned notes appear as non-removable chips (dashed border, pin icon) in the chip strip above the chat input.
+- The project switcher pill in the chat header shows the active project name or "No project"; clicking opens a menu to switch.
+- `LLMPlugin.reinitProjectManager()` is called when `rootVaultFolder` changes (Settings → General).
+- Projects are managed (create/edit/delete/activate) via Settings → Features → Projects.
+
+#### `projectSettings` persistence
+
+`LLMPluginSettings.projectSettings: ProjectSettings` — deep-merged on load with defaults `{ activeProjectId: null }`.
+
 ### Key Files
 
+- `src/Projects/ProjectManager.ts` - Project discovery, parsing, hot-reload, and create/delete helpers
 - `src/Memory/MemoryService.ts` - Memory extraction, deduplication, recall, and vault persistence
-- `src/Types/types.ts` - TypeScript interfaces (ChatParams, ImageParams, RAGSettings, MemorySettings, etc.)
+- `src/Types/types.ts` - TypeScript interfaces (ChatParams, ImageParams, RAGSettings, MemorySettings, ProjectSettings, etc.)
 - `src/utils/constants.ts` - Provider/model/endpoint constants (includes `images`, `chat`, `messages`, `assistant`, `claudeCodeEndpoint`, etc.)
 - `src/utils/models.ts` - Model configuration definitions
 - `src/utils/utils.ts` - API validation and helper functions

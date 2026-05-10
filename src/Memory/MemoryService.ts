@@ -29,7 +29,7 @@
  */
 
 import { App, Notice } from "obsidian";
-import { VaultIndexer, SearchResult } from "RAG/VaultIndexer";
+import { VaultIndexer } from "RAG/VaultIndexer";
 import { EmbeddingService } from "RAG/EmbeddingService";
 import { Message } from "Types/types";
 
@@ -291,67 +291,65 @@ ${mem.content}
 
 	/**
 	 * Recall relevant memories for a query string, searching across all active
-	 * scope folders. Returns a formatted system-context block ready to prepend.
+	 * scope folders.
+	 *
+	 * Loads memory files directly from disk (bypassing the global vault index),
+	 * embeds each one, and ranks by cosine similarity to the query. This is
+	 * more reliable than global vault search + folder filter, which fails when
+	 * the memory file isn't in the top-N results across the entire vault.
 	 *
 	 * @param query    The user's current prompt.
 	 * @param ctx      Active assistant / project scope info.
-	 * @param topK     Maximum results per scope (default 5).
-	 * @param indexer  VaultIndexer instance (used for hybrid search).
+	 * @param topK     Maximum memories to return overall (default 5).
+	 * @param _indexer Unused — kept for signature compatibility.
 	 * @returns        Formatted context block, or null if nothing was found.
 	 */
 	async recall(
 		query: string,
 		ctx: MemoryContext,
 		topK: number = DEFAULT_RECALL_TOP_K,
-		indexer: VaultIndexer | null,
+		_indexer: VaultIndexer | null,
 	): Promise<string | null> {
-		if (!indexer) return null;
-
 		const folders = this.scopeFolders(ctx);
-		const results: SearchResult[] = [];
 
+		// Load all memory records from every relevant scope folder
+		const allMemories: MemoryRecord[] = [];
 		for (const folder of folders) {
+			const records = await this.loadMemoriesFromFolder(folder);
+			allMemories.push(...records);
+		}
+
+		if (allMemories.length === 0) return null;
+
+		// Embed the query, then rank memories by cosine similarity
+		let queryVec: number[];
+		try {
+			queryVec = await this.embedding.embed(query);
+		} catch (e) {
+			// Embedding failed — fall back to returning all memories up to topK
+			console.warn("[Memory] Query embedding failed during recall, using all memories:", e);
+			return formatMemoriesAsContext(allMemories.slice(0, topK).map(m => m.content));
+		}
+
+		const scored: { content: string; score: number }[] = [];
+		for (const mem of allMemories) {
 			try {
-				const folderResults = await this.searchInFolder(query, folder, topK, indexer);
-				results.push(...folderResults);
-			} catch (e) {
-				// Folder may not exist yet — skip silently
-				console.debug(`[Memory] Recall skipped folder "${folder}":`, e);
+				const memVec = await this.embedding.embed(mem.content);
+				const score = cosineSimilarity(queryVec, memVec);
+				scored.push({ content: mem.content, score });
+			} catch {
+				// If a single memory fails to embed, include it at score 0
+				// so it can still appear if there are few memories
+				scored.push({ content: mem.content, score: 0 });
 			}
 		}
 
-		if (results.length === 0) return null;
+		// Sort by descending similarity, take top K
+		scored.sort((a, b) => b.score - a.score);
+		const top = scored.slice(0, topK);
 
-		// Sort by score descending, de-duplicate by filePath, take top topK overall
-		const seen = new Set<string>();
-		const deduped: SearchResult[] = [];
-		for (const r of results.sort((a, b) => b.score - a.score)) {
-			if (!seen.has(r.filePath)) {
-				seen.add(r.filePath);
-				deduped.push(r);
-				if (deduped.length >= topK) break;
-			}
-		}
-
-		return formatMemoriesAsContext(deduped);
-	}
-
-	/**
-	 * Search the VaultIndexer but restrict results to chunks whose filePath
-	 * is inside `folder`.
-	 */
-	private async searchInFolder(
-		query: string,
-		folder: string,
-		topK: number,
-		indexer: VaultIndexer,
-	): Promise<SearchResult[]> {
-		// We fetch more results than needed and filter by folder prefix
-		const raw = await indexer.search(query, topK * 4);
-		const prefix = folder.endsWith("/") ? folder : folder + "/";
-		return raw
-			.filter((r) => r.filePath.startsWith(prefix))
-			.slice(0, topK);
+		console.log(`[Memory] Recalled ${top.length} memories (best score: ${top[0]?.score.toFixed(3)})`);
+		return formatMemoriesAsContext(top.map(s => s.content));
 	}
 
 	// ── Load memory files ────────────────────────────────────────────────────────
@@ -435,7 +433,7 @@ function yamlString(yaml: string, key: string): string | null {
 
 // ── Formatting ────────────────────────────────────────────────────────────────
 
-function formatMemoriesAsContext(results: SearchResult[]): string {
+function formatMemoriesAsContext(contents: string[]): string {
 	const lines = [
 		"# Recalled Memories",
 		"",
@@ -443,9 +441,7 @@ function formatMemoriesAsContext(results: SearchResult[]): string {
 		"",
 	];
 
-	for (const r of results) {
-		// Strip the chunk prefix added by VaultIndexer (e.g. "[AI/Memories/xxx.md]\n")
-		const content = r.text.replace(/^\[[^\]]+\]\n/, "").trim();
+	for (const content of contents) {
 		lines.push(`- ${content}`);
 	}
 

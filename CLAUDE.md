@@ -310,11 +310,86 @@ created: <ISO date>
 
 `LLMPluginSettings.projectSettings: ProjectSettings` — deep-merged on load with defaults `{ activeProjectId: null }`.
 
+### Assistants System
+
+The plugin supports a vault-native Assistants feature. Assistants are user-defined AI personas stored as `ASSISTANT.md` files in the vault. This is **distinct from the existing OpenAI Assistants API integration** (`AssistantHandler.ts`/`AssistantsContainer.ts`) — do not modify those files.
+
+#### Vault hierarchy
+
+```
+<rootVaultFolder>/
+  Assistants/
+    <assistant-id>/
+      ASSISTANT.md             ← assistant definition
+      memories/                ← assistant-scoped memory files
+```
+
+#### ASSISTANT.md format
+
+```yaml
+---
+name: My Assistant
+description: One-line description
+provider: claude                   # informational only
+model: claude-sonnet-4-6           # informational only
+enabled-skills:                    # skill ids from AI/Skills/
+  - summarize
+  - create-note
+allowed-tools:                     # ObsidianToolRegistry tool names
+  - obsidian_read_note
+  - obsidian_search
+created: 2024-01-01T00:00:00.000Z
+---
+
+<system prompt — injected into context when this assistant is active>
+```
+
+#### Key files
+
+- **`src/Assistants/AssistantManager.ts`** — discovers and parses `ASSISTANT.md` files; hot-reloads on vault `create/modify/delete/rename` events. Same adapter-based pattern as `SkillRegistry` and `ProjectManager`. Also has `createAssistant()` / `deleteAssistant()` helpers.
+- **`src/Types/types.ts`** — `Assistant` and `AssistantSettings` types.
+
+#### How it integrates
+
+- `LLMPlugin.assistantManager` is the singleton instance (always initialized, folder derived from `rootVaultFolder`).
+- `LLMPlugin.settings.assistantSettings.activeAssistantId` (persisted) holds the active assistant id or `null`.
+- `LLMPlugin.assistantsFolder` getter returns `<rootVaultFolder>/Assistants`.
+- In `ChatContainer.handleGenerateClick()`, if an assistant is active:
+  1. Its `enabled-skills` are merged with globally-enabled skills (union).
+  2. Its `allowed-tools` intersect with any skill-level tool restrictions (most restrictive wins).
+  3. Its system prompt is injected as `# Assistant: <name>` block — positioned **after** project instructions (project is outer, assistant is inner).
+  4. Memory recall passes `activeAssistant: assistant.id` to `MemoryContext`, so assistant-scoped memories are included.
+- If no explicit assistant is set but the active project has a `default-assistant`, that assistant is auto-activated for the conversation.
+- Memory extraction scope: project active → write to project memories; only assistant active → write to assistant memories; neither → global.
+- The assistant switcher pill in the chat header shows the active assistant or is hidden when no assistants exist.
+- `LLMPlugin.reinitAssistantManager()` is called when `rootVaultFolder` changes (Settings → General).
+- Assistants are managed (create/edit/delete/activate) via Settings → Core Settings → Assistants.
+
+#### Context injection order (from top of model context to bottom)
+
+```
+[Recalled memories]     ← prepended last, so they appear first
+[Project instructions]  ← outer scope
+[Assistant system prompt] ← inner persona
+[Skill instructions]
+[Vault / file context]
+```
+
+#### `assistantSettings` persistence
+
+`LLMPluginSettings.assistantSettings: AssistantSettings` — deep-merged on load with defaults `{ activeAssistantId: null }`.
+
+#### CSS classes
+
+- `.llm-assistant-switcher` — header pill button (hidden via `.llm-assistant-switcher--hidden` when no assistants exist; accent-coloured via `.llm-assistant-switcher--active`)
+- `.llm-assistant-panel` — per-response indicator showing which assistant was active (analogous to `.llm-skill-panel` and `.llm-memory-panel`)
+
 ### Key Files
 
+- `src/Assistants/AssistantManager.ts` - Assistant discovery, parsing, hot-reload, and create/delete helpers
 - `src/Projects/ProjectManager.ts` - Project discovery, parsing, hot-reload, and create/delete helpers
 - `src/Memory/MemoryService.ts` - Memory extraction, deduplication, recall, and vault persistence
-- `src/Types/types.ts` - TypeScript interfaces (ChatParams, ImageParams, RAGSettings, MemorySettings, ProjectSettings, etc.)
+- `src/Types/types.ts` - TypeScript interfaces (ChatParams, ImageParams, RAGSettings, MemorySettings, ProjectSettings, AssistantSettings, etc.)
 - `src/utils/constants.ts` - Provider/model/endpoint constants (includes `images`, `chat`, `messages`, `assistant`, `claudeCodeEndpoint`, etc.)
 - `src/utils/models.ts` - Model configuration definitions
 - `src/utils/utils.ts` - API validation and helper functions

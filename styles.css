@@ -2032,6 +2032,103 @@ details[open] .llm-tool-calls-chevron {
 	color: var(--text-faint);
 }
 
+/* ── Assistant switcher (header pill) ────────────────────────────────────── */
+
+.llm-assistant-switcher {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	padding: var(--size-2-1) var(--size-4-2);
+	background: transparent;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	max-width: 160px;
+	white-space: nowrap;
+	overflow: hidden;
+	transition: background 100ms ease, border-color 100ms ease;
+	box-shadow: none;
+	margin-left: var(--size-2-2);
+}
+
+.llm-assistant-switcher:hover {
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover);
+	color: var(--text-normal);
+}
+
+.llm-assistant-switcher--active {
+	border-color: var(--color-purple);
+	color: var(--text-normal);
+}
+
+.llm-assistant-switcher--hidden {
+	display: none;
+}
+
+.llm-assistant-switcher-icon {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	--icon-size: var(--icon-xs);
+	--icon-stroke: 1.5;
+	color: var(--text-faint);
+}
+
+.llm-assistant-switcher--active .llm-assistant-switcher-icon {
+	color: var(--color-purple);
+}
+
+.llm-assistant-switcher-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	flex: 1;
+}
+
+.llm-assistant-switcher-chevron {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	--icon-size: var(--icon-xs);
+	--icon-stroke: 1.5;
+	color: var(--text-faint);
+}
+
+/* ── Assistant panel indicator (below assistant message) ─────────────────── */
+
+.llm-assistant-panel {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-bottom: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-2);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.llm-assistant-panel-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+	color: var(--color-purple);
+}
+
+.llm-assistant-panel-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 200px;
+}
+
 /* ── Pinned note chip (project pinned notes — non-removable) ──────────────── */
 
 .llm-context-chip--pinned {

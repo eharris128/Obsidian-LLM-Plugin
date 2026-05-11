@@ -214,6 +214,34 @@ export type ProjectSettings = {
 	activeProjectId: string | null;
 };
 
+export type Assistant = {
+	/** Unique key derived from the folder name. */
+	id: string;
+	/** Display name from frontmatter `name:`, or falls back to id. */
+	name: string;
+	/** One-line description from frontmatter `description:`. */
+	description: string;
+	/** Provider hint from frontmatter `provider:` (informational). */
+	provider: string;
+	/** Model hint from frontmatter `model:` (informational). */
+	model: string;
+	/** Skill ids from `enabled-skills:` — activated when this assistant is active. */
+	enabledSkills: string[];
+	/** Tool names from `allowed-tools:` — restricts the tool registry when active. Empty = all tools. */
+	allowedTools: string[];
+	/** ISO date from frontmatter `created:`. */
+	created: string;
+	/** Vault path of the ASSISTANT.md file. */
+	filePath: string;
+	/** The system prompt body (everything below the --- frontmatter block). */
+	systemPrompt: string;
+};
+
+export type AssistantSettings = {
+	/** The id of the currently active assistant, or null for none. */
+	activeAssistantId: string | null;
+};
+
 export type ToolSettings = {
 	/**
 	 * Tool names that are permanently disabled and will never be offered to the

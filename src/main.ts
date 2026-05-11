@@ -1,5 +1,6 @@
 import { Plugin, WorkspaceLeaf, Platform } from "obsidian";
 import {
+	AssistantSettings,
 	HistoryItem,
 	ImageQuality,
 	ImageSize,
@@ -11,6 +12,7 @@ import {
 	ToolSettings,
 	ViewSettings,
 } from "./Types/types";
+import { AssistantManager } from "Assistants/AssistantManager";
 import { ProjectManager } from "Projects/ProjectManager";
 import { MemoryService } from "Memory/MemoryService";
 import { SkillRegistry } from "Skills/SkillRegistry";
@@ -90,6 +92,7 @@ export interface LLMPluginSettings {
 	skillsSettings: SkillsSettings;
 	memorySettings: MemorySettings;
 	projectSettings: ProjectSettings;
+	assistantSettings: AssistantSettings;
 	toolSettings: ToolSettings;
 	/**
 	 * Root vault folder for all AI feature data (default "AI").
@@ -193,6 +196,9 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	projectSettings: {
 		activeProjectId: null,
 	},
+	assistantSettings: {
+		activeAssistantId: null,
+	},
 	toolSettings: {
 		disabledTools: [],
 		maxToolCalls: 10,
@@ -225,6 +231,8 @@ export default class LLMPlugin extends Plugin {
 	skillRegistry: SkillRegistry;
 	/** Projects registry — always initialized; folder derived from rootVaultFolder. */
 	projectManager: ProjectManager;
+	/** Assistants registry — always initialized; folder derived from rootVaultFolder. */
+	assistantManager: AssistantManager;
 
 	async onload() {
 		this.fileSystem = Platform.isDesktop
@@ -239,12 +247,15 @@ export default class LLMPlugin extends Plugin {
 		this.registerRagVaultEvents();
 		this.skillRegistry = new SkillRegistry(this.app);
 		this.projectManager = new ProjectManager(this.app);
-		// Skills and Projects are in the vault — wait for layout ready before scanning
+		this.assistantManager = new AssistantManager(this.app);
+		// Skills, Projects, and Assistants are in the vault — wait for layout ready before scanning
 		this.app.workspace.onLayoutReady(async () => {
 			await this.skillRegistry.setFolder(this.skillsFolder);
 			this.registerSkillVaultEvents();
 			await this.projectManager.setFolder(this.projectsFolder);
 			this.registerProjectVaultEvents();
+			await this.assistantManager.setFolder(this.assistantsFolder);
+			this.registerAssistantVaultEvents();
 		});
 		this.registerOllamaModels();
 		this.registerLMStudioModels();
@@ -476,11 +487,26 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	/**
+	 * Derived path to the Assistants folder: "<rootVaultFolder>/Assistants".
+	 */
+	get assistantsFolder(): string {
+		return (this.settings.rootVaultFolder || "AI") + "/Assistants";
+	}
+
+	/**
 	 * Re-initialise the ProjectManager from current settings.
 	 * Call after the root vault folder setting changes.
 	 */
 	async reinitProjectManager(): Promise<void> {
 		await this.projectManager.setFolder(this.projectsFolder);
+	}
+
+	/**
+	 * Re-initialise the AssistantManager from current settings.
+	 * Call after the root vault folder setting changes.
+	 */
+	async reinitAssistantManager(): Promise<void> {
+		await this.assistantManager.setFolder(this.assistantsFolder);
 	}
 
 	/**
@@ -519,6 +545,47 @@ export default class LLMPlugin extends Plugin {
 				}
 				if (this.projectManager.isProjectFile(file.path)) {
 					await this.projectManager.loadProjectByPath(file.path);
+				}
+			})
+		);
+	}
+
+	/**
+	 * Register vault events to keep the AssistantManager hot-reloaded whenever
+	 * ASSISTANT.md files inside the assistants folder are created, modified, or deleted.
+	 */
+	private registerAssistantVaultEvents(): void {
+		this.registerEvent(
+			this.app.vault.on("create", async (file) => {
+				if (this.assistantManager.isAssistantFile(file.path)) {
+					await this.assistantManager.loadAssistantByPath(file.path);
+				}
+			})
+		);
+
+		this.registerEvent(
+			this.app.vault.on("modify", async (file) => {
+				if (this.assistantManager.isAssistantFile(file.path)) {
+					await this.assistantManager.loadAssistantByPath(file.path);
+				}
+			})
+		);
+
+		this.registerEvent(
+			this.app.vault.on("delete", (file) => {
+				if (this.assistantManager.isAssistantFile(file.path)) {
+					this.assistantManager.removeByPath(file.path);
+				}
+			})
+		);
+
+		this.registerEvent(
+			this.app.vault.on("rename", async (file, oldPath) => {
+				if (this.assistantManager.isAssistantFile(oldPath)) {
+					this.assistantManager.removeByPath(oldPath);
+				}
+				if (this.assistantManager.isAssistantFile(file.path)) {
+					await this.assistantManager.loadAssistantByPath(file.path);
 				}
 			})
 		);
@@ -775,6 +842,12 @@ export default class LLMPlugin extends Plugin {
 			this.settings.projectSettings = {
 				...DEFAULT_SETTINGS.projectSettings,
 				...(dataJSON.projectSettings ?? {}),
+			};
+
+			// Deep-merge assistantSettings so new fields get defaults if missing from saved data
+			this.settings.assistantSettings = {
+				...DEFAULT_SETTINGS.assistantSettings,
+				...(dataJSON.assistantSettings ?? {}),
 			};
 
 			// Ensure rootVaultFolder has a value (new field — may be absent in old saves)

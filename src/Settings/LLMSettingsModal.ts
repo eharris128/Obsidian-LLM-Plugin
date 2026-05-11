@@ -79,9 +79,10 @@ export class LLMSettingsModal extends Modal {
 				{ id: "interface", label: "Interface",  icon: "layout-dashboard" },
 				{ id: "chat",      label: "Chat",       icon: "message-square" },
 				{ id: "tools",     label: "Tools",      icon: "wrench" },
-				{ id: "skills",    label: "Skills",     icon: "scroll-text" },
+				{ id: "skills",     label: "Skills",     icon: "scroll-text" },
 				{ id: "memory",    label: "Memory",     icon: "brain" },
 				{ id: "projects",  label: "Projects",   icon: "folder-open" },
+				{ id: "assistants", label: "Assistants", icon: "bot" },
 			],
 		},
 		{
@@ -256,6 +257,7 @@ export class LLMSettingsModal extends Modal {
 			case "skills":        this.renderSkills();        break;
 			case "memory":        this.renderMemory();        break;
 			case "projects":      this.renderProjects();      break;
+			case "assistants":    this.renderAssistants();    break;
 		}
 	}
 
@@ -343,6 +345,7 @@ export class LLMSettingsModal extends Modal {
 					await this.plugin.saveSettings();
 					await this.plugin.reinitSkillRegistry();
 					await this.plugin.reinitProjectManager();
+					await this.plugin.reinitAssistantManager();
 				});
 			});
 	}
@@ -1266,6 +1269,157 @@ export class LLMSettingsModal extends Modal {
 						await this.plugin.projectManager.deleteProject(project.id);
 						new Notice(`Project "${project.name}" deleted.`);
 						this.renderTab("projects");
+					});
+			});
+		}
+	}
+
+	private renderAssistants() {
+		const el = this.mainContentEl;
+		this.addTabHeader(el, "Assistants");
+
+		const assistantsFolder = this.plugin.assistantsFolder;
+		el.createDiv({
+			cls: "setting-item-description",
+			text: `Assistants are loaded from "${assistantsFolder}". Each assistant is a sub-folder containing an ASSISTANT.md file.`,
+		});
+
+		// ── Create new assistant form ──────────────────────────────────────────
+		const createGroup = this.addSettingGroup(el, "New Assistant");
+
+		let newAssistantName = "";
+		let newAssistantDescription = "";
+
+		new Setting(createGroup)
+			.setName("Name")
+			.setDesc("Display name and folder slug (spaces become hyphens).")
+			.addText((text) => {
+				text.setPlaceholder("e.g. Research Helper");
+				text.onChange((v) => { newAssistantName = v; });
+			});
+
+		new Setting(createGroup)
+			.setName("Description")
+			.setDesc("One-line summary of this assistant's purpose.")
+			.addText((text) => {
+				text.setPlaceholder("e.g. Helps me synthesize research notes");
+				text.onChange((v) => { newAssistantDescription = v; });
+			});
+
+		new Setting(createGroup)
+			.addButton((btn) => {
+				btn.setButtonText("Create assistant")
+					.setCta()
+					.onClick(async () => {
+						const name = newAssistantName.trim();
+						if (!name) {
+							new Notice("Please enter an assistant name.");
+							return;
+						}
+						// Slugify the name for the folder
+						const id = name
+							.toLowerCase()
+							.replace(/[^\w\s-]/g, "")
+							.replace(/\s+/g, "-")
+							.replace(/-+/g, "-")
+							.replace(/^-|-$/g, "")
+							.slice(0, 60) || "assistant";
+
+						const filePath = await this.plugin.assistantManager.createAssistant(
+							id,
+							name,
+							newAssistantDescription.trim()
+						);
+						if (filePath) {
+							new Notice(`✓ Assistant "${name}" created.`);
+							// Open the ASSISTANT.md in the vault for editing
+							const file = this.plugin.app.vault.getFileByPath(filePath);
+							if (file) {
+								const leaf = this.plugin.app.workspace.getLeaf(false);
+								await leaf.openFile(file);
+							}
+							this.renderTab("assistants");
+						} else {
+							new Notice("Failed to create assistant.");
+						}
+					});
+			});
+
+		// ── Existing assistants ────────────────────────────────────────────────
+		const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
+		if (assistants.length === 0) {
+			el.createDiv({
+				cls: "setting-item-description",
+				text: "No assistants yet. Create one above.",
+			});
+			return;
+		}
+
+		const listGroup = this.addSettingGroup(
+			el,
+			`${assistants.length} Assistant${assistants.length === 1 ? "" : "s"}`
+		);
+		const activeId = this.plugin.settings.assistantSettings?.activeAssistantId;
+
+		for (const assistant of assistants) {
+			const descParts: string[] = [];
+			if (assistant.description) descParts.push(assistant.description);
+			if (assistant.enabledSkills.length > 0) {
+				descParts.push(`${assistant.enabledSkills.length} skill${assistant.enabledSkills.length === 1 ? "" : "s"}`);
+			}
+			if (assistant.allowedTools.length > 0) {
+				descParts.push(`${assistant.allowedTools.length} tool${assistant.allowedTools.length === 1 ? "" : "s"}`);
+			}
+			if (activeId === assistant.id) descParts.push("● Active");
+
+			const setting = new Setting(listGroup)
+				.setName(assistant.name)
+				.setDesc(descParts.join(" · ") || assistant.id);
+
+			// Edit: open ASSISTANT.md in vault
+			setting.addButton((btn) => {
+				btn.setIcon("pencil")
+					.setTooltip("Edit ASSISTANT.md")
+					.onClick(async () => {
+						const file = this.plugin.app.vault.getFileByPath(assistant.filePath);
+						if (file) {
+							const leaf = this.plugin.app.workspace.getLeaf(false);
+							await leaf.openFile(file);
+						} else {
+							new Notice("ASSISTANT.md not found in vault.");
+						}
+					});
+			});
+
+			// Activate / deactivate
+			setting.addButton((btn) => {
+				const isActive = activeId === assistant.id;
+				btn.setButtonText(isActive ? "Deactivate" : "Activate")
+					.setTooltip(isActive ? "Clear active assistant" : "Set as active assistant")
+					.onClick(async () => {
+						this.plugin.settings.assistantSettings = {
+							...this.plugin.settings.assistantSettings,
+							activeAssistantId: isActive ? null : assistant.id,
+						};
+						await this.plugin.saveSettings();
+						this.renderTab("assistants");
+					});
+			});
+
+			// Delete
+			setting.addButton((btn) => {
+				btn.setIcon("trash")
+					.setTooltip("Delete assistant")
+					.setWarning()
+					.onClick(async () => {
+						// If deleting the active assistant, clear active
+						if (this.plugin.settings.assistantSettings?.activeAssistantId === assistant.id) {
+							this.plugin.settings.assistantSettings.activeAssistantId = null;
+							await this.plugin.saveSettings();
+						}
+						await this.plugin.assistantManager.deleteAssistant(assistant.id);
+						new Notice(`Assistant "${assistant.name}" deleted.`);
+						this.renderTab("assistants");
 					});
 			});
 		}

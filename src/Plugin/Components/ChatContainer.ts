@@ -168,6 +168,8 @@ export class ChatContainer {
 	private memoriesInjectedThisTurn: boolean = false;
 	/** Stored reference so we can update the memory button's active state. */
 	private memoryButton: import("obsidian").ButtonComponent | null = null;
+	/** Display name of the assistant active for the current generation — cleared after the indicator is shown. */
+	private activeAssistantNameThisTurn: string | null = null;
 
 	constructor(
 		private plugin: LLMPlugin,
@@ -881,9 +883,28 @@ export class ChatContainer {
 		}
 		// ── End /remember ────────────────────────────────────────────────────────
 
+		// ── Resolve active project and assistant (needed by multiple blocks below) ──
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
+		const activeProject = activeProjectId
+			? this.plugin.projectManager?.getProject(activeProjectId)
+			: null;
+
+		// Resolve active assistant: explicit setting first, then project default-assistant
+		const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
+		let activeAssistant = activeAssistantId
+			? (this.plugin.assistantManager?.getAssistant(activeAssistantId) ?? null)
+			: null;
+		// Auto-activate project's default-assistant if no explicit assistant is set
+		if (!activeAssistant && activeProject?.defaultAssistant) {
+			activeAssistant = this.plugin.assistantManager?.getAssistantByName(activeProject.defaultAssistant) ?? null;
+		}
+		// Track for the post-generation UI indicator
+		this.activeAssistantNameThisTurn = activeAssistant?.name ?? null;
+		// ── End resolve active project / assistant ───────────────────────────────
+
 		// ── Skill resolution ────────────────────────────────────────────────────
 		// 1. Check for /skill-name prefix in the prompt (slash invocation).
-		// 2. If no slash invocation, apply any globally-enabled skills.
+		// 2. If no slash invocation, apply globally-enabled skills + assistant-enabled skills.
 		this.activeSkillId = null;
 		let skillInstructions: string | null = null;
 		let skillAllowedTools: string[] = [];
@@ -911,11 +932,13 @@ export class ChatContainer {
 			}
 		}
 
-		// If no slash invocation, collect all globally-enabled skill instructions
+		// If no slash invocation, collect all globally-enabled + assistant-enabled skill instructions
 		if (!this.activeSkillId) {
 			const enabledSkills = this.plugin.settings.skillsSettings?.enabledSkills ?? {};
+			// Build the union of global enabled skill ids and assistant-enabled skill ids
+			const assistantSkillIds = new Set<string>(activeAssistant?.enabledSkills ?? []);
 			const activeSkills = (this.plugin.skillRegistry?.getSkills() ?? []).filter(
-				(s) => enabledSkills[s.id]
+				(s) => enabledSkills[s.id] || assistantSkillIds.has(s.id)
 			);
 			if (activeSkills.length > 0) {
 				const instructionBlocks = activeSkills
@@ -935,6 +958,20 @@ export class ChatContainer {
 			}
 		}
 
+		// Apply assistant's allowed-tools as an additional restriction.
+		// If the assistant specifies allowed-tools, intersect with any skill restriction (most restrictive wins).
+		const assistantAllowedTools = activeAssistant?.allowedTools ?? [];
+		if (assistantAllowedTools.length > 0) {
+			if (skillAllowedTools.length > 0) {
+				// Both have restrictions — take the intersection
+				const assistantSet = new Set(assistantAllowedTools);
+				skillAllowedTools = skillAllowedTools.filter((t) => assistantSet.has(t));
+			} else {
+				// Only assistant has a restriction — use it
+				skillAllowedTools = assistantAllowedTools;
+			}
+		}
+
 		// Inject skill instructions into the pending context
 		if (skillInstructions) {
 			const block = `# Skill Instructions\n\n${skillInstructions}`;
@@ -944,12 +981,17 @@ export class ChatContainer {
 		}
 		// ── End skill resolution ─────────────────────────────────────────────────
 
-		// ── Project context injection ─────────────────────────────────────────────
-		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
-		const activeProject = activeProjectId
-			? this.plugin.projectManager?.getProject(activeProjectId)
-			: null;
+		// ── Assistant system prompt injection ─────────────────────────────────────
+		// Inject BEFORE project so that project context (outer) wraps assistant (inner).
+		// Effective order from model's top-of-context perspective: memories → project → assistant → skills → context
+		if (activeAssistant?.systemPrompt && modelEndpoint !== images) {
+			const block = `# Assistant: ${activeAssistant.name}\n\n${activeAssistant.systemPrompt}`;
+			this.pendingContextString = block +
+				(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
+		}
+		// ── End assistant system prompt injection ─────────────────────────────────
 
+		// ── Project context injection ─────────────────────────────────────────────
 		if (activeProject && modelEndpoint !== images) {
 			// Inject pinned notes as context
 			if (activeProject.pinnedNotes?.length > 0) {
@@ -984,6 +1026,8 @@ export class ChatContainer {
 		) {
 			try {
 				const memCtx: MemoryContext = {
+					// MemoryService uses the id as the folder name (slug), not the display name
+					activeAssistant: activeAssistant?.id,
 					activeProject: activeProject?.name,
 				};
 				const recalled = await this.plugin.memoryService.recall(
@@ -1075,6 +1119,11 @@ export class ChatContainer {
 					this.appendMemoryIndicator(this.loadingDivContainer);
 					this.memoriesInjectedThisTurn = false;
 				}
+				// Show assistant indicator if an assistant was active this turn
+				if (this.activeAssistantNameThisTurn) {
+					this.appendAssistantIndicator(this.loadingDivContainer, this.activeAssistantNameThisTurn);
+					this.activeAssistantNameThisTurn = null;
+				}
 				// Clear context and active skill after generation
 				this.currentVaultContext = null;
 				this.pendingContextString = null;
@@ -1125,6 +1174,7 @@ export class ChatContainer {
 			this.prompt = "";
 			this.pendingRagSources = [];
 			this.activeSkillId = null;
+			this.activeAssistantNameThisTurn = null;
 			errorMessages(error, params);
 			if (this.getMessages().length > 0) {
 				setTimeout(() => {
@@ -2856,6 +2906,16 @@ export class ChatContainer {
 	}
 
 	/**
+	 * Append a small indicator showing which assistant was active for this generation.
+	 */
+	private appendAssistantIndicator(container: HTMLElement, assistantName: string): void {
+		const panel = container.createDiv({ cls: "llm-assistant-panel" });
+		const iconEl = panel.createSpan({ cls: "llm-assistant-panel-icon" });
+		setIcon(iconEl, "bot");
+		panel.createSpan({ cls: "llm-assistant-panel-label", text: assistantName });
+	}
+
+	/**
 	 * Build a callModel wrapper for the active provider, used by MemoryService
 	 * to run the extraction prompt.
 	 */
@@ -2936,11 +2996,31 @@ export class ChatContainer {
 			return;
 		}
 		new Notice("Extracting memories…");
+
+		// Determine the extraction scope:
+		// - If a project is active: write to the project's memories folder
+		// - Else if an assistant is active: write to the assistant's memories folder
+		// - Otherwise: write to global memories folder
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
+		const activeProject = activeProjectId
+			? this.plugin.projectManager?.getProject(activeProjectId)
+			: null;
+		const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
+		const activeAssistant = activeAssistantId
+			? this.plugin.assistantManager?.getAssistant(activeAssistantId)
+			: null;
+
+		const scope = activeProject ? "project"
+			: activeAssistant ? "assistant"
+			: "global";
+		// MemoryService uses the id (slug) as the folder name for assistants, display name for projects
+		const scopeName = activeProject?.name ?? activeAssistant?.id;
+
 		try {
 			await this.plugin.memoryService.extractAndSave(
 				messages,
-				"global",
-				undefined,
+				scope,
+				scopeName,
 				callModel,
 			);
 		} catch (e) {

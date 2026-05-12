@@ -2212,3 +2212,12 @@ details[open] .llm-tool-calls-chevron {
 .llm-context-chip--pinned .llm-context-chip-icon {
 	color: var(--interactive-accent);
 }
+
+.llm-context-chip--clickable {
+	cursor: pointer;
+}
+
+.llm-context-chip--clickable:hover {
+	background-color: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+	border-color: var(--interactive-accent-hover);
+}

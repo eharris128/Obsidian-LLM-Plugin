@@ -261,7 +261,16 @@ export class ChatContainer {
 
 	getParams(endpoint: string, model: string, modelType: string) {
 		const settingType = getSettingType(this.viewType);
-		const storedMessages = this.getMessages();
+		const rawMessages = this.getMessages();
+
+		// Strip any tool-call structured messages (role: "tool", tool_calls
+		// arrays, Anthropic content-block arrays) before sending to models that
+		// don't support the agent/tool-call message format.  Models that do
+		// support agent mode receive messages as-is because their own AgentLoop
+		// manages the tool-call turns locally anyway.
+		const storedMessages = this.supportsAgentMode(modelType)
+			? rawMessages
+			: this.sanitizeMessagesForNonAgentModel(rawMessages);
 
 		// For OpenAI-compatible providers, inject context as a system message so it
 		// stays separate from the user's message. Claude and Gemini handle system
@@ -1262,6 +1271,85 @@ export class ChatContainer {
 		);
 	}
 
+	/**
+	 * Strip or flatten any tool-call structured messages from a message list so
+	 * that models which don't understand the tool-call message format receive
+	 * clean plain-text history.
+	 *
+	 * The MessageStore only ever stores { role, content: string } messages, so
+	 * this is currently a defensive guard. It becomes load-bearing if a future
+	 * code path ever writes OpenAI-format tool-call objects (role: "tool",
+	 * tool_calls arrays) or Anthropic structured content blocks into the store.
+	 *
+	 * Transformation rules:
+	 *  - role: "tool" messages → dropped entirely (their content is implicit in
+	 *    the following assistant turn's text response)
+	 *  - role: "assistant" with tool_calls → keep only the text portion
+	 *  - role: "user" with array content (Anthropic tool_result blocks) →
+	 *    flatten text blocks; summarise tool_result blocks as "[Tool result: …]"
+	 *  - Everything else → passed through unchanged
+	 */
+	private sanitizeMessagesForNonAgentModel(messages: Message[]): Message[] {
+		const out: Message[] = [];
+		for (const msg of messages) {
+			// Use `any` to inspect fields that the narrower Message type doesn't
+			// declare but that may appear in practice (e.g. OpenAI tool messages).
+			const raw = msg as any;
+
+			// Pure tool-result messages — drop them; their semantic content is
+			// already captured in the assistant's final text reply.
+			if (raw.role === "tool") continue;
+
+			// Assistant messages that contain tool_calls alongside (possibly
+			// empty) text — keep only the text portion.
+			if (raw.role === "assistant" && raw.tool_calls) {
+				const text =
+					typeof raw.content === "string"
+						? raw.content
+						: Array.isArray(raw.content)
+						? (raw.content as any[])
+								.filter((b) => b.type === "text")
+								.map((b) => b.text ?? "")
+								.join("\n")
+								.trim()
+						: "";
+				if (text) out.push({ role: "assistant", content: text });
+				continue;
+			}
+
+			// User messages whose content is an array (Anthropic tool_result
+			// blocks mixed with optional text blocks).
+			if (raw.role === "user" && Array.isArray(raw.content)) {
+				const parts: string[] = (raw.content as any[])
+					.map((b) => {
+						if (b.type === "text") return (b.text ?? "").trim();
+						if (b.type === "tool_result") {
+							const inner =
+								typeof b.content === "string"
+									? b.content
+									: Array.isArray(b.content)
+									? (b.content as any[])
+											.filter((x) => x.type === "text")
+											.map((x) => x.text ?? "")
+											.join(" ")
+									: "";
+							return inner ? `[Tool result: ${inner.trim()}]` : "";
+						}
+						return "";
+					})
+					.filter(Boolean);
+				if (parts.length > 0) {
+					out.push({ role: "user", content: parts.join("\n") });
+				}
+				continue;
+			}
+
+			// Standard { role, content: string } message — pass through.
+			out.push(msg);
+		}
+		return out;
+	}
+
 	/** Build the right OpenAI-compatible client for a given provider. */
 	private createOpenAIClient(modelType: string): OpenAI {
 		if (modelType === ollama) {
@@ -1779,8 +1867,8 @@ export class ChatContainer {
 
 		// Pinned project notes first
 		for (const notePath of pinnedNotes) {
-			const noteName = notePath.split("/").pop() || notePath;
-			this.buildPinnedChip(this.chipContainer, noteName);
+			const { displayName, file } = this.resolvePinnedNote(notePath);
+			this.buildPinnedChip(this.chipContainer, displayName, file);
 		}
 
 		// File context chips (only when enabled)
@@ -1828,12 +1916,34 @@ export class ChatContainer {
 	}
 
 	/** Build a non-removable pinned-note chip (for project pinned notes). */
-	private buildPinnedChip(container: HTMLElement, name: string): HTMLElement {
+	private buildPinnedChip(container: HTMLElement, name: string, file: TFile | null): HTMLElement {
 		const chip = container.createDiv({ cls: "llm-context-chip llm-context-chip--pinned" });
 		const pinIcon = chip.createEl("span", { cls: "llm-context-chip-icon" });
 		setIcon(pinIcon, "pin");
 		chip.createEl("span", { text: name, cls: "llm-context-chip-name" });
+		if (file) {
+			chip.addClass("llm-context-chip--clickable");
+			chip.addEventListener("click", () => {
+				this.plugin.app.workspace.getLeaf(false).openFile(file);
+			});
+		}
 		return chip;
+	}
+
+	/**
+	 * Resolve a pinned note path (plain path or wikilink like [[Note Name]]) to
+	 * a display name (no brackets, no .md extension) and the TFile if found.
+	 */
+	private resolvePinnedNote(notePath: string): { displayName: string; file: TFile | null } {
+		const isWikilink = notePath.startsWith("[[") && notePath.endsWith("]]");
+		if (isWikilink) {
+			const linkText = notePath.slice(2, -2).split("|")[0].trim(); // handle [[Note|Alias]]
+			const file = this.plugin.app.metadataCache.getFirstLinkpathDest(linkText, "") ?? null;
+			return { displayName: linkText, file };
+		}
+		const file = this.plugin.app.vault.getAbstractFileByPath(notePath);
+		const displayName = notePath.split("/").pop()?.replace(/\.md$/i, "") || notePath;
+		return { displayName, file: file instanceof TFile ? file : null };
 	}
 
 	/**
@@ -1846,14 +1956,13 @@ export class ChatContainer {
 		const blocks: string[] = [];
 		for (const notePath of paths) {
 			try {
-				const file = this.plugin.app.vault.getAbstractFileByPath(notePath);
+				const { displayName, file } = this.resolvePinnedNote(notePath);
 				if (!file) {
 					console.warn(`[Projects] Pinned note not found: ${notePath}`);
 					continue;
 				}
-				const content = await this.plugin.app.vault.read(file as TFile);
-				const name = notePath.split("/").pop() ?? notePath;
-				blocks.push(`### ${name}\nPath: \`${notePath}\`\n\n${content}`);
+				const content = await this.plugin.app.vault.read(file);
+				blocks.push(`### ${displayName}\nPath: \`${file.path}\`\n\n${content}`);
 			} catch (e) {
 				console.warn(`[Projects] Failed to read pinned note ${notePath}:`, e);
 			}

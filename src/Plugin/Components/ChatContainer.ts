@@ -1715,13 +1715,20 @@ export class ChatContainer {
 
 	auto_height(elem: TextAreaComponent, parentElement: Element) {
 		const MAX_HEIGHT = 140; // ~5 lines before scrolling
-		// Collapse to 1px so scrollHeight accurately reflects content height
-		elem.inputEl.setAttribute("style", "height: 1px");
-		const contentHeight = elem.inputEl.scrollHeight;
+		const ta = elem.inputEl;
+		// Collapse height to 0 so scrollHeight accurately reflects content.
+		// Set properties individually to avoid wiping other inline styles.
+		// overflow:hidden must be set before reading scrollHeight so the
+		// browser doesn't add a scrollbar gutter that inflates the measurement.
+		ta.style.overflowY = "hidden";
+		ta.style.height = "0px";
+		const contentHeight = ta.scrollHeight;
 		if (contentHeight <= MAX_HEIGHT) {
-			elem.inputEl.setAttribute("style", `height: ${contentHeight}px; overflow-y: hidden`);
+			ta.style.height = `${contentHeight}px`;
+			ta.style.overflowY = "hidden";
 		} else {
-			elem.inputEl.setAttribute("style", `height: ${MAX_HEIGHT}px; overflow-y: auto`);
+			ta.style.height = `${MAX_HEIGHT}px`;
+			ta.style.overflowY = "auto";
 		}
 		parentElement.scrollTo(0, 9999);
 	}
@@ -2137,6 +2144,11 @@ export class ChatContainer {
 			modelDropdown.selectEl.value = viewSettings.model;
 		}
 
+		// Single unified onChange — handles assistant selection, plain model
+		// selection, AND vault-search visibility in one place so there is never
+		// a second .onChange() call that could silently replace this one.
+		let syncVaultSearchVisibility: ((modelType: string) => void) | null = null;
+
 		modelDropdown.onChange((change) => {
 			if (change.startsWith("assistant:")) {
 				// ── Assistant selected ────────────────────────────────────────
@@ -2157,6 +2169,7 @@ export class ChatContainer {
 					viewSettings.modelType = models[preferredName].type;
 					viewSettings.endpointURL = models[preferredName].url;
 					viewSettings.modelEndpoint = models[preferredName].endpoint;
+					syncVaultSearchVisibility?.(models[preferredName].type);
 				}
 
 				this.plugin.saveSettings();
@@ -2183,6 +2196,7 @@ export class ChatContainer {
 				viewSettings.modelType = models[modelName].type;
 				viewSettings.endpointURL = models[modelName].url;
 				viewSettings.modelEndpoint = models[modelName].endpoint;
+				syncVaultSearchVisibility?.(models[modelName].type);
 				this.plugin.saveSettings();
 				header.setHeader(modelName);
 			}
@@ -2308,8 +2322,8 @@ export class ChatContainer {
 			vaultSearchButton.setTooltip("Search vault");
 			vaultSearchButton.buttonEl.addClass("llm-scan-button");
 
-			// Hide/show based on whether the selected model supports agent mode
-			const syncVaultSearchVisibility = (modelType: string) => {
+			// Wire the shared visibility function — the main onChange above will call it.
+			syncVaultSearchVisibility = (modelType: string) => {
 				const hidden = this.supportsAgentMode(modelType);
 				vaultSearchButton.buttonEl.toggleClass("llm-hidden", hidden);
 				// If we just hid it, also deactivate the toggle so it doesn't
@@ -2326,14 +2340,6 @@ export class ChatContainer {
 			vaultSearchButton.onClick(() => {
 				this.useVaultSearch = !this.useVaultSearch;
 				vaultSearchButton.buttonEl.toggleClass("is-active", this.useVaultSearch);
-			});
-
-			// Re-evaluate whenever the user switches models
-			modelDropdown.onChange((change) => {
-				const modelName = modelNames[change];
-				if (modelName && models[modelName]) {
-					syncVaultSearchVisibility(models[modelName].type);
-				}
 			});
 		}
 

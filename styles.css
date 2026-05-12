@@ -341,8 +341,13 @@ button.llm-send-button:disabled {
 }
 
 .llm-input-section textarea {
-	flex: 1;
+	/* No flex: the wrapper (.llm-prompt-wrapper) already fills the row width via
+	   its own flex:1. Using flex:1 here (flex-basis:0%) on the textarea inside a
+	   column flex container causes the flex algorithm to own the height and ignore
+	   the explicit height: Xpx set by auto_height, breaking textarea expansion. */
+	width: 100%;
 	min-width: 0;
+	box-sizing: border-box;
 }
 
 /* Mirror overlay — rendered on top of the textarea (pointer-events:none).

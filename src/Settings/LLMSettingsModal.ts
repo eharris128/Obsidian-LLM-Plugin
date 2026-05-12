@@ -81,8 +81,9 @@ export class LLMSettingsModal extends Modal {
 				{ id: "tools",     label: "Tools",      icon: "wrench" },
 				{ id: "skills",     label: "Skills",     icon: "scroll-text" },
 				{ id: "memory",    label: "Memory",     icon: "brain" },
-				{ id: "projects",  label: "Projects",   icon: "folder-open" },
-				{ id: "assistants", label: "Assistants", icon: "bot" },
+				{ id: "projects",       label: "Projects",        icon: "folder-open" },
+				{ id: "assistants",     label: "Assistants",      icon: "bot" },
+				{ id: "obsidian-agent", label: "Obsidian Agent",  icon: "stone" },
 			],
 		},
 		{
@@ -101,8 +102,7 @@ export class LLMSettingsModal extends Modal {
 			id: "features",
 			label: "Features",
 			items: [
-				{ id: "vault-search",     label: "Vault Search",     icon: "search" },
-				{ id: "obsidian-agent",   label: "Obsidian Agent",   icon: "cpu" },
+				{ id: "vault-search", label: "Vault Search", icon: "search" },
 			],
 		},
 	];

@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, Platform } from "obsidian";
+import { Plugin, WorkspaceLeaf, Platform, addIcon } from "obsidian";
 import {
 	AssistantSettings,
 	HistoryItem,
@@ -247,6 +247,19 @@ export default class LLMPlugin extends Plugin {
 	obsidianAgent: ObsidianAgent;
 
 	async onload() {
+		// Register custom icons that aren't in the Obsidian-bundled version of Lucide.
+		// addIcon uses a 0 0 100 100 viewBox; scale the 24x24 Lucide paths up by 100/24 ≈ 4.1667.
+		// Wrapping in a <g transform="scale(4.1667)"> is the simplest approach — stroke-width
+		// scales proportionally to ~8.3pt which matches other sidebar icons at this size.
+		addIcon(
+			"stone",
+			`<g transform="scale(4.1667)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			  <path d="M11.264 2.205A4 4 0 0 0 6.42 4.211l-4 8a4 4 0 0 0 1.359 5.117l6 4a4 4 0 0 0 4.438 0l6-4a4 4 0 0 0 1.576-4.592l-2-6a4 4 0 0 0-2.53-2.53z"/>
+			  <path d="M11.99 22 14 12l7.822 3.184"/>
+			  <path d="M14 12 8.47 2.302"/>
+			</g>`
+		);
+
 		this.fileSystem = Platform.isDesktop
 			? new DesktopFileSystem()
 			: new MobileFileSystem(this);

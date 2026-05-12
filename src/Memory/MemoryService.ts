@@ -88,8 +88,8 @@ export class MemoryService {
 	}
 
 	/** Vault-relative path to an assistant's memories folder. */
-	assistantMemoriesFolder(assistantName: string): string {
-		return `${this.rootVaultFolder}/Assistants/${assistantName}/memories`;
+	assistantMemoriesFolder(assistantId: string): string {
+		return `${this.rootVaultFolder}/Assistants/${assistantId}/memories`;
 	}
 
 	/** Vault-relative path to a project's memories folder. */

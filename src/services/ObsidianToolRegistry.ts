@@ -162,22 +162,47 @@ export const ALL_TOOL_DEFINITIONS: NeutralToolDefinition[] = [
 
 export class ObsidianToolRegistry {
 	private tools: NeutralToolDefinition[] = ALL_TOOL_DEFINITIONS;
+	/** Dynamic tools registered at runtime (e.g. invoke_assistant in agent mode). */
+	private dynamicTools: Map<string, { def: NeutralToolDefinition; executor: (input: any) => Promise<ToolResult> }> = new Map();
 
 	constructor(private app: App, private vaultIndexer?: VaultIndexer) {}
 
+	/**
+	 * Register a tool that isn't in ALL_TOOL_DEFINITIONS.
+	 * Used by ObsidianAgent to add `invoke_assistant` at agent-mode start.
+	 */
+	registerDynamicTool(
+		def: NeutralToolDefinition,
+		executor: (input: any) => Promise<ToolResult>
+	): void {
+		this.dynamicTools.set(def.name, { def, executor });
+	}
+
 	getTools(): NeutralToolDefinition[] {
-		return this.tools;
+		const dynamic = Array.from(this.dynamicTools.values()).map((d) => d.def);
+		return [...this.tools, ...dynamic];
 	}
 
 	getRisk(toolName: string): RiskTier {
+		if (this.dynamicTools.has(toolName)) return this.dynamicTools.get(toolName)!.def.risk;
 		return this.tools.find(t => t.name === toolName)?.risk ?? "danger";
 	}
 
 	getDescription(toolName: string): string {
+		if (this.dynamicTools.has(toolName)) return this.dynamicTools.get(toolName)!.def.description;
 		return this.tools.find(t => t.name === toolName)?.description ?? toolName;
 	}
 
 	async executeTool(name: string, input: Record<string, any>): Promise<ToolResult> {
+		// Dynamic tools (registered at runtime) take priority
+		if (this.dynamicTools.has(name)) {
+			try {
+				return await this.dynamicTools.get(name)!.executor(input);
+			} catch (e) {
+				return { success: false, error: String(e) };
+			}
+		}
+
 		try {
 			switch (name) {
 				case "obsidian_create_note": {

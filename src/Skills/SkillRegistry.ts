@@ -25,6 +25,7 @@
  */
 
 import { App, TFile } from "obsidian";
+import { BUILTIN_SKILLS } from "./BuiltinSkills";
 
 export interface ParsedSkill {
 	/** Unique key derived from the folder name (also used for /slash invocation). */
@@ -73,6 +74,39 @@ export class SkillRegistry {
 
 	getFolder(): string {
 		return this.skillsFolder;
+	}
+
+	/**
+	 * Write any missing built-in SKILL.md files into the vault under the current
+	 * skills folder. Existing files are never overwritten — user edits are safe.
+	 * Call this once before reloadAll() during plugin startup.
+	 */
+	async seedBuiltinSkills(): Promise<void> {
+		const adapter = this.app.vault.adapter;
+
+		// Ensure the skills folder itself exists
+		const folderExists = await adapter.exists(this.skillsFolder);
+		if (!folderExists) {
+			await adapter.mkdir(this.skillsFolder);
+		}
+
+		for (const skill of BUILTIN_SKILLS) {
+			const skillDir = `${this.skillsFolder}/${skill.id}`;
+			const skillFile = `${skillDir}/SKILL.md`;
+
+			// Only create if the file doesn't already exist
+			const fileExists = await adapter.exists(skillFile);
+			if (fileExists) continue;
+
+			// Ensure the skill sub-folder exists
+			const dirExists = await adapter.exists(skillDir);
+			if (!dirExists) {
+				await adapter.mkdir(skillDir);
+			}
+
+			await adapter.write(skillFile, skill.content);
+			console.log(`[SkillRegistry] Seeded built-in skill: ${skill.id}`);
+		}
 	}
 
 	/**

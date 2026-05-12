@@ -242,6 +242,25 @@ export type AssistantSettings = {
 	activeAssistantId: string | null;
 };
 
+export type ObsidianAgentSettings = {
+	/** Whether the Obsidian Agent is enabled. When true, FAB and status bar open in agent mode. */
+	enabled: boolean;
+	/** Whether to enable web search (placeholder — for when providers support it). */
+	enableWebSearch: boolean;
+	/**
+	 * Per-skill availability keyed by skill id.
+	 * Explicitly false = excluded from the agent. Missing = available (default true).
+	 */
+	availableSkills: Record<string, boolean>;
+	/**
+	 * Per-assistant availability keyed by assistant id.
+	 * Explicitly false = excluded. Missing = available (default true).
+	 */
+	availableAssistants: Record<string, boolean>;
+	/** Free-text instructions appended after the agent's auto-generated base prompt. */
+	vaultGuidance: string;
+};
+
 export type ToolSettings = {
 	/**
 	 * Tool names that are permanently disabled and will never be offered to the

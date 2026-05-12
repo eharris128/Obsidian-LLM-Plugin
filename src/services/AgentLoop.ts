@@ -53,8 +53,11 @@ export class AgentLoop {
 		allowedTools?: string[],
 		disabledTools?: string[],
 		maxToolCalls?: number,
+		/** Optional callback to configure the registry before the loop runs (e.g. register dynamic tools). */
+		extraSetup?: (registry: ObsidianToolRegistry) => void,
 	) {
 		this.registry = new ObsidianToolRegistry(app, vaultIndexer ?? undefined);
+		extraSetup?.(this.registry);
 		this.allowedTools = allowedTools ?? [];
 		this.disabledTools = disabledTools ?? [];
 		this.maxToolCalls = maxToolCalls ?? 10;

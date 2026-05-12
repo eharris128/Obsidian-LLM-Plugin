@@ -118,6 +118,16 @@ The plugin supports semantic search over the user's vault via three classes in `
 
 The plugin supports a vault-native Skills feature. Each skill is a folder inside the configurable `skillsSettings.folder` (default `LLM-Skills`) containing a `SKILL.md` file.
 
+#### Built-in skills
+
+Three skills ship with the plugin and are seeded into the vault on first run (and whenever `reinitSkillRegistry` is called, e.g. after changing `rootVaultFolder`). They are defined in `src/Skills/BuiltinSkills.ts` as `BUILTIN_SKILLS: BuiltinSkillDef[]`. Seeding is non-destructive — existing files are never overwritten. The built-in skills are:
+
+- **obsidian-markdown** — Obsidian Flavored Markdown syntax (wikilinks, callouts, embeds, properties). Content sourced from [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) (MIT).
+- **obsidian-bases** — Obsidian Bases (`.base`) file format: filters, columns, formulas, views.
+- **json-canvas** — JSON Canvas (`.canvas`) format: nodes, edges, groups, colors.
+
+To add a new built-in skill, add a `BuiltinSkillDef` entry to the `BUILTIN_SKILLS` array in `BuiltinSkills.ts`. The `id` field becomes the folder name and skill id.
+
 #### SKILL.md format
 
 ```yaml
@@ -384,12 +394,73 @@ created: 2024-01-01T00:00:00.000Z
 - `.llm-assistant-switcher` — header pill button (hidden via `.llm-assistant-switcher--hidden` when no assistants exist; accent-coloured via `.llm-assistant-switcher--active`)
 - `.llm-assistant-panel` — per-response indicator showing which assistant was active (analogous to `.llm-skill-panel` and `.llm-memory-panel`)
 
+### Obsidian Agent
+
+The Obsidian Agent is the single always-available primary agent — the equivalent of Linear's "Linear Agent." It knows the full vault, can invoke any enabled Skill, and can route to any configured Assistant for specialised work.
+
+#### Entry points
+
+When `obsidianAgentSettings.enabled` is true:
+- **FAB** — `FAB.generateFAB()` sets `chatContainer.isObsidianAgent = true`
+- **Status bar button** — `StatusBarButton.buildPopover()` sets `chatContainer.isObsidianAgent = true`
+- **Command palette** — `open-obsidian-agent` command opens `ChatModal2(plugin, true)`
+- **Modal (non-agent)** — `ChatModal2` also sets `isObsidianAgent` from the setting when opened without the flag
+
+#### How agent mode works in ChatContainer
+
+`ChatContainer.isObsidianAgent: boolean` (default `false`) enables agent mode:
+1. In `handleGenerateClick`, after memory recall, `ObsidianAgent.buildSystemPrompt()` is appended to `pendingContextString` (memories remain first in context; agent prompt follows).
+2. In `runAgentMode`, when `isObsidianAgent`, an `extraSetup` callback is passed to `AgentLoop` that calls `ObsidianAgent.registerTools(registry)` — this registers the `invoke_assistant` dynamic tool.
+3. When `invoke_assistant` fires, `onToolResult` captures the assistant name into `agentRoutedAssistantThisTurn`.
+4. After generation, `appendAgentRoutingIndicator(container, assistantName)` adds a `.llm-agent-routing-panel` banner below the response.
+5. `historyPushToFile` tags new files with `agent: true` in frontmatter via `ChatHistory.save(... isAgent=true)`.
+
+#### `invoke_assistant` tool
+
+Defined and registered in `ObsidianAgent.registerTools(registry: ObsidianToolRegistry)`. Only registered when there are agent-available assistants. Execution returns the assistant's system prompt + task as a string — the main agent loop continues from that persona. Routing is expressed entirely through the system prompt, not a separate sub-AgentLoop.
+
+#### System prompt composition
+
+`ObsidianAgent.buildSystemPrompt()` auto-generates from live state:
+1. Base identity paragraph
+2. Available Skills list (filtered by `obsidianAgentSettings.availableSkills`)
+3. Available Assistants list with `invoke_assistant` instructions (filtered by `obsidianAgentSettings.availableAssistants`)
+4. Projects in the vault
+5. User vault guidance text (`obsidianAgentSettings.vaultGuidance`)
+
+#### Settings
+
+`LLMPluginSettings.obsidianAgentSettings: ObsidianAgentSettings` — deep-merged on load:
+- `enabled: boolean` — gates the feature; when toggled, FAB is regenerated
+- `enableWebSearch: boolean` — placeholder for future web search support
+- `availableSkills: Record<string, boolean>` — per-skill opt-in/out; missing keys = available
+- `availableAssistants: Record<string, boolean>` — per-assistant opt-in/out; missing keys = available
+- `vaultGuidance: string` — appended to the auto-generated base prompt
+
+Settings UI lives in `LLMSettingsModal` under Features → Obsidian Agent.
+
+#### Dynamic tool registration
+
+`ObsidianToolRegistry.registerDynamicTool(def, executor)` adds tools at runtime without modifying `ALL_TOOL_DEFINITIONS`. `AgentLoop` accepts an optional `extraSetup?: (registry) => void` 8th constructor argument that's called after the registry is created.
+
+#### History tagging
+
+Agent conversations are saved to the same `ChatHistory` folder as regular chats but with `agent: true` in YAML frontmatter. `ChatFileMeta.agent?: boolean` is the field; `buildFrontmatter` emits it; `load()` returns it in `ChatFileMeta`.
+
+#### CSS classes
+
+- `.llm-agent-routing-panel` — routing indicator below the response when `invoke_assistant` was called
+- `.llm-agent-routing-panel-icon` — icon element (uses `waypoints` Lucide icon, accent-coloured)
+- `.llm-agent-routing-panel-label` — "Routed to <Assistant Name>" text
+- `.llm-agent-guidance-textarea` — textarea in settings for vault guidance input
+
 ### Key Files
 
+- `src/Plugin/ObsidianAgent/ObsidianAgent.ts` - System prompt builder, `registerTools()`, `invoke_assistant` tool logic
 - `src/Assistants/AssistantManager.ts` - Assistant discovery, parsing, hot-reload, and create/delete helpers
 - `src/Projects/ProjectManager.ts` - Project discovery, parsing, hot-reload, and create/delete helpers
 - `src/Memory/MemoryService.ts` - Memory extraction, deduplication, recall, and vault persistence
-- `src/Types/types.ts` - TypeScript interfaces (ChatParams, ImageParams, RAGSettings, MemorySettings, ProjectSettings, AssistantSettings, etc.)
+- `src/Types/types.ts` - TypeScript interfaces (ChatParams, ImageParams, RAGSettings, MemorySettings, ProjectSettings, AssistantSettings, ObsidianAgentSettings, etc.)
 - `src/utils/constants.ts` - Provider/model/endpoint constants (includes `images`, `chat`, `messages`, `assistant`, `claudeCodeEndpoint`, etc.)
 - `src/utils/models.ts` - Model configuration definitions
 - `src/utils/utils.ts` - API validation and helper functions

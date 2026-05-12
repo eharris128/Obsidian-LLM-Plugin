@@ -13,6 +13,8 @@ export interface ChatFileMeta {
 	context?: string[];
 	/** Name of the active project when this chat was created, if any. */
 	project?: string;
+	/** True when this conversation was conducted through the Obsidian Agent. */
+	agent?: boolean;
 }
 
 export interface LoadedChat {
@@ -88,6 +90,9 @@ export class ChatHistory {
 		];
 		if (meta.project) {
 			lines.push(`project: "${meta.project.replace(/"/g, '\\"')}"`);
+		}
+		if (meta.agent) {
+			lines.push(`agent: true`);
 		}
 		if (meta.context?.length) {
 			lines.push("context:");
@@ -235,7 +240,8 @@ export class ChatHistory {
 		vaultContext?: VaultContext,
 		toolCallsByTurn?: Map<number, ToolCallRecord[]>,
 		skillsByTurn?: Map<number, string>,
-		projectName?: string
+		projectName?: string,
+		isAgent?: boolean
 	): Promise<string> {
 		await this.ensureFolder();
 
@@ -273,6 +279,7 @@ export class ChatHistory {
 				provider,
 				tags: ["llm-chats"],
 				...(projectName ? { project: projectName } : {}),
+				...(isAgent ? { agent: true } : {}),
 				...(contextLinks.length ? { context: contextLinks } : {}),
 			};
 			await this.plugin.app.vault.create(

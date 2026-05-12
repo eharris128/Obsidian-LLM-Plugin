@@ -10,7 +10,11 @@ import { setHistoryIndex, setView } from "utils/utils";
 export class ChatModal2 extends Modal {
 	private chatContainer: ChatContainer | null = null;
 
-	constructor(private plugin: LLMPlugin) {
+	/**
+	 * @param plugin   The plugin instance.
+	 * @param agentMode  When true, the modal's ChatContainer runs in Obsidian Agent mode.
+	 */
+	constructor(private plugin: LLMPlugin, private agentMode = false) {
 		super(plugin.app);
 	}
 
@@ -30,6 +34,10 @@ export class ChatModal2 extends Modal {
 			"modal",
 			this.plugin.conversationRegistry
 		);
+		// Enable agent mode when opened via the Obsidian Agent command.
+		if (this.agentMode || this.plugin.settings.obsidianAgentSettings?.enabled) {
+			this.chatContainer.isObsidianAgent = true;
+		}
 		const chatContainer = this.chatContainer;
 		const historyContainer = new HistoryContainer(this.plugin, "modal");
 		const settingsContainer = new SettingsContainer(this.plugin, "modal");

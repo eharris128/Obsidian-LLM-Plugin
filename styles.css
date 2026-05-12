@@ -2129,6 +2129,45 @@ details[open] .llm-tool-calls-chevron {
 	max-width: 200px;
 }
 
+/* ── Agent routing panel indicator (below Obsidian Agent message) ─────────── */
+
+.llm-agent-routing-panel {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-bottom: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-2);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.llm-agent-routing-panel-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+	color: var(--interactive-accent);
+}
+
+.llm-agent-routing-panel-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 220px;
+}
+
+/* ── Agent guidance textarea in settings ───────────────────────────────────── */
+
+.llm-agent-guidance-textarea {
+	width: 100%;
+	min-height: 120px;
+	resize: vertical;
+}
+
 /* ── Pinned note chip (project pinned notes — non-removable) ──────────────── */
 
 .llm-context-chip--pinned {

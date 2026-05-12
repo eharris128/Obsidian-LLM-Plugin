@@ -170,6 +170,17 @@ export class ChatContainer {
 	private memoryButton: import("obsidian").ButtonComponent | null = null;
 	/** Display name of the assistant active for the current generation — cleared after the indicator is shown. */
 	private activeAssistantNameThisTurn: string | null = null;
+	/**
+	 * When true this ChatContainer runs in Obsidian Agent mode:
+	 * - Agent system prompt is prepended automatically.
+	 * - invoke_assistant tool is registered on the AgentLoop.
+	 * - Routing indicator is shown when an assistant is invoked.
+	 * - History files are tagged with agent: true in frontmatter.
+	 * Set by FAB, StatusBarButton, or ChatModal2 when obsidianAgentSettings.enabled.
+	 */
+	isObsidianAgent: boolean = false;
+	/** Assistant name invoked via invoke_assistant during the current turn — drives routing indicator. */
+	private agentRoutedAssistantThisTurn: string | null = null;
 
 	constructor(
 		private plugin: LLMPlugin,
@@ -1048,6 +1059,27 @@ export class ChatContainer {
 		}
 		// ── End memory recall ─────────────────────────────────────────────────────
 
+		// ── Obsidian Agent base prompt ────────────────────────────────────────────
+		// Injected after memories (memories remain first) but before everything else.
+		// Only active when isObsidianAgent is true and the feature is enabled.
+		this.agentRoutedAssistantThisTurn = null;
+		if (
+			this.isObsidianAgent &&
+			this.plugin.settings.obsidianAgentSettings?.enabled &&
+			this.plugin.obsidianAgent &&
+			modelEndpoint !== images
+		) {
+			const agentSystemPrompt = this.plugin.obsidianAgent.buildSystemPrompt();
+			if (agentSystemPrompt) {
+				// Append AFTER memories (which were prepended last → appear first).
+				// This places the agent prompt after memories but before all other context.
+				this.pendingContextString = this.pendingContextString
+					? this.pendingContextString + "\n\n---\n\n" + agentSystemPrompt
+					: agentSystemPrompt;
+			}
+		}
+		// ── End Obsidian Agent base prompt ────────────────────────────────────────
+
 		const userMessage = { role: "user" as const, content: this.prompt };
 		this.messageStore.addMessage(userMessage);
 		// Wait for the async DOM render triggered by addMessage to complete before
@@ -1123,6 +1155,11 @@ export class ChatContainer {
 				if (this.activeAssistantNameThisTurn) {
 					this.appendAssistantIndicator(this.loadingDivContainer, this.activeAssistantNameThisTurn);
 					this.activeAssistantNameThisTurn = null;
+				}
+				// Show agent routing indicator when invoke_assistant was called this turn
+				if (this.agentRoutedAssistantThisTurn) {
+					this.appendAgentRoutingIndicator(this.loadingDivContainer, this.agentRoutedAssistantThisTurn);
+					this.agentRoutedAssistantThisTurn = null;
 				}
 				// Clear context and active skill after generation
 				this.currentVaultContext = null;
@@ -1313,6 +1350,17 @@ export class ChatContainer {
 		const disabledTools = this.plugin.settings.toolSettings?.disabledTools ?? [];
 		const maxToolCalls = this.plugin.settings.toolSettings?.maxToolCalls ?? 10;
 
+		// In Obsidian Agent mode, register the invoke_assistant dynamic tool.
+		const agentSetup = (
+			this.isObsidianAgent &&
+			this.plugin.settings.obsidianAgentSettings?.enabled &&
+			this.plugin.obsidianAgent
+		)
+			? (registry: import("services/ObsidianToolRegistry").ObsidianToolRegistry) => {
+				this.plugin.obsidianAgent.registerTools(registry);
+			}
+			: undefined;
+
 		const agentLoop = new AgentLoop(
 			this.plugin.app,
 			permissionMode,
@@ -1321,6 +1369,7 @@ export class ChatContainer {
 			allowedTools.length > 0 ? allowedTools : undefined,
 			disabledTools,
 			maxToolCalls,
+			agentSetup,
 		);
 
 		const callbacks: AgentCallbacks = {
@@ -1355,6 +1404,10 @@ export class ChatContainer {
 					if (!this.pendingRagSources.includes(input.path)) {
 						this.pendingRagSources.push(input.path);
 					}
+				} else if (toolName === "invoke_assistant" && typeof input.assistant_id === "string") {
+					// Track which assistant was routed to for the routing indicator
+					const assistant = this.plugin.assistantManager?.getAssistant(input.assistant_id);
+					this.agentRoutedAssistantThisTurn = assistant?.name ?? input.assistant_id;
 				}
 				// Record the tool call for chat file history
 				this.pendingToolCalls.push({ name: toolName, input, result });
@@ -1525,7 +1578,8 @@ export class ChatContainer {
 			vaultContext,
 			this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined,
 			this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined,
-			activeProject?.name
+			activeProject?.name,
+			this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled
 		);
 
 		this.currentHistoryFilePath = filePath;
@@ -2913,6 +2967,17 @@ export class ChatContainer {
 		const iconEl = panel.createSpan({ cls: "llm-assistant-panel-icon" });
 		setIcon(iconEl, "bot");
 		panel.createSpan({ cls: "llm-assistant-panel-label", text: assistantName });
+	}
+
+	/**
+	 * Append a small routing indicator showing which assistant the Obsidian Agent
+	 * delegated to via the invoke_assistant tool.
+	 */
+	private appendAgentRoutingIndicator(container: HTMLElement, assistantName: string): void {
+		const panel = container.createDiv({ cls: "llm-agent-routing-panel" });
+		const iconEl = panel.createSpan({ cls: "llm-agent-routing-panel-icon" });
+		setIcon(iconEl, "waypoints");
+		panel.createSpan({ cls: "llm-agent-routing-panel-label", text: `Routed to ${assistantName}` });
 	}
 
 	/**

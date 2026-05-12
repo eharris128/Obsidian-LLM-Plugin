@@ -5,6 +5,7 @@ import {
 	ImageQuality,
 	ImageSize,
 	MemorySettings,
+	ObsidianAgentSettings,
 	ProjectSettings,
 	RAGSettings,
 	ResponseFormat,
@@ -12,6 +13,7 @@ import {
 	ToolSettings,
 	ViewSettings,
 } from "./Types/types";
+import { ObsidianAgent } from "Plugin/ObsidianAgent/ObsidianAgent";
 import { AssistantManager } from "Assistants/AssistantManager";
 import { ProjectManager } from "Projects/ProjectManager";
 import { MemoryService } from "Memory/MemoryService";
@@ -94,6 +96,7 @@ export interface LLMPluginSettings {
 	projectSettings: ProjectSettings;
 	assistantSettings: AssistantSettings;
 	toolSettings: ToolSettings;
+	obsidianAgentSettings: ObsidianAgentSettings;
 	/**
 	 * Root vault folder for all AI feature data (default "AI").
 	 * Skills live at <rootVaultFolder>/Skills/<skill-name>/SKILL.md.
@@ -203,6 +206,13 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		disabledTools: [],
 		maxToolCalls: 10,
 	},
+	obsidianAgentSettings: {
+		enabled: false,
+		enableWebSearch: false,
+		availableSkills: {},
+		availableAssistants: {},
+		vaultGuidance: "",
+	},
 	rootVaultFolder: "AI",
 };
 
@@ -233,6 +243,8 @@ export default class LLMPlugin extends Plugin {
 	projectManager: ProjectManager;
 	/** Assistants registry — always initialized; folder derived from rootVaultFolder. */
 	assistantManager: AssistantManager;
+	/** Obsidian Agent — always initialized; active when obsidianAgentSettings.enabled is true. */
+	obsidianAgent: ObsidianAgent;
 
 	async onload() {
 		this.fileSystem = Platform.isDesktop
@@ -248,8 +260,10 @@ export default class LLMPlugin extends Plugin {
 		this.skillRegistry = new SkillRegistry(this.app);
 		this.projectManager = new ProjectManager(this.app);
 		this.assistantManager = new AssistantManager(this.app);
+		this.obsidianAgent = new ObsidianAgent(this);
 		// Skills, Projects, and Assistants are in the vault — wait for layout ready before scanning
 		this.app.workspace.onLayoutReady(async () => {
+			await this.skillRegistry.seedBuiltinSkills();
 			await this.skillRegistry.setFolder(this.skillsFolder);
 			this.registerSkillVaultEvents();
 			await this.projectManager.setFolder(this.projectsFolder);
@@ -623,6 +637,7 @@ export default class LLMPlugin extends Plugin {
 	 * Call after the root vault folder setting changes.
 	 */
 	async reinitSkillRegistry(): Promise<void> {
+		await this.skillRegistry.seedBuiltinSkills();
 		await this.skillRegistry.setFolder(this.skillsFolder);
 	}
 
@@ -700,6 +715,14 @@ export default class LLMPlugin extends Plugin {
 				this.settings.showFAB
 					? this.fab.regenerateFAB()
 					: this.fab.removeFab();
+			},
+		});
+
+		this.addCommand({
+			id: "open-obsidian-agent",
+			name: "Open Obsidian Agent",
+			callback: () => {
+				new ChatModal2(this, true).open();
 			},
 		});
 	}

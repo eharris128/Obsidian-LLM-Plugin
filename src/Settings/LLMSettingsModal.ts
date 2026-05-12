@@ -101,7 +101,8 @@ export class LLMSettingsModal extends Modal {
 			id: "features",
 			label: "Features",
 			items: [
-				{ id: "vault-search", label: "Vault Search", icon: "search" },
+				{ id: "vault-search",     label: "Vault Search",     icon: "search" },
+				{ id: "obsidian-agent",   label: "Obsidian Agent",   icon: "cpu" },
 			],
 		},
 	];
@@ -257,7 +258,8 @@ export class LLMSettingsModal extends Modal {
 			case "skills":        this.renderSkills();        break;
 			case "memory":        this.renderMemory();        break;
 			case "projects":      this.renderProjects();      break;
-			case "assistants":    this.renderAssistants();    break;
+			case "assistants":      this.renderAssistants();      break;
+			case "obsidian-agent":  this.renderObsidianAgent();   break;
 		}
 	}
 
@@ -1423,6 +1425,123 @@ export class LLMSettingsModal extends Modal {
 					});
 			});
 		}
+	}
+
+	// ── Obsidian Agent ────────────────────────────────────────────────────────
+
+	private renderObsidianAgent() {
+		const el = this.mainContentEl;
+		this.addTabHeader(el, "Obsidian Agent");
+
+		const s = this.plugin.settings.obsidianAgentSettings ?? {
+			enabled: false,
+			enableWebSearch: false,
+			availableSkills: {},
+			availableAssistants: {},
+			vaultGuidance: "",
+		};
+
+		// ── Enable / Disable ─────────────────────────────────────────────────
+		const enableGroup = this.addSettingGroup(el);
+		new Setting(enableGroup)
+			.setName("Enable Obsidian Agent")
+			.setDesc(
+				'When enabled, the FAB, status bar button, and the "Open Obsidian Agent" ' +
+				"command all open the agent — a vault-aware AI that can read/write notes, " +
+				"run skills, and delegate to specialised assistants."
+			)
+			.addToggle((toggle) => {
+				toggle.setValue(s.enabled).onChange(async (value) => {
+					this.plugin.settings.obsidianAgentSettings.enabled = value;
+					await this.plugin.saveSettings();
+					// Regenerate FAB/StatusBar so the agent flag is picked up.
+					if (this.plugin.settings.showFAB) this.plugin.fab.regenerateFAB();
+					this.renderTab("obsidian-agent");
+				});
+			});
+
+		if (!s.enabled) return; // Only show further settings when enabled
+
+		// ── Available Skills ─────────────────────────────────────────────────
+		const skills = this.plugin.skillRegistry?.getSkills() ?? [];
+		if (skills.length > 0) {
+			const skillGroup = this.addSettingGroup(el, "Available Skills");
+			const skillDesc = el.createEl("p", {
+				cls: "setting-item-description",
+				text: "Choose which skills the Obsidian Agent can invoke. Deselecting a skill hides it from the agent's context entirely.",
+			});
+			skillGroup.prepend(skillDesc);
+
+			for (const skill of skills) {
+				const isAvailable = s.availableSkills[skill.id] !== false;
+				new Setting(skillGroup)
+					.setName(skill.name)
+					.setDesc(skill.description || `/${skill.id}`)
+					.addToggle((toggle) => {
+						toggle.setValue(isAvailable).onChange(async (value) => {
+							this.plugin.settings.obsidianAgentSettings.availableSkills[skill.id] = value;
+							await this.plugin.saveSettings();
+						});
+					});
+			}
+		} else {
+			el.createEl("p", {
+				cls: "setting-item-description",
+				text: "No skills found. Create skill folders in your AI/Skills/ directory.",
+			});
+		}
+
+		// ── Available Assistants ─────────────────────────────────────────────
+		const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
+		if (assistants.length > 0) {
+			const assistantGroup = this.addSettingGroup(el, "Available Assistants");
+			const assistantDesc = el.createEl("p", {
+				cls: "setting-item-description",
+				text: "Choose which assistants the agent can route sub-tasks to via the invoke_assistant tool.",
+			});
+			assistantGroup.prepend(assistantDesc);
+
+			for (const assistant of assistants) {
+				const isAvailable = s.availableAssistants[assistant.id] !== false;
+				new Setting(assistantGroup)
+					.setName(assistant.name)
+					.setDesc(assistant.description || assistant.id)
+					.addToggle((toggle) => {
+						toggle.setValue(isAvailable).onChange(async (value) => {
+							this.plugin.settings.obsidianAgentSettings.availableAssistants[assistant.id] = value;
+							await this.plugin.saveSettings();
+						});
+					});
+			}
+		} else {
+			el.createEl("p", {
+				cls: "setting-item-description",
+				text: "No assistants found. Create assistant folders in your AI/Assistants/ directory.",
+			});
+		}
+
+		// ── Vault Guidance ───────────────────────────────────────────────────
+		const guidanceGroup = this.addSettingGroup(el, "Vault Guidance");
+		new Setting(guidanceGroup)
+			.setName("Custom instructions")
+			.setDesc(
+				"Free-text instructions appended after the agent's auto-generated base prompt. " +
+				"Use this to describe your vault structure, preferred workflows, or routing rules. " +
+				'Example: "When asked to do research, use the Research Assistant. Always save findings in Projects/Research/."'
+			)
+			.addTextArea((textarea) => {
+				textarea
+					.setPlaceholder(
+						"Describe your vault, preferred workflows, or routing rules…"
+					)
+					.setValue(s.vaultGuidance ?? "")
+					.onChange(async (value) => {
+						this.plugin.settings.obsidianAgentSettings.vaultGuidance = value;
+						await this.plugin.saveSettings();
+					});
+				textarea.inputEl.rows = 6;
+				textarea.inputEl.addClass("llm-agent-guidance-textarea");
+			});
 	}
 
 	// ── Helpers ────────────────────────────────────────────────────────────────

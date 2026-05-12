@@ -64,6 +64,10 @@ export class StatusBarButton {
 			"floating-action-button",
 			this.plugin.conversationRegistry
 		);
+		// Enable agent mode when the Obsidian Agent feature is on.
+		if (this.plugin.settings.obsidianAgentSettings?.enabled) {
+			this.chatContainer.isObsidianAgent = true;
+		}
 		const historyContainer = new HistoryContainer(
 			this.plugin,
 			"floating-action-button"

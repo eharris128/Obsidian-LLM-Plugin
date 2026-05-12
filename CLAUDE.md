@@ -342,6 +342,7 @@ name: My Assistant
 description: One-line description
 provider: claude                   # informational only
 model: claude-sonnet-4-6           # informational only
+preferred-model: claude-sonnet-4-6 # auto-selected when this assistant is chosen in the dropdown
 enabled-skills:                    # skill ids from AI/Skills/
   - summarize
   - create-note
@@ -371,7 +372,8 @@ created: 2024-01-01T00:00:00.000Z
   4. Memory recall passes `activeAssistant: assistant.id` to `MemoryContext`, so assistant-scoped memories are included.
 - If no explicit assistant is set but the active project has a `default-assistant`, that assistant is auto-activated for the conversation.
 - Memory extraction scope: project active → write to project memories; only assistant active → write to assistant memories; neither → global.
-- The assistant switcher pill in the chat header shows the active assistant or is hidden when no assistants exist.
+- Assistant selection is handled via the combined model+assistant dropdown in the chat input toolbar (not a header pill). The dropdown has two `<optgroup>` sections: "Models" and "Assistants". Selecting an assistant sets `activeAssistantId`, optionally switches to the assistant's `preferredModel`, and starts a new chat. Selecting a plain model clears the active assistant.
+- `ChatContainer.syncAssistantDropdownOptions()` rebuilds the assistants optgroup on hot-reload; call it whenever `AssistantManager` reloads.
 - `LLMPlugin.reinitAssistantManager()` is called when `rootVaultFolder` changes (Settings → General).
 - Assistants are managed (create/edit/delete/activate) via Settings → Core Settings → Assistants.
 
@@ -391,7 +393,6 @@ created: 2024-01-01T00:00:00.000Z
 
 #### CSS classes
 
-- `.llm-assistant-switcher` — header pill button (hidden via `.llm-assistant-switcher--hidden` when no assistants exist; accent-coloured via `.llm-assistant-switcher--active`)
 - `.llm-assistant-panel` — per-response indicator showing which assistant was active (analogous to `.llm-skill-panel` and `.llm-memory-panel`)
 
 ### Obsidian Agent

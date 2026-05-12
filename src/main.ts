@@ -537,6 +537,19 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	/**
+	 * Notify all live ChatContainer instances (FAB, status bar, and any open
+	 * widget tabs) to rebuild their assistants optgroup. Call this after any
+	 * change to the AssistantManager's loaded set.
+	 */
+	syncAllAssistantDropdowns(): void {
+		this.fab?.syncAssistantDropdownOptions();
+		this.statusBarButton?.syncAssistantDropdownOptions();
+		for (const leaf of this.app.workspace.getLeavesOfType(TAB_VIEW_TYPE)) {
+			(leaf.view as WidgetView).syncAssistantDropdownOptions();
+		}
+	}
+
+	/**
 	 * Register vault events to keep the ProjectManager hot-reloaded whenever
 	 * PROJECT.md files inside the projects folder are created, modified, or deleted.
 	 */
@@ -586,6 +599,7 @@ export default class LLMPlugin extends Plugin {
 			this.app.vault.on("create", async (file) => {
 				if (this.assistantManager.isAssistantFile(file.path)) {
 					await this.assistantManager.loadAssistantByPath(file.path);
+					this.syncAllAssistantDropdowns();
 				}
 			})
 		);
@@ -594,6 +608,7 @@ export default class LLMPlugin extends Plugin {
 			this.app.vault.on("modify", async (file) => {
 				if (this.assistantManager.isAssistantFile(file.path)) {
 					await this.assistantManager.loadAssistantByPath(file.path);
+					this.syncAllAssistantDropdowns();
 				}
 			})
 		);
@@ -602,6 +617,7 @@ export default class LLMPlugin extends Plugin {
 			this.app.vault.on("delete", (file) => {
 				if (this.assistantManager.isAssistantFile(file.path)) {
 					this.assistantManager.removeByPath(file.path);
+					this.syncAllAssistantDropdowns();
 				}
 			})
 		);
@@ -614,6 +630,7 @@ export default class LLMPlugin extends Plugin {
 				if (this.assistantManager.isAssistantFile(file.path)) {
 					await this.assistantManager.loadAssistantByPath(file.path);
 				}
+				this.syncAllAssistantDropdowns();
 			})
 		);
 	}

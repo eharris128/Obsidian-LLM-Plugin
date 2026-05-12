@@ -85,11 +85,12 @@ export class WidgetView extends ItemView {
 		const settingType = getSettingType("widget");
 
 		try {
-			const { meta, messages, toolCallsByTurn, skillsByTurn } = await this.plugin.chatHistory.load(filePath);
+			const { meta, messages, toolCallsByTurn, skillsByTurn, modelsByTurn } = await this.plugin.chatHistory.load(filePath);
 
 			this.chatContainer.resetChat();
 			this.chatContainer.setToolCallsByTurn(toolCallsByTurn);
 			this.chatContainer.setSkillsByTurn(skillsByTurn);
+			this.chatContainer.setModelsByTurn(modelsByTurn);
 			this.chatContainer.messageStore.setMessages(messages);
 			this.chatContainer.generateIMLikeMessages(messages);
 
@@ -204,6 +205,11 @@ export class WidgetView extends ItemView {
 	/** Delegates to ChatContainer so the empty state re-renders with the latest settings. */
 	refreshEmptyState() {
 		this.chatContainer?.refreshEmptyState();
+	}
+
+	/** Rebuilds the assistants optgroup in the model dropdown after hot-reload. */
+	syncAssistantDropdownOptions() {
+		this.chatContainer?.syncAssistantDropdownOptions();
 	}
 
 	async onClose() {

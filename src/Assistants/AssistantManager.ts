@@ -188,6 +188,7 @@ name: ${name}
 description: ${description}
 provider:
 model:
+preferred-model:
 enabled-skills: []
 allowed-tools: []
 created: ${created}
@@ -248,6 +249,7 @@ ${systemPrompt || "<!-- Add your assistant's system prompt / persona instruction
 				description: "",
 				provider: "",
 				model: "",
+				preferredModel: "",
 				enabledSkills: [],
 				allowedTools: [],
 				created: new Date().toISOString(),
@@ -263,6 +265,7 @@ ${systemPrompt || "<!-- Add your assistant's system prompt / persona instruction
 		const description = AssistantManager.yamlString(frontmatter, "description") ?? "";
 		const provider = AssistantManager.yamlString(frontmatter, "provider") ?? "";
 		const model = AssistantManager.yamlString(frontmatter, "model") ?? "";
+		const preferredModel = AssistantManager.yamlString(frontmatter, "preferred-model") ?? "";
 		const created = AssistantManager.yamlString(frontmatter, "created") ?? new Date().toISOString();
 		const enabledSkills = AssistantManager.yamlStringList(frontmatter, "enabled-skills");
 		const allowedTools = AssistantManager.yamlStringList(frontmatter, "allowed-tools");
@@ -273,6 +276,7 @@ ${systemPrompt || "<!-- Add your assistant's system prompt / persona instruction
 			description,
 			provider,
 			model,
+			preferredModel,
 			enabledSkills,
 			allowedTools,
 			created,

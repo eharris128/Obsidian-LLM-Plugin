@@ -123,6 +123,13 @@ export class ChatContainer {
 	 * Cleared on newChat(). Populated by handleGenerateClick / runAgentMode.
 	 */
 	allSkillsByTurn: Map<number, string> = new Map();
+	/**
+	 * Model or assistant display name per assistant-message turn (0-based).
+	 * Stored as the assistant name when an assistant is active, otherwise the model display name.
+	 * Written to the chat file as a `> [!note]-` callout and shown as a small badge in the UI.
+	 * Cleared on newChat(). Populated by handleGenerateClick / runAgentMode.
+	 */
+	allModelsByTurn: Map<number, string> = new Map();
 
 	/** Restore tool-call data when loading a conversation from a file. */
 	setToolCallsByTurn(map: Map<number, ToolCallRecord[]>): void {
@@ -132,6 +139,11 @@ export class ChatContainer {
 	/** Restore skill-usage data when loading a conversation from a file. */
 	setSkillsByTurn(map: Map<number, string>): void {
 		this.allSkillsByTurn = map;
+	}
+
+	/** Restore model/assistant attribution data when loading a conversation from a file. */
+	setModelsByTurn(map: Map<number, string>): void {
+		this.allModelsByTurn = map;
 	}
 	/** Resolves when the most recent generateIMLikeMessages render is complete. */
 	private renderingPromise: Promise<void> = Promise.resolve();
@@ -147,6 +159,8 @@ export class ChatContainer {
 	activeFileForChip: { name: string; path: string } | null = null;
 	/** Stored so StatusBarButton (and FAB) can re-sync the displayed model after settings change. */
 	private modelDropdown: DropdownComponent | null = null;
+	/** The <optgroup> for assistants inside the model dropdown — refreshed on hot-reload. */
+	private assistantsOptGroup: HTMLOptGroupElement | null = null;
 	/**
 	 * Skill id that is active for the current generation — set by /slash invocation
 	 * or by globally-enabled skills. Cleared after each generation.
@@ -1092,6 +1106,10 @@ export class ChatContainer {
 		const preTurnAssistantCount = this.getMessages().filter(
 			(m) => m.role === assistant
 		).length;
+		// Record which model/assistant answered this turn for the chat log.
+		// Prefer the assistant name when active (it's the meaningful "who"), else the model display name.
+		const turnModelLabel = this.activeAssistantNameThisTurn ?? modelName;
+		this.allModelsByTurn.set(preTurnAssistantCount, turnModelLabel);
 		try {
 			this.previewText = "";
 
@@ -1155,6 +1173,14 @@ export class ChatContainer {
 				if (this.activeAssistantNameThisTurn) {
 					this.appendAssistantIndicator(this.loadingDivContainer, this.activeAssistantNameThisTurn);
 					this.activeAssistantNameThisTurn = null;
+				}
+				// Show model/assistant attribution badge below the response
+				{
+					const liveLabel = this.allModelsByTurn.get(preTurnAssistantCount);
+					if (liveLabel) {
+						const contentWrap = this.loadingDivContainer.querySelector<HTMLElement>(".llm-flex-column");
+						if (contentWrap) this.appendModelPanel(contentWrap, liveLabel);
+					}
 				}
 				// Show agent routing indicator when invoke_assistant was called this turn
 				if (this.agentRoutedAssistantThisTurn) {
@@ -1538,7 +1564,10 @@ export class ChatContainer {
 				params,
 				vaultContext,
 				this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined,
-				this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined
+				this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined,
+				undefined, // projectName — unchanged on update
+				undefined, // isAgent — unchanged on update
+				this.allModelsByTurn.size > 0 ? this.allModelsByTurn : undefined
 			);
 			return;
 		}
@@ -1579,7 +1608,8 @@ export class ChatContainer {
 			this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined,
 			this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined,
 			activeProject?.name,
-			this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled
+			this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled,
+			this.allModelsByTurn.size > 0 ? this.allModelsByTurn : undefined
 		);
 
 		this.currentHistoryFilePath = filePath;
@@ -2036,18 +2066,25 @@ export class ChatContainer {
 		const toolbarSection = promptContainer.createDiv();
 		toolbarSection.addClass("llm-input-toolbar");
 
-		// Model dropdown
+		// Combined model + assistant dropdown
 		const settingType = getSettingType(this.viewType);
 		const viewSettings = this.plugin.settings[settingType];
 		this.modelDropdown = new DropdownComponent(toolbarSection);
 		const modelDropdown = this.modelDropdown;
 		modelDropdown.selectEl.addClass("llm-model-select");
+
+		// ── Models optgroup ───────────────────────────────────────────────────
+		const modelsGroup = document.createElement("optgroup");
+		modelsGroup.label = "Models";
 		const { openAIAPIKey, claudeAPIKey, geminiAPIKey, mistralAPIKey } = this.plugin.settings;
 		for (const modelDisplayName of Object.keys(models)) {
 			const type = models[modelDisplayName].type;
 			// Local providers: always show
 			if (type === ollama || type === lmStudio) {
-				modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+				const opt = document.createElement("option");
+				opt.value = models[modelDisplayName].model;
+				opt.text = modelDisplayName;
+				modelsGroup.appendChild(opt);
 				continue;
 			}
 			// GPT4All: only show if the model file exists locally
@@ -2055,7 +2092,10 @@ export class ChatContainer {
 				const gpt4AllPath = getGpt4AllPath(this.plugin);
 				const fullPath = `${gpt4AllPath}/${models[modelDisplayName].model}`;
 				if (this.plugin.fileSystem.existsSync(fullPath)) {
-					modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+					const opt = document.createElement("option");
+					opt.value = models[modelDisplayName].model;
+					opt.text = modelDisplayName;
+					modelsGroup.appendChild(opt);
 				}
 				continue;
 			}
@@ -2064,19 +2104,88 @@ export class ChatContainer {
 			if ((type === claude || type === claudeCode) && !claudeAPIKey) continue;
 			if (type === gemini && !geminiAPIKey) continue;
 			if (type === mistral && !mistralAPIKey) continue;
-			modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+			const opt = document.createElement("option");
+			opt.value = models[modelDisplayName].model;
+			opt.text = modelDisplayName;
+			modelsGroup.appendChild(opt);
 		}
-		modelDropdown.setValue(viewSettings.model);
+		modelDropdown.selectEl.appendChild(modelsGroup);
+
+		// ── Assistants optgroup ───────────────────────────────────────────────
+		const buildAssistantsGroup = (): HTMLOptGroupElement => {
+			const group = document.createElement("optgroup");
+			group.label = "Assistants";
+			const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
+			for (const assistant of assistants) {
+				const opt = document.createElement("option");
+				opt.value = `assistant:${assistant.id}`;
+				opt.text = assistant.name;
+				group.appendChild(opt);
+			}
+			return group;
+		};
+		this.assistantsOptGroup = buildAssistantsGroup();
+		if ((this.plugin.assistantManager?.getAssistants().length ?? 0) > 0) {
+			modelDropdown.selectEl.appendChild(this.assistantsOptGroup);
+		}
+
+		// Set initial value — show active assistant if one is set
+		const initAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
+		if (initAssistantId) {
+			modelDropdown.selectEl.value = `assistant:${initAssistantId}`;
+		} else {
+			modelDropdown.selectEl.value = viewSettings.model;
+		}
+
 		modelDropdown.onChange((change) => {
-			const modelName = modelNames[change];
-			if (!modelName || !models[modelName]) return;
-			viewSettings.model = change;
-			viewSettings.modelName = modelName;
-			viewSettings.modelType = models[modelName].type;
-			viewSettings.endpointURL = models[modelName].url;
-			viewSettings.modelEndpoint = models[modelName].endpoint;
-			this.plugin.saveSettings();
-			header.setHeader(modelName);
+			if (change.startsWith("assistant:")) {
+				// ── Assistant selected ────────────────────────────────────────
+				const assistantId = change.slice("assistant:".length);
+				const assistant = this.plugin.assistantManager?.getAssistant(assistantId);
+				if (!assistant) return;
+
+				this.plugin.settings.assistantSettings = {
+					...this.plugin.settings.assistantSettings,
+					activeAssistantId: assistantId,
+				};
+
+				// Auto-switch to the assistant's preferred model if one is configured
+				if (assistant.preferredModel && modelNames[assistant.preferredModel]) {
+					const preferredName = modelNames[assistant.preferredModel];
+					viewSettings.model = assistant.preferredModel;
+					viewSettings.modelName = preferredName;
+					viewSettings.modelType = models[preferredName].type;
+					viewSettings.endpointURL = models[preferredName].url;
+					viewSettings.modelEndpoint = models[preferredName].endpoint;
+				}
+
+				this.plugin.saveSettings();
+				// Start a fresh conversation under the new assistant
+				header.setTitle("");
+				header.showTitle();
+				this.newChat();
+				this.resetMessages();
+				setHistoryIndex(this.plugin, this.viewType);
+				this.plugin.settings.currentIndex = -1;
+				this.plugin.saveSettings();
+			} else {
+				// ── Plain model selected — clear active assistant ─────────────
+				if (this.plugin.settings.assistantSettings?.activeAssistantId) {
+					this.plugin.settings.assistantSettings = {
+						...this.plugin.settings.assistantSettings,
+						activeAssistantId: null,
+					};
+				}
+				const modelName = modelNames[change];
+				if (!modelName || !models[modelName]) return;
+				viewSettings.model = change;
+				viewSettings.modelName = modelName;
+				viewSettings.modelType = models[modelName].type;
+				viewSettings.endpointURL = models[modelName].url;
+				viewSettings.modelEndpoint = models[modelName].endpoint;
+				this.plugin.saveSettings();
+				header.setHeader(modelName);
+			}
 		});
 
 		// Right-side group: scan button (FAB/Modal only) + send button
@@ -2685,7 +2794,8 @@ export class ChatContainer {
 		finalMessage: Boolean,
 		assistant: Boolean = false,
 		toolCalls?: ToolCallRecord[],
-		skillId?: string
+		skillId?: string,
+		modelLabel?: string
 	): Promise<void> {
 		// Outer wrapper carries the alignment class so CSS selectors like
 		// .llm-message-wrapper.llm-flex-start (bubble background) fire correctly.
@@ -2722,6 +2832,11 @@ export class ChatContainer {
 			const imLikeMessage = contentWrap.createDiv();
 			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
 			await this.renderMarkdown(content, imLikeMessage);
+
+			// Model/assistant attribution badge — shown below message content
+			if (modelLabel) {
+				this.appendModelPanel(contentWrap, modelLabel);
+			}
 		} else {
 			const imLikeMessage = imLikeMessageContainer.createDiv();
 			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
@@ -2767,7 +2882,8 @@ export class ChatContainer {
 			if (role === "assistant") {
 				const toolCalls = this.allToolCallsByTurn.get(assistantIdx);
 				const skillId = this.allSkillsByTurn.get(assistantIdx);
-				await this.createMessage(content, index, finalMessage, true, toolCalls, skillId);
+				const modelLabel = this.allModelsByTurn.get(assistantIdx);
+				await this.createMessage(content, index, finalMessage, true, toolCalls, skillId, modelLabel);
 				assistantIdx++;
 			} else {
 				await this.createMessage(content, index, finalMessage);
@@ -2872,9 +2988,47 @@ export class ChatContainer {
 	 */
 	syncModelDropdown() {
 		if (!this.modelDropdown) return;
-		const settingType = getSettingType(this.viewType);
-		this.modelDropdown.setValue(this.plugin.settings[settingType].model);
+		const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
+		if (activeAssistantId) {
+			this.modelDropdown.selectEl.value = `assistant:${activeAssistantId}`;
+		} else {
+			const settingType = getSettingType(this.viewType);
+			this.modelDropdown.setValue(this.plugin.settings[settingType].model);
+		}
 		this.syncFileContextButtons();
+	}
+
+	/**
+	 * Rebuild the assistants optgroup inside the model dropdown to reflect
+	 * the current list of assistants (called after hot-reload of ASSISTANT.md files).
+	 */
+	syncAssistantDropdownOptions() {
+		if (!this.modelDropdown || !this.assistantsOptGroup) return;
+		const select = this.modelDropdown.selectEl;
+
+		// Remove old group if present
+		if (this.assistantsOptGroup.parentNode === select) {
+			select.removeChild(this.assistantsOptGroup);
+		}
+
+		// Rebuild
+		const group = document.createElement("optgroup");
+		group.label = "Assistants";
+		const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
+		for (const assistant of assistants) {
+			const opt = document.createElement("option");
+			opt.value = `assistant:${assistant.id}`;
+			opt.text = assistant.name;
+			group.appendChild(opt);
+		}
+		this.assistantsOptGroup = group;
+
+		if (assistants.length > 0) {
+			select.appendChild(this.assistantsOptGroup);
+		}
+
+		// Re-sync selected value in case the active assistant changed
+		this.syncModelDropdown();
 	}
 
 	/** Show or hide the file-context buttons based on the enableFileContext setting. */
@@ -2893,6 +3047,14 @@ export class ChatContainer {
 		const iconEl = panel.createSpan({ cls: "llm-skill-panel-icon" });
 		setIcon(iconEl, "scroll-text");
 		panel.createSpan({ cls: "llm-skill-panel-label", text: skillName });
+	}
+
+	/** Append a small attribution badge below the message showing which model/assistant answered. */
+	private appendModelPanel(container: HTMLElement, label: string): void {
+		const panel = container.createDiv({ cls: "llm-model-panel" });
+		const iconEl = panel.createSpan({ cls: "llm-model-panel-icon" });
+		setIcon(iconEl, "cpu");
+		panel.createSpan({ cls: "llm-model-panel-label", text: label });
 	}
 
 	/**
@@ -3115,6 +3277,7 @@ export class ChatContainer {
 		this.pendingToolCalls = [];
 		this.allToolCallsByTurn = new Map();
 		this.allSkillsByTurn = new Map();
+		this.allModelsByTurn = new Map();
 		this.displayNoChatView(this.historyMessages);
 
 		// Reset active file chip state, then re-evaluate from the current setting.

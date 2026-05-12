@@ -225,6 +225,9 @@ export type Assistant = {
 	provider: string;
 	/** Model hint from frontmatter `model:` (informational). */
 	model: string;
+	/** Preferred model value (e.g. "claude-sonnet-4-6") from frontmatter `preferred-model:`.
+	 *  When set, selecting this assistant in the dropdown auto-switches to this model. */
+	preferredModel: string;
 	/** Skill ids from `enabled-skills:` — activated when this assistant is active. */
 	enabledSkills: string[];
 	/** Tool names from `allowed-tools:` — restricts the tool registry when active. Empty = all tools. */

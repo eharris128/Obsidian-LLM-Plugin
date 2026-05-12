@@ -332,10 +332,11 @@ export class StatusBarButton {
 		// Load the file-based conversation
 		this.plugin.chatHistory
 			.load(filePath)
-			.then(({ meta, messages, toolCallsByTurn, skillsByTurn }) => {
+			.then(({ meta, messages, toolCallsByTurn, skillsByTurn, modelsByTurn }) => {
 				this.chatContainer!.resetChat();
 				this.chatContainer!.setToolCallsByTurn(toolCallsByTurn);
 				this.chatContainer!.setSkillsByTurn(skillsByTurn);
+				this.chatContainer!.setModelsByTurn(modelsByTurn);
 				this.chatContainer!.messageStore.setMessages(messages);
 				this.chatContainer!.generateIMLikeMessages(messages);
 
@@ -372,6 +373,11 @@ export class StatusBarButton {
 	/** Delegates to ChatContainer so the empty state re-renders with the latest settings. */
 	refreshEmptyState() {
 		this.chatContainer?.refreshEmptyState();
+	}
+
+	/** Rebuilds the assistants optgroup in the model dropdown after hot-reload. */
+	syncAssistantDropdownOptions() {
+		this.chatContainer?.syncAssistantDropdownOptions();
 	}
 
 	remove() {

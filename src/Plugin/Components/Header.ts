@@ -20,8 +20,6 @@ export class Header {
 	settingsButton?: ButtonComponent;
 	/** Reference to the project switcher pill element so it can be updated. */
 	private projectSwitcherEl: HTMLElement | null = null;
-	/** Reference to the assistant switcher pill element so it can be updated. */
-	private assistantSwitcherEl: HTMLElement | null = null;
 
 	setHeader(_modelName: string) {
 		// Model name is now shown in the chat input toolbar dropdown
@@ -292,15 +290,6 @@ export class Header {
 			chatHistoryContainerDiv,
 			chatContainer
 		);
-
-		// Assistant switcher — on the left, after the project switcher
-		this.buildAssistantSwitcher(
-			leftDiv,
-			chatContainerDiv,
-			settingsContainerDiv,
-			chatHistoryContainerDiv,
-			chatContainer
-		);
 	}
 
 	/**
@@ -518,130 +507,5 @@ export class Header {
 			chatContainer
 		);
 
-		// Assistant switcher — shown on the left, after the project switcher
-		this.buildAssistantSwitcher(
-			leftButtonDiv,
-			chatContainerDiv,
-			settingsContainerDiv,
-			chatHistoryContainerDiv,
-			chatContainer
-		);
-	}
-
-	/**
-	 * Build the assistant switcher pill and append it to the given container.
-	 * Only rendered when at least one assistant exists.
-	 * Clicking opens a menu to switch assistants (or clear the active assistant).
-	 * Switching auto-starts a new chat.
-	 */
-	private buildAssistantSwitcher(
-		container: HTMLElement,
-		chatContainerDiv: HTMLElement,
-		settingsContainerDiv: HTMLElement,
-		chatHistoryContainerDiv: HTMLElement,
-		chatContainer: ChatContainer
-	): void {
-		this.assistantSwitcherEl = container.createEl("button");
-		this.assistantSwitcherEl.addClass("llm-assistant-switcher");
-		this.updateAssistantSwitcher();
-
-		this.assistantSwitcherEl.addEventListener("click", (evt: MouseEvent) => {
-			const menu = new Menu();
-			const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
-			const activeId = this.plugin.settings.assistantSettings?.activeAssistantId;
-
-			// "No assistant" option
-			menu.addItem((item) => {
-				item
-					.setTitle("No assistant")
-					.setIcon("x-circle")
-					.setChecked(!activeId)
-					.onClick(() => {
-						this.plugin.settings.assistantSettings = {
-							...this.plugin.settings.assistantSettings,
-							activeAssistantId: null,
-						};
-						this.plugin.saveSettings();
-						this.updateAssistantSwitcher();
-						// Auto-start new chat
-						this.setTitle("");
-						this.showTitle();
-						chatContainerDiv.show();
-						settingsContainerDiv.hide();
-						chatHistoryContainerDiv.hide();
-						chatContainer.newChat();
-						chatContainer.resetMessages();
-						setHistoryIndex(this.plugin, this.viewType);
-						this.plugin.settings.currentIndex = -1;
-						this.plugin.saveSettings();
-					});
-			});
-
-			if (assistants.length > 0) {
-				menu.addSeparator();
-				for (const assistant of assistants) {
-					menu.addItem((item) => {
-						item
-							.setTitle(assistant.name)
-							.setIcon("bot")
-							.setChecked(activeId === assistant.id)
-							.onClick(() => {
-								this.plugin.settings.assistantSettings = {
-									...this.plugin.settings.assistantSettings,
-									activeAssistantId: assistant.id,
-								};
-								this.plugin.saveSettings();
-								this.updateAssistantSwitcher();
-								// Auto-start new chat under the new assistant
-								this.setTitle("");
-								this.showTitle();
-								chatContainerDiv.show();
-								settingsContainerDiv.hide();
-								chatHistoryContainerDiv.hide();
-								chatContainer.newChat();
-								chatContainer.resetMessages();
-								setHistoryIndex(this.plugin, this.viewType);
-								this.plugin.settings.currentIndex = -1;
-								this.plugin.saveSettings();
-							});
-					});
-				}
-			}
-
-			if (assistants.length === 0) {
-				menu.addItem((item) => {
-					item.setTitle("No assistants yet").setDisabled(true);
-				});
-			}
-
-			menu.showAtMouseEvent(evt);
-		});
-	}
-
-	/** Update the assistant switcher pill text/state to reflect the current active assistant. */
-	updateAssistantSwitcher(): void {
-		if (!this.assistantSwitcherEl) return;
-		const activeId = this.plugin.settings.assistantSettings?.activeAssistantId;
-		const assistant = activeId
-			? this.plugin.assistantManager?.getAssistant(activeId)
-			: null;
-
-		this.assistantSwitcherEl.empty();
-
-		const iconEl = this.assistantSwitcherEl.createEl("span", { cls: "llm-assistant-switcher-icon" });
-		setIcon(iconEl, "bot");
-
-		this.assistantSwitcherEl.createEl("span", {
-			text: assistant ? assistant.name : "Assistant",
-			cls: "llm-assistant-switcher-label",
-		});
-
-		const chevronEl = this.assistantSwitcherEl.createEl("span", { cls: "llm-assistant-switcher-chevron" });
-		setIcon(chevronEl, "chevron-down");
-
-		// Only show the pill when there are assistants or one is active
-		const hasAssistants = (this.plugin.assistantManager?.getAssistants().length ?? 0) > 0;
-		this.assistantSwitcherEl.toggleClass("llm-assistant-switcher--active", !!assistant);
-		this.assistantSwitcherEl.toggleClass("llm-assistant-switcher--hidden", !hasAssistants && !assistant);
 	}
 }

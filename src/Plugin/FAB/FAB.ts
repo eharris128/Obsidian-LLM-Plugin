@@ -192,6 +192,11 @@ export class FAB {
 		this.chatContainer?.refreshEmptyState();
 	}
 
+	/** Rebuilds the assistants optgroup in the model dropdown after hot-reload. */
+	syncAssistantDropdownOptions() {
+		this.chatContainer?.syncAssistantDropdownOptions();
+	}
+
 	removeFab() {
 		this.chatContainer?.destroy();
 		this.chatContainer = null;

@@ -1935,6 +1935,8 @@ export class ChatContainer {
 	 * a display name (no brackets, no .md extension) and the TFile if found.
 	 */
 	private resolvePinnedNote(notePath: string): { displayName: string; file: TFile | null } {
+		// Strip surrounding quotes that YAML parsers may leave (e.g. "[[Note]]" → [[Note]])
+		notePath = notePath.replace(/^["']|["']$/g, "").trim();
 		const isWikilink = notePath.startsWith("[[") && notePath.endsWith("]]");
 		if (isWikilink) {
 			const linkText = notePath.slice(2, -2).split("|")[0].trim(); // handle [[Note|Alias]]

@@ -279,7 +279,7 @@ created: ${created}
 		if (blockMatch) {
 			return blockMatch[1]
 				.split(/\r?\n/)
-				.map((l) => l.replace(/^\s*-\s*/, "").trim())
+				.map((l) => l.replace(/^\s*-\s*/, "").trim().replace(/^["']|["']$/g, ""))
 				.filter(Boolean);
 		}
 

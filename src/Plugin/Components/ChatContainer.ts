@@ -868,6 +868,12 @@ export class ChatContainer {
 			}
 		}
 
+		// ── Resolve active project and assistant (needed by multiple blocks below) ──
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
+		const activeProject = activeProjectId
+			? this.plugin.projectManager?.getProject(activeProjectId)
+			: null;
+
 		// ── /remember built-in command ───────────────────────────────────────────
 		// Intercept "/remember [content]" before skill resolution.
 		// Saves the content directly as a memory without a model call.
@@ -886,15 +892,31 @@ export class ChatContainer {
 				return;
 			}
 
+			// Determine scope from active project/assistant (mirrors extractMemories() logic)
+			const rememberActiveAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
+			const rememberActiveAssistant = rememberActiveAssistantId
+				? (this.plugin.assistantManager?.getAssistant(rememberActiveAssistantId) ?? null)
+				: null;
+			let rememberScope: "global" | "project" | "assistant" = "global";
+			let rememberScopeName: string | undefined;
+			if (activeProject) {
+				rememberScope = "project";
+				rememberScopeName = activeProject.name;
+			} else if (rememberActiveAssistant) {
+				rememberScope = "assistant";
+				rememberScopeName = rememberActiveAssistant.id;
+			}
+
 			// Show the user's message in the chat
 			this.messageStore.addMessage({ role: "user" as const, content: this.prompt });
 			await this.renderingPromise;
 			this.setDiv(true);
 
 			try {
-				const filePath = await this.plugin.memoryService.saveDirectly(content);
+				const filePath = await this.plugin.memoryService.saveDirectly(content, "fact", rememberScope, rememberScopeName);
+				const scopeLabel = rememberScope === "global" ? "global memory" : `${rememberScope} memory (${rememberScopeName})`;
 				const response = filePath
-					? `✓ Saved to memory: "${content}"`
+					? `✓ Saved to ${scopeLabel}: "${content}"`
 					: `This is already in my memory: "${content}"`;
 
 				await MarkdownRenderer.render(
@@ -916,12 +938,6 @@ export class ChatContainer {
 			return;
 		}
 		// ── End /remember ────────────────────────────────────────────────────────
-
-		// ── Resolve active project and assistant (needed by multiple blocks below) ──
-		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
-		const activeProject = activeProjectId
-			? this.plugin.projectManager?.getProject(activeProjectId)
-			: null;
 
 		// Resolve active assistant: explicit setting first, then project default-assistant
 		const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
@@ -1464,16 +1480,82 @@ export class ChatContainer {
 		const disabledTools = this.plugin.settings.toolSettings?.disabledTools ?? [];
 		const maxToolCalls = this.plugin.settings.toolSettings?.maxToolCalls ?? 10;
 
-		// In Obsidian Agent mode, register the invoke_assistant dynamic tool.
-		const agentSetup = (
-			this.isObsidianAgent &&
-			this.plugin.settings.obsidianAgentSettings?.enabled &&
-			this.plugin.obsidianAgent
-		)
-			? (registry: import("services/ObsidianToolRegistry").ObsidianToolRegistry) => {
+		// Configure the agent registry: register dynamic tools before the loop runs.
+		const agentSetup = (registry: import("services/ObsidianToolRegistry").ObsidianToolRegistry) => {
+			// Obsidian Agent mode: register invoke_assistant
+			if (this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled && this.plugin.obsidianAgent) {
 				this.plugin.obsidianAgent.registerTools(registry);
 			}
-			: undefined;
+
+			// Memory: register save_memory whenever MemoryService is available
+			if (this.plugin.memoryService) {
+				const memSvc = this.plugin.memoryService;
+				registry.registerDynamicTool(
+					{
+						name: "save_memory",
+						displayName: "Save memory",
+						description:
+							"Persist a piece of information to the user's long-term memory store. " +
+							"Call this whenever the user says 'remember X', 'save this to memory', " +
+							"'keep a note of Y', or otherwise explicitly asks you to retain something " +
+							"across conversations. The memory is scoped automatically to the active " +
+							"project or assistant — you do not need to specify a path.",
+						parameters: {
+							type: "object",
+							properties: {
+								content: {
+									type: "string",
+									description: "The information to save as a single clear, self-contained sentence.",
+								},
+								type: {
+									type: "string",
+									description: "Memory type: 'fact' (default), 'preference', or 'context'.",
+									enum: ["fact", "preference", "context"],
+								},
+							},
+							required: ["content"],
+						},
+						risk: "write",
+					},
+					async (input: { content: string; type?: string }) => {
+						const { content, type = "fact" } = input;
+						// Resolve scope at call time from current settings
+						const projId = this.plugin.settings.projectSettings?.activeProjectId;
+						const proj = projId ? this.plugin.projectManager?.getProject(projId) : null;
+						const asstId = this.plugin.settings.assistantSettings?.activeAssistantId;
+						const asst = asstId ? this.plugin.assistantManager?.getAssistant(asstId) : null;
+						let scope: "global" | "project" | "assistant" = "global";
+						let scopeName: string | undefined;
+						if (proj) {
+							scope = "project";
+							scopeName = proj.name;
+						} else if (asst) {
+							scope = "assistant";
+							scopeName = asst.id;
+						}
+						try {
+							const filePath = await memSvc.saveDirectly(
+								content,
+								type as "fact" | "preference" | "context",
+								scope,
+								scopeName
+							);
+							if (filePath) {
+								const label =
+									scope === "global"
+										? "global memory"
+										: `${scope} memory (${scopeName})`;
+								return { success: true, result: `Saved to ${label}: "${content}"` };
+							} else {
+								return { success: true, result: `Already in memory: "${content}"` };
+							}
+						} catch (e: any) {
+							return { success: false, error: e?.message ?? String(e) };
+						}
+					}
+				);
+			}
+		};
 
 		const agentLoop = new AgentLoop(
 			this.plugin.app,

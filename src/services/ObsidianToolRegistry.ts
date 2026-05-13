@@ -79,7 +79,7 @@ export const ALL_TOOL_DEFINITIONS: NeutralToolDefinition[] = [
 	{
 		name: "obsidian_append_note",
 		displayName: "Append to note",
-		description: "Append text to the end of an existing note without overwriting it.",
+		description: "Append text to the very end of an existing note. Use obsidian_insert_after_heading instead when you need to add content inside a specific section.",
 		parameters: {
 			type: "object",
 			properties: {
@@ -87,6 +87,36 @@ export const ALL_TOOL_DEFINITIONS: NeutralToolDefinition[] = [
 				content: { type: "string", description: "Text to append." },
 			},
 			required: ["path", "content"],
+		},
+		risk: "write",
+	},
+	{
+		name: "obsidian_insert_after_heading",
+		displayName: "Insert after heading",
+		description: "Insert text immediately after a specific heading in a note, without touching the rest of the file. Use this instead of obsidian_append_note whenever the user asks to add content to a named section (e.g. 'add a bullet to the Log section'). The heading match is case-insensitive and ignores the leading # characters.",
+		parameters: {
+			type: "object",
+			properties: {
+				path: { type: "string", description: "File path relative to vault root." },
+				heading: { type: "string", description: "The heading text to insert after (e.g. 'Log' or 'Scheduled tasks'). Do not include # characters." },
+				content: { type: "string", description: "Text to insert on a new line immediately after the heading line." },
+			},
+			required: ["path", "heading", "content"],
+		},
+		risk: "write",
+	},
+	{
+		name: "obsidian_patch_note",
+		displayName: "Patch note",
+		description: "Find an exact string in a note and replace it with new text. Use for surgical edits — change a single line, fix a value, or update a specific phrase — without rewriting the whole file. The old_string must match exactly (including whitespace). Returns an error if the string is not found or appears more than once.",
+		parameters: {
+			type: "object",
+			properties: {
+				path: { type: "string", description: "File path relative to vault root." },
+				old_string: { type: "string", description: "The exact text to find and replace. Must be unique within the file." },
+				new_string: { type: "string", description: "The text to replace it with." },
+			},
+			required: ["path", "old_string", "new_string"],
 		},
 		risk: "write",
 	},
@@ -276,6 +306,37 @@ export class ObsidianToolRegistry {
 					const existing = await this.app.vault.read(file);
 					await this.app.vault.modify(file, existing + "\n" + content);
 					return { success: true, result: `Appended to ${path}` };
+				}
+
+				case "obsidian_insert_after_heading": {
+					const { path, heading, content } = input as { path: string; heading: string; content: string };
+					const file = this.app.vault.getAbstractFileByPath(path);
+					if (!(file instanceof TFile)) return { success: false, error: `File not found: ${path}` };
+					const existing = await this.app.vault.read(file);
+					const lines = existing.split("\n");
+					const headingNorm = heading.replace(/^#+\s*/, "").trim().toLowerCase();
+					const headingIdx = lines.findIndex(l => l.replace(/^#+\s*/, "").trim().toLowerCase() === headingNorm);
+					if (headingIdx === -1) {
+						return { success: false, error: `Heading "${heading}" not found in ${path}` };
+					}
+					lines.splice(headingIdx + 1, 0, content);
+					await this.app.vault.modify(file, lines.join("\n"));
+					return { success: true, result: `Inserted content after heading "${heading}" in ${path}` };
+				}
+
+				case "obsidian_patch_note": {
+					const { path, old_string, new_string } = input as { path: string; old_string: string; new_string: string };
+					const file = this.app.vault.getAbstractFileByPath(path);
+					if (!(file instanceof TFile)) return { success: false, error: `File not found: ${path}` };
+					const existing = await this.app.vault.read(file);
+					// Count occurrences to ensure uniqueness
+					let count = 0;
+					let pos = 0;
+					while ((pos = existing.indexOf(old_string, pos)) !== -1) { count++; pos += old_string.length; }
+					if (count === 0) return { success: false, error: `String not found in ${path}: ${old_string}` };
+					if (count > 1) return { success: false, error: `String appears ${count} times in ${path} — provide more surrounding context to make it unique` };
+					await this.app.vault.modify(file, existing.replace(old_string, new_string));
+					return { success: true, result: `Patched ${path}` };
 				}
 
 				case "obsidian_search": {

@@ -550,6 +550,19 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	/**
+	 * Re-sync the selected value in every live chat toolbar dropdown to reflect
+	 * the current default model / active assistant. Call this after the General
+	 * settings "Default model or assistant" picker changes.
+	 */
+	syncAllModelDropdowns(): void {
+		this.fab?.syncModelDropdown();
+		this.statusBarButton?.syncModelDropdown();
+		for (const leaf of this.app.workspace.getLeavesOfType(TAB_VIEW_TYPE)) {
+			(leaf.view as WidgetView).syncModelDropdown();
+		}
+	}
+
+	/**
 	 * Register vault events to keep the ProjectManager hot-reloaded whenever
 	 * PROJECT.md files inside the projects folder are created, modified, or deleted.
 	 */

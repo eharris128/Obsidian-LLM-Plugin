@@ -2229,10 +2229,18 @@ export class ChatContainer {
 		}
 		modelDropdown.selectEl.appendChild(modelsGroup);
 
-		// ── Assistants optgroup ───────────────────────────────────────────────
+		// ── Assistants optgroup ──────────────────────────────────────────────
+		// Includes the built-in "Obsidian Agent" entry (pinned at top) when enabled.
 		const buildAssistantsGroup = (): HTMLOptGroupElement => {
 			const group = document.createElement("optgroup");
 			group.label = "Assistants";
+			// Built-in agent entry — pinned first
+			if (this.plugin.settings.obsidianAgentSettings?.enabled) {
+				const agentOpt = document.createElement("option");
+				agentOpt.value = "agent:obsidian";
+				agentOpt.text = "Obsidian Agent";
+				group.appendChild(agentOpt);
+			}
 			const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
 			for (const assistant of assistants) {
 				const opt = document.createElement("option");
@@ -2242,14 +2250,18 @@ export class ChatContainer {
 			}
 			return group;
 		};
+		const agentEnabled = this.plugin.settings.obsidianAgentSettings?.enabled;
+		const userAssistants = this.plugin.assistantManager?.getAssistants() ?? [];
 		this.assistantsOptGroup = buildAssistantsGroup();
-		if ((this.plugin.assistantManager?.getAssistants().length ?? 0) > 0) {
+		if (agentEnabled || userAssistants.length > 0) {
 			modelDropdown.selectEl.appendChild(this.assistantsOptGroup);
 		}
 
-		// Set initial value — show active assistant if one is set
+		// Set initial value — agent mode takes highest priority, then active assistant, then model
 		const initAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
-		if (initAssistantId) {
+		if (this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled) {
+			modelDropdown.selectEl.value = "agent:obsidian";
+		} else if (initAssistantId) {
 			modelDropdown.selectEl.value = `assistant:${initAssistantId}`;
 		} else {
 			modelDropdown.selectEl.value = viewSettings.model;
@@ -2261,8 +2273,39 @@ export class ChatContainer {
 		let syncVaultSearchVisibility: ((modelType: string) => void) | null = null;
 
 		modelDropdown.onChange((change) => {
-			if (change.startsWith("assistant:")) {
+			if (change === "agent:obsidian") {
+				// ── Obsidian Agent selected ───────────────────────────────────
+				this.isObsidianAgent = true;
+				// Clear any active assistant
+				if (this.plugin.settings.assistantSettings?.activeAssistantId) {
+					this.plugin.settings.assistantSettings = {
+						...this.plugin.settings.assistantSettings,
+						activeAssistantId: null,
+					};
+				}
+				// Apply the agent's default model if one is configured
+				const agentDefaultModel = this.plugin.settings.obsidianAgentSettings?.defaultModel;
+				if (agentDefaultModel && modelNames[agentDefaultModel]) {
+					const name = modelNames[agentDefaultModel];
+					viewSettings.model = agentDefaultModel;
+					viewSettings.modelName = name;
+					viewSettings.modelType = models[name].type;
+					viewSettings.endpointURL = models[name].url;
+					viewSettings.modelEndpoint = models[name].endpoint;
+					syncVaultSearchVisibility?.(models[name].type);
+				}
+				this.plugin.saveSettings();
+				// Start a fresh conversation in agent mode
+				header.setTitle("");
+				header.showTitle();
+				this.newChat();
+				this.resetMessages();
+				setHistoryIndex(this.plugin, this.viewType);
+				this.plugin.settings.currentIndex = -1;
+				this.plugin.saveSettings();
+			} else if (change.startsWith("assistant:")) {
 				// ── Assistant selected ────────────────────────────────────────
+				this.isObsidianAgent = false;
 				const assistantId = change.slice("assistant:".length);
 				const assistant = this.plugin.assistantManager?.getAssistant(assistantId);
 				if (!assistant) return;
@@ -2293,7 +2336,8 @@ export class ChatContainer {
 				this.plugin.settings.currentIndex = -1;
 				this.plugin.saveSettings();
 			} else {
-				// ── Plain model selected — clear active assistant ─────────────
+				// ── Plain model selected — clear active assistant + agent mode ─
+				this.isObsidianAgent = false;
 				if (this.plugin.settings.assistantSettings?.activeAssistantId) {
 					this.plugin.settings.assistantSettings = {
 						...this.plugin.settings.assistantSettings,
@@ -3106,7 +3150,9 @@ export class ChatContainer {
 	syncModelDropdown() {
 		if (!this.modelDropdown) return;
 		const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
-		if (activeAssistantId) {
+		if (this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled) {
+			this.modelDropdown.selectEl.value = "agent:obsidian";
+		} else if (activeAssistantId) {
 			this.modelDropdown.selectEl.value = `assistant:${activeAssistantId}`;
 		} else {
 			const settingType = getSettingType(this.viewType);
@@ -3123,14 +3169,21 @@ export class ChatContainer {
 		if (!this.modelDropdown || !this.assistantsOptGroup) return;
 		const select = this.modelDropdown.selectEl;
 
-		// Remove old group if present
+		// Remove old group
 		if (this.assistantsOptGroup.parentNode === select) {
 			select.removeChild(this.assistantsOptGroup);
 		}
 
-		// Rebuild
+		// Rebuild — includes Obsidian Agent entry at top when enabled
 		const group = document.createElement("optgroup");
 		group.label = "Assistants";
+		const agentEnabled = this.plugin.settings.obsidianAgentSettings?.enabled;
+		if (agentEnabled) {
+			const agentOpt = document.createElement("option");
+			agentOpt.value = "agent:obsidian";
+			agentOpt.text = "Obsidian Agent";
+			group.appendChild(agentOpt);
+		}
 		const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
 		for (const assistant of assistants) {
 			const opt = document.createElement("option");
@@ -3140,11 +3193,11 @@ export class ChatContainer {
 		}
 		this.assistantsOptGroup = group;
 
-		if (assistants.length > 0) {
+		if (agentEnabled || assistants.length > 0) {
 			select.appendChild(this.assistantsOptGroup);
 		}
 
-		// Re-sync selected value in case the active assistant changed
+		// Re-sync selected value in case the active assistant/agent changed
 		this.syncModelDropdown();
 	}
 

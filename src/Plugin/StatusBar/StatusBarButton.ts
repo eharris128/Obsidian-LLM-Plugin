@@ -380,6 +380,11 @@ export class StatusBarButton {
 		this.chatContainer?.syncAssistantDropdownOptions();
 	}
 
+	/** Re-syncs the selected value in the model dropdown to match current settings. */
+	syncModelDropdown() {
+		this.chatContainer?.syncModelDropdown();
+	}
+
 	remove() {
 		this.hidePopover();
 		if (this.boundRepositionHandler) {

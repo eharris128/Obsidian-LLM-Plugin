@@ -75,15 +75,15 @@ export class LLMSettingsModal extends Modal {
 			id: "core",
 			label: "Core Settings",
 			items: [
-				{ id: "general",   label: "General",   icon: "settings" },
-				{ id: "interface", label: "Interface",  icon: "layout-dashboard" },
-				{ id: "chat",      label: "Chat",       icon: "message-square" },
-				{ id: "tools",     label: "Tools",      icon: "wrench" },
-				{ id: "skills",     label: "Skills",     icon: "scroll-text" },
-				{ id: "memory",    label: "Memory",     icon: "brain" },
+				{ id: "general",        label: "General",        icon: "settings" },
+				{ id: "obsidian-agent", label: "Obsidian Agent",  icon: "stone" },
+				{ id: "interface",      label: "Interface",       icon: "layout-dashboard" },
+				{ id: "chat",           label: "Chat",            icon: "message-square" },
+				{ id: "tools",          label: "Tools",           icon: "wrench" },
+				{ id: "skills",         label: "Skills",          icon: "scroll-text" },
+				{ id: "memory",         label: "Memory",          icon: "brain" },
 				{ id: "projects",       label: "Projects",        icon: "folder-open" },
 				{ id: "assistants",     label: "Assistants",      icon: "bot" },
-				{ id: "obsidian-agent", label: "Obsidian Agent",  icon: "stone" },
 			],
 		},
 		{
@@ -270,48 +270,105 @@ export class LLMSettingsModal extends Modal {
 		this.addTabHeader(el, "General");
 		const items = this.addSettingGroup(el);
 
-		// Default model
+		// Default model or assistant
 		new Setting(items)
-			.setName("Default model")
-			.setDesc("Sets the default LLM used across the plugin.")
+			.setName("Default model or assistant")
+			.setDesc("Sets the default LLM or assistant used across the plugin.")
 			.addDropdown((dropdown: DropdownComponent) => {
 				const ollamaBuilt = buildOllamaModels(this.plugin.settings.ollamaModels);
 				const lmStudioBuilt = buildLMStudioModels(this.plugin.settings.lmStudioModels);
 				const allModels = { ...models, ...ollamaBuilt.models, ...lmStudioBuilt.models };
 				const allModelNames = { ...modelNames, ...ollamaBuilt.names, ...lmStudioBuilt.names };
 
-				dropdown.addOption(
-					modelNames[this.plugin.settings.defaultModel] ?? "",
-					"Select default model"
-				);
-
+				// ── Models optgroup ───────────────────────────────────────────
+				const modelsGroup = document.createElement("optgroup");
+				modelsGroup.label = "Models";
 				for (const model of Object.keys(allModels)) {
 					const type = allModels[model].type;
 					if (type === ollama || type === lmStudio) {
-						dropdown.addOption(allModels[model].model, model);
+						const opt = document.createElement("option");
+						opt.value = allModels[model].model;
+						opt.text = model;
+						modelsGroup.appendChild(opt);
 						continue;
 					}
 					if (type === GPT4All) {
 						const fullPath = `${getGpt4AllPath(this.plugin)}/${allModels[model].model}`;
 						if (this.plugin.fileSystem.existsSync(fullPath)) {
-							dropdown.addOption(allModels[model].model, model);
+							const opt = document.createElement("option");
+							opt.value = allModels[model].model;
+							opt.text = model;
+							modelsGroup.appendChild(opt);
 						}
 						continue;
 					}
-					dropdown.addOption(allModels[model].model, model);
+					const opt = document.createElement("option");
+					opt.value = allModels[model].model;
+					opt.text = model;
+					modelsGroup.appendChild(opt);
+				}
+				dropdown.selectEl.appendChild(modelsGroup);
+
+				// ── Assistants optgroup ───────────────────────────────────────
+				const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
+				if (assistants.length > 0) {
+					const assistantsGroup = document.createElement("optgroup");
+					assistantsGroup.label = "Assistants";
+					for (const assistant of assistants) {
+						const opt = document.createElement("option");
+						opt.value = `assistant:${assistant.id}`;
+						opt.text = assistant.name;
+						assistantsGroup.appendChild(opt);
+					}
+					dropdown.selectEl.appendChild(assistantsGroup);
+				}
+
+				// Set initial value — show active assistant if one is set, else current model
+				const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
+				if (activeAssistantId) {
+					dropdown.selectEl.value = `assistant:${activeAssistantId}`;
+				} else {
+					dropdown.selectEl.value = this.plugin.settings.modalSettings.model;
 				}
 
 				dropdown.onChange((change) => {
-					const name = allModelNames[change];
-					if (name && (allModels[name]?.type === ollama || allModels[name]?.type === lmStudio)) {
-						models[name] = allModels[name];
-						modelNames[change] = name;
+					if (change.startsWith("assistant:")) {
+						// ── Assistant selected ────────────────────────────────
+						const assistantId = change.slice("assistant:".length);
+						const assistant = this.plugin.assistantManager?.getAssistant(assistantId);
+						if (!assistant) return;
+						this.plugin.settings.assistantSettings = {
+							...this.plugin.settings.assistantSettings,
+							activeAssistantId: assistantId,
+						};
+						// If the assistant has a preferred model, also update the default model
+						if (assistant.preferredModel && allModelNames[assistant.preferredModel]) {
+							const name = allModelNames[assistant.preferredModel];
+							if (allModels[name]?.type === ollama || allModels[name]?.type === lmStudio) {
+								models[name] = allModels[name];
+								modelNames[assistant.preferredModel] = name;
+							}
+							changeDefaultModel(assistant.preferredModel, this.plugin);
+						}
+					} else {
+						// ── Model selected — clear active assistant ───────────
+						const name = allModelNames[change];
+						if (name && (allModels[name]?.type === ollama || allModels[name]?.type === lmStudio)) {
+							models[name] = allModels[name];
+							modelNames[change] = name;
+						}
+						if (this.plugin.settings.assistantSettings?.activeAssistantId) {
+							this.plugin.settings.assistantSettings = {
+								...this.plugin.settings.assistantSettings,
+								activeAssistantId: null,
+							};
+						}
+						changeDefaultModel(change, this.plugin);
 					}
-					changeDefaultModel(change, this.plugin);
 					this.plugin.saveSettings();
+					// Sync all view dropdowns to reflect the new default
+					this.plugin.syncAllModelDropdowns();
 				});
-
-				dropdown.setValue(this.plugin.settings.modalSettings.model);
 			});
 
 		// Empty chat avatar
@@ -1461,6 +1518,41 @@ export class LLMSettingsModal extends Modal {
 			});
 
 		if (!s.enabled) return; // Only show further settings when enabled
+
+		// ── Default Model ────────────────────────────────────────────────────
+		const modelGroup = this.addSettingGroup(el, "Model");
+		const modelSetting = new Setting(modelGroup)
+			.setName("Default model")
+			.setDesc(
+				"The model used when Obsidian Agent is active. " +
+				"Leave on 'Use current model' to keep whatever model is selected in the chat toolbar."
+			);
+
+		const { openAIAPIKey, claudeAPIKey, geminiAPIKey, mistralAPIKey } = this.plugin.settings;
+		modelSetting.addDropdown((dropdown) => {
+			dropdown.addOption("", "Use current model");
+
+			// Mirror the same filtering logic used in the chat toolbar dropdown.
+			for (const displayName of Object.keys(models)) {
+				const m = models[displayName];
+				if (m.type === ollama || m.type === lmStudio) {
+					dropdown.addOption(m.model, displayName);
+					continue;
+				}
+				if (m.type === GPT4All) continue; // skip GPT4All — path check not available here
+				if (m.type === "openAI"    && !openAIAPIKey)  continue;
+				if ((m.type === "claude" || m.type === "claudeCode") && !claudeAPIKey) continue;
+				if (m.type === "gemini"    && !geminiAPIKey)  continue;
+				if (m.type === "mistral"   && !mistralAPIKey) continue;
+				dropdown.addOption(m.model, displayName);
+			}
+
+			dropdown.setValue(s.defaultModel ?? "");
+			dropdown.onChange(async (value) => {
+				this.plugin.settings.obsidianAgentSettings.defaultModel = value || undefined;
+				await this.plugin.saveSettings();
+			});
+		});
 
 		// ── Available Skills ─────────────────────────────────────────────────
 		const skills = this.plugin.skillRegistry?.getSkills() ?? [];

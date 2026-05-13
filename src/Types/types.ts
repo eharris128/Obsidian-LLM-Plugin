@@ -251,6 +251,11 @@ export type ObsidianAgentSettings = {
 	/** Whether to enable web search (placeholder — for when providers support it). */
 	enableWebSearch: boolean;
 	/**
+	 * The model key (from `models` map) used when the agent is active.
+	 * When undefined/empty the active view's current model is used as-is.
+	 */
+	defaultModel?: string;
+	/**
 	 * Per-skill availability keyed by skill id.
 	 * Explicitly false = excluded from the agent. Missing = available (default true).
 	 */

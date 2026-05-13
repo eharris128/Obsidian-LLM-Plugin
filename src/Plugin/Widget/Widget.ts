@@ -212,6 +212,11 @@ export class WidgetView extends ItemView {
 		this.chatContainer?.syncAssistantDropdownOptions();
 	}
 
+	/** Re-syncs the selected value in the model dropdown to match current settings. */
+	syncModelDropdown() {
+		this.chatContainer?.syncModelDropdown();
+	}
+
 	async onClose() {
 		this.chatContainer?.destroy();
 		this.chatContainer = null;

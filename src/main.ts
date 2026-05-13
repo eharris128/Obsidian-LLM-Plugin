@@ -83,6 +83,7 @@ export interface LLMPluginSettings {
 	showRibbonIcon: boolean;
 	enableFileContext: boolean;
 	defaultModel: string;
+	defaultAgentMode: boolean;
 	ollamaHost: string;
 	ollamaModels: string[];
 	lmStudioHost: string;
@@ -172,6 +173,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	showRibbonIcon: true,
 	enableFileContext: false,
 	defaultModel: "",
+	defaultAgentMode: false,
 	ollamaHost: "http://localhost:11434",
 	ollamaModels: [],
 	lmStudioHost: "http://localhost:1234",
@@ -559,6 +561,19 @@ export default class LLMPlugin extends Plugin {
 		this.statusBarButton?.syncModelDropdown();
 		for (const leaf of this.app.workspace.getLeavesOfType(TAB_VIEW_TYPE)) {
 			(leaf.view as WidgetView).syncModelDropdown();
+		}
+	}
+
+	/**
+	 * Set agent mode on every live ChatContainer and sync their dropdowns.
+	 * Call this after the General settings "Default model or assistant" picker
+	 * changes to or from the Obsidian Agent option.
+	 */
+	syncAllContainersAgentMode(enabled: boolean): void {
+		this.fab?.setAgentMode(enabled);
+		this.statusBarButton?.setAgentMode(enabled);
+		for (const leaf of this.app.workspace.getLeavesOfType(TAB_VIEW_TYPE)) {
+			(leaf.view as WidgetView).setAgentMode(enabled);
 		}
 	}
 

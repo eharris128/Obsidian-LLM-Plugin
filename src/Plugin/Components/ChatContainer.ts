@@ -2788,6 +2788,12 @@ export class ChatContainer {
 	 *
 	 * Skips patterns already inside [[wikilinks]], markdown links (url), or
 	 * URLs (containing ://).
+	 *
+	 * NOTE: spaces are intentionally excluded from the filename character class.
+	 * Allowing spaces causes the regex to greedily capture preceding words —
+	 * e.g. "in LLM Plugin.md" → [[in LLM Plugin.md]] instead of [[LLM Plugin.md]].
+	 * Models should output spaced filenames as [[wikilinks]] directly; tool
+	 * results already do this via the wikilink format.
 	 */
 	private linkifyMdRefs(text: string): string {
 		// LLMs (especially smaller models) often wrap wiki-links in backticks:
@@ -2799,8 +2805,10 @@ export class ChatContainer {
 		// (catches [[already]], (url), and http://path/file.md).
 		// Negative lookahead:  don't match if followed by ] or )
 		// (catches the closing half of existing syntax).
+		// No spaces in the character class — prevents "in Foo Bar.md" from being
+		// captured as a single match starting at "in".
 		return text.replace(
-			/(?<![\[(/])(\b[\w][\w ./-]*?\.md\b)(?![)\]])/g,
+			/(?<![\[(/])(\b[\w][\w./-]*?\.md\b)(?![)\]])/g,
 			"[[$1]]"
 		);
 	}

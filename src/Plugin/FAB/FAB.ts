@@ -48,8 +48,8 @@ export class FAB {
 			this.plugin.conversationRegistry
 		);
 		const chatContainer = this.chatContainer;
-		// Enable agent mode when the Obsidian Agent feature is on.
-		if (this.plugin.settings.obsidianAgentSettings?.enabled) {
+		// Enable agent mode when the Obsidian Agent feature is on or set as default.
+		if (this.plugin.settings.obsidianAgentSettings?.enabled || this.plugin.settings.defaultAgentMode) {
 			chatContainer.isObsidianAgent = true;
 		}
 		// Wire the header title callback so the title updates when the first message is sent.
@@ -200,6 +200,14 @@ export class FAB {
 	/** Re-syncs the selected value in the model dropdown to match current settings. */
 	syncModelDropdown() {
 		this.chatContainer?.syncModelDropdown();
+	}
+
+	/** Sets agent mode on the chat container and refreshes the dropdown. */
+	setAgentMode(enabled: boolean) {
+		if (this.chatContainer) {
+			this.chatContainer.isObsidianAgent = enabled;
+			this.chatContainer.syncModelDropdown();
+		}
 	}
 
 	removeFab() {

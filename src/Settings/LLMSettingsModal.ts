@@ -309,11 +309,19 @@ export class LLMSettingsModal extends Modal {
 				}
 				dropdown.selectEl.appendChild(modelsGroup);
 
-				// ── Assistants optgroup ───────────────────────────────────────
+				// ── Assistants optgroup (includes built-in Obsidian Agent) ───────
 				const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
-				if (assistants.length > 0) {
+				const agentEnabled = this.plugin.settings.obsidianAgentSettings?.enabled;
+				if (agentEnabled || assistants.length > 0) {
 					const assistantsGroup = document.createElement("optgroup");
 					assistantsGroup.label = "Assistants";
+					// Obsidian Agent pinned first, only when the feature is enabled
+					if (agentEnabled) {
+						const agentOpt = document.createElement("option");
+						agentOpt.value = "agent:obsidian";
+						agentOpt.text = "Obsidian Agent";
+						assistantsGroup.appendChild(agentOpt);
+					}
 					for (const assistant of assistants) {
 						const opt = document.createElement("option");
 						opt.value = `assistant:${assistant.id}`;
@@ -323,17 +331,32 @@ export class LLMSettingsModal extends Modal {
 					dropdown.selectEl.appendChild(assistantsGroup);
 				}
 
-				// Set initial value — show active assistant if one is set, else current model
+				// Set initial value — agent mode > active assistant > current model
 				const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
-				if (activeAssistantId) {
+				if (this.plugin.settings.defaultAgentMode) {
+					dropdown.selectEl.value = "agent:obsidian";
+				} else if (activeAssistantId) {
 					dropdown.selectEl.value = `assistant:${activeAssistantId}`;
 				} else {
 					dropdown.selectEl.value = this.plugin.settings.modalSettings.model;
 				}
 
 				dropdown.onChange((change) => {
-					if (change.startsWith("assistant:")) {
+					if (change === "agent:obsidian") {
+						// ── Obsidian Agent selected ───────────────────────────
+						this.plugin.settings.defaultAgentMode = true;
+						if (this.plugin.settings.assistantSettings?.activeAssistantId) {
+							this.plugin.settings.assistantSettings = {
+								...this.plugin.settings.assistantSettings,
+								activeAssistantId: null,
+							};
+						}
+						this.plugin.saveSettings();
+						this.plugin.syncAllContainersAgentMode(true);
+						return;
+					} else if (change.startsWith("assistant:")) {
 						// ── Assistant selected ────────────────────────────────
+						this.plugin.settings.defaultAgentMode = false;
 						const assistantId = change.slice("assistant:".length);
 						const assistant = this.plugin.assistantManager?.getAssistant(assistantId);
 						if (!assistant) return;
@@ -350,8 +373,10 @@ export class LLMSettingsModal extends Modal {
 							}
 							changeDefaultModel(assistant.preferredModel, this.plugin);
 						}
+						this.plugin.syncAllContainersAgentMode(false);
 					} else {
-						// ── Model selected — clear active assistant ───────────
+						// ── Model selected — clear active assistant + agent mode ─
+						this.plugin.settings.defaultAgentMode = false;
 						const name = allModelNames[change];
 						if (name && (allModels[name]?.type === ollama || allModels[name]?.type === lmStudio)) {
 							models[name] = allModels[name];
@@ -364,6 +389,7 @@ export class LLMSettingsModal extends Modal {
 							};
 						}
 						changeDefaultModel(change, this.plugin);
+						this.plugin.syncAllContainersAgentMode(false);
 					}
 					this.plugin.saveSettings();
 					// Sync all view dropdowns to reflect the new default

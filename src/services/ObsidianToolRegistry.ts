@@ -51,14 +51,28 @@ export const ALL_TOOL_DEFINITIONS: NeutralToolDefinition[] = [
 	{
 		name: "obsidian_modify_note",
 		displayName: "Modify note",
-		description: "Overwrite the entire content of an existing note.",
+		description: "Overwrite the ENTIRE content of an existing note. WARNING: this replaces every byte of the file. You MUST call obsidian_read_note first and include the complete existing content with your changes merged in. Use obsidian_update_frontmatter instead when you only need to change frontmatter properties.",
 		parameters: {
 			type: "object",
 			properties: {
 				path: { type: "string", description: "File path relative to vault root." },
-				content: { type: "string", description: "New markdown content to write." },
+				content: { type: "string", description: "Complete new markdown content to write (must include all existing content with your edits applied)." },
 			},
 			required: ["path", "content"],
+		},
+		risk: "write",
+	},
+	{
+		name: "obsidian_update_frontmatter",
+		displayName: "Update frontmatter",
+		description: "Safely update one or more frontmatter properties in an existing note without touching the note body. Pass the properties to add or change as a JSON object string. Example updates_json: '{\"status\": \"Done\", \"priority\": \"high\"}'.",
+		parameters: {
+			type: "object",
+			properties: {
+				path: { type: "string", description: "File path relative to vault root." },
+				updates_json: { type: "string", description: "JSON object string of frontmatter key-value pairs to set. Example: '{\"status\": \"In Progress\", \"tags\": [\"project\", \"active\"]}'." },
+			},
+			required: ["path", "updates_json"],
 		},
 		risk: "write",
 	},
@@ -230,6 +244,29 @@ export class ObsidianToolRegistry {
 					if (!(file instanceof TFile)) return { success: false, error: `File not found: ${path}` };
 					await this.app.vault.modify(file, content);
 					return { success: true, result: `Modified ${path}` };
+				}
+
+				case "obsidian_update_frontmatter": {
+					const { path, updates_json } = input as { path: string; updates_json: string };
+					const file = this.app.vault.getAbstractFileByPath(path);
+					if (!(file instanceof TFile)) return { success: false, error: `File not found: ${path}` };
+					let updates: Record<string, any>;
+					try {
+						updates = JSON.parse(updates_json);
+						if (typeof updates !== "object" || Array.isArray(updates) || updates === null) {
+							return { success: false, error: "updates_json must be a JSON object (e.g. {\"key\": \"value\"})" };
+						}
+					} catch {
+						return { success: false, error: `Invalid JSON in updates_json: ${updates_json}` };
+					}
+					await this.app.fileManager.processFrontMatter(file, (fm) => {
+						for (const [key, value] of Object.entries(updates)) {
+							fm[key] = value;
+						}
+					});
+					const keys = Object.keys(updates).join(", ");
+					const displayName = path.replace(/\.md$/, "");
+					return { success: true, result: `Updated frontmatter keys [${keys}] in [[${displayName}]]` };
 				}
 
 				case "obsidian_append_note": {

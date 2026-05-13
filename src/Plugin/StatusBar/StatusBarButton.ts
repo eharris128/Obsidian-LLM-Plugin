@@ -64,8 +64,8 @@ export class StatusBarButton {
 			"floating-action-button",
 			this.plugin.conversationRegistry
 		);
-		// Enable agent mode when the Obsidian Agent feature is on.
-		if (this.plugin.settings.obsidianAgentSettings?.enabled) {
+		// Enable agent mode when the Obsidian Agent feature is on or set as default.
+		if (this.plugin.settings.obsidianAgentSettings?.enabled || this.plugin.settings.defaultAgentMode) {
 			this.chatContainer.isObsidianAgent = true;
 		}
 		const historyContainer = new HistoryContainer(
@@ -383,6 +383,14 @@ export class StatusBarButton {
 	/** Re-syncs the selected value in the model dropdown to match current settings. */
 	syncModelDropdown() {
 		this.chatContainer?.syncModelDropdown();
+	}
+
+	/** Sets agent mode on the chat container and refreshes the dropdown. */
+	setAgentMode(enabled: boolean) {
+		if (this.chatContainer) {
+			this.chatContainer.isObsidianAgent = enabled;
+			this.chatContainer.syncModelDropdown();
+		}
 	}
 
 	remove() {

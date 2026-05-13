@@ -142,6 +142,10 @@ export class WidgetView extends ItemView {
 			this.plugin.conversationRegistry
 		);
 		const chatContainer = this.chatContainer;
+		// Enable agent mode when set as the plugin-wide default.
+		if (this.plugin.settings.defaultAgentMode) {
+			chatContainer.isObsidianAgent = true;
+		}
 		const header = this.header;
 		// Update the header title when the first message of a new conversation is sent
 		chatContainer.headerTitleCallback = (title: string) => header.setTitle(title);
@@ -215,6 +219,14 @@ export class WidgetView extends ItemView {
 	/** Re-syncs the selected value in the model dropdown to match current settings. */
 	syncModelDropdown() {
 		this.chatContainer?.syncModelDropdown();
+	}
+
+	/** Sets agent mode on the chat container and refreshes the dropdown. */
+	setAgentMode(enabled: boolean) {
+		if (this.chatContainer) {
+			this.chatContainer.isObsidianAgent = enabled;
+			this.chatContainer.syncModelDropdown();
+		}
 	}
 
 	async onClose() {

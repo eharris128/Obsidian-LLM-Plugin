@@ -183,7 +183,6 @@ export class ChatContainer extends Component {
 	/** Whether memories were injected for the current generation (drives UI indicator). */
 	private memoriesInjectedThisTurn: boolean = false;
 	/** Stored reference so we can update the memory button's active state. */
-	private memoryButton: import("obsidian").ButtonComponent | null = null;
 	/** Display name of the assistant active for the current generation — cleared after the indicator is shown. */
 	private activeAssistantNameThisTurn: string | null = null;
 	/**
@@ -2158,15 +2157,24 @@ export class ChatContainer extends Component {
 		const hasAdditional = this.plugin.settings.enableFileContext && contextSettings.selectedFiles.length > 0;
 		const hasPinned = pinnedNotes.length > 0;
 		const hasProject = !!activeProject;
+		const hasMemory = !!(this.plugin.settings.memorySettings?.enabled && this.useMemory);
 
-		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject) {
+		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject && !hasMemory) {
 			this.chipContainer.style.display = "none";
 			return;
 		}
 
 		this.chipContainer.style.display = "flex";
 
-		// Project chip first — icon-only at rest, name revealed on hover
+		// Memory chip — icon-only at rest, label + remove revealed on hover
+		if (hasMemory) {
+			this.buildMemoryChip(this.chipContainer, () => {
+				this.useMemory = false;
+				this.syncChips();
+			});
+		}
+
+		// Project chip — icon-only at rest, name revealed on hover
 		if (hasProject) {
 			this.buildProjectChip(this.chipContainer, activeProject!.name, () => {
 				this.setActiveProject(null);
@@ -2246,6 +2254,20 @@ export class ChatContainer extends Component {
 		const iconEl = chip.createEl("span", { cls: "llm-context-chip-icon" });
 		setIcon(iconEl, "box");
 		chip.createEl("span", { text: name, cls: "llm-context-chip-name llm-project-chip-name" });
+		const removeBtn = chip.createEl("span", { text: "×", cls: "llm-context-chip-remove" });
+		removeBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			onRemove();
+		});
+		return chip;
+	}
+
+	/** Build a memory-recall chip — icon-only at rest, expands on hover to show label + remove. */
+	private buildMemoryChip(container: HTMLElement, onRemove: () => void): HTMLElement {
+		const chip = container.createDiv({ cls: "llm-context-chip llm-memory-chip" });
+		const iconEl = chip.createEl("span", { cls: "llm-context-chip-icon" });
+		setIcon(iconEl, "brain");
+		chip.createEl("span", { text: "Memory", cls: "llm-context-chip-name llm-memory-chip-name" });
 		const removeBtn = chip.createEl("span", { text: "×", cls: "llm-context-chip-remove" });
 		removeBtn.addEventListener("click", (e) => {
 			e.stopPropagation();
@@ -2605,6 +2627,8 @@ export class ChatContainer extends Component {
 		} else {
 			modelDropdown.selectEl.value = viewSettings.model;
 		}
+		// Resize after layout so computed font styles are available.
+		window.requestAnimationFrame(() => this.resizeModelDropdown());
 
 		// Single unified onChange — handles assistant selection, plain model
 		// selection, AND vault-search visibility in one place so there is never
@@ -2694,6 +2718,7 @@ export class ChatContainer extends Component {
 				this.plugin.saveSettings();
 				header.setHeader(modelName);
 			}
+			this.resizeModelDropdown();
 		});
 
 		// Right-side group: scan button (FAB/Modal only) + send button
@@ -2732,11 +2757,21 @@ export class ChatContainer extends Component {
 					});
 			});
 
-			// "Save a memory" shortcut — only when memory is enabled
+			// Memory recall toggle + save shortcut — only when memory is enabled
 			if (this.plugin.settings.memorySettings?.enabled && this.plugin.memoryService) {
 				menu.addItem((item) => {
-					item.setTitle("Save a memory")
+					item.setTitle(this.useMemory ? "Disable memory recall" : "Enable memory recall")
 						.setIcon("brain")
+						.setChecked(this.useMemory)
+						.onClick(() => {
+							this.useMemory = !this.useMemory;
+							this.syncChips();
+						});
+				});
+
+				menu.addItem((item) => {
+					item.setTitle("Save a memory")
+						.setIcon("brain-circuit")
 						.onClick(() => {
 							const newVal = "/remember ";
 							promptField.setValue(newVal);
@@ -2866,26 +2901,6 @@ export class ChatContainer extends Component {
 				this.useVaultSearch = !this.useVaultSearch;
 				vaultSearchButton.buttonEl.toggleClass("is-active", this.useVaultSearch);
 			});
-		}
-
-		// Memory toggle button — only shown when the Memory feature is enabled
-		if (this.plugin.settings.memorySettings?.enabled) {
-			this.memoryButton = new ButtonComponent(toolbarRight);
-			this.memoryButton.setIcon("brain");
-			this.memoryButton.setTooltip("Memory: recall past conversations");
-			this.memoryButton.buttonEl.addClass("llm-scan-button");
-
-			// Initialise from instance state (survives re-renders within a session)
-			this.memoryButton.buttonEl.toggleClass("is-active", this.useMemory);
-
-			this.memoryButton.onClick(() => {
-				this.useMemory = !this.useMemory;
-				this.memoryButton?.buttonEl.toggleClass("is-active", this.useMemory);
-				if (this.useMemory) {
-					new Notice("Memory recall enabled for this conversation.");
-				}
-			});
-
 		}
 
 		// Sync file-context button visibility based on the current setting
@@ -3546,7 +3561,34 @@ export class ChatContainer extends Component {
 			const settingType = getSettingType(this.viewType);
 			this.modelDropdown.setValue(this.plugin.settings[settingType].model);
 		}
+		this.resizeModelDropdown();
 		this.syncFileContextButtons();
+	}
+
+	/**
+	 * Shrinks the model/assistant <select> to exactly fit the selected option's
+	 * text plus the custom chevron, so there is no dead space between label and arrow.
+	 */
+	private resizeModelDropdown(): void {
+		if (!this.modelDropdown) return;
+		const select = this.modelDropdown.selectEl;
+		const selected = select.options[select.selectedIndex];
+		if (!selected) return;
+
+		// Measure the rendered text width using a temporary off-screen span.
+		const ruler = document.createElement("span");
+		ruler.style.cssText =
+			"visibility:hidden;position:absolute;white-space:nowrap;pointer-events:none;";
+		ruler.style.font = window.getComputedStyle(select).font;
+		ruler.textContent = selected.text;
+		document.body.appendChild(ruler);
+		const textWidth = ruler.getBoundingClientRect().width;
+		document.body.removeChild(ruler);
+
+		// Left pad (~4px) + text + right pad + chevron room (~22px) = ~26px total.
+		// Add a small buffer so the text never clips.
+		const PADDING = 30;
+		select.style.width = `${Math.ceil(textWidth + PADDING)}px`;
 	}
 
 	/**
@@ -3870,13 +3912,11 @@ export class ChatContainer extends Component {
 
 		this.syncChips();
 
-		// Re-apply the always-recall preference for the new conversation,
-		// then sync the brain button's visual state to match.
+		// Re-apply the always-recall preference for the new conversation.
 		this.useMemory = !!(
 			this.plugin.settings.memorySettings?.enabled &&
 			this.plugin.settings.memorySettings?.recallAlways
 		);
-		this.memoryButton?.buttonEl.toggleClass("is-active", this.useMemory);
 	}
 }
 

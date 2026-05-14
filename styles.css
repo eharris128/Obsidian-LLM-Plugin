@@ -2059,6 +2059,33 @@ details[open] .llm-tool-calls-chevron {
 	max-width: 200px;
 }
 
+/* ── Memory chip (chip strip) ──────────────────────────────────────────────── */
+/* Shows just the brain icon at rest; "Memory" label + remove revealed on hover. */
+
+.llm-memory-chip {
+	border: 1px solid var(--color-purple);
+	background-color: color-mix(in srgb, var(--color-purple) 10%, transparent);
+	max-width: 32px;
+	overflow: hidden;
+	transition: max-width 0.2s ease;
+	cursor: default;
+}
+
+.llm-memory-chip:hover {
+	max-width: 180px;
+	background-color: color-mix(in srgb, var(--color-purple) 16%, transparent);
+}
+
+.llm-memory-chip .llm-context-chip-icon {
+	color: var(--color-purple);
+	flex-shrink: 0;
+}
+
+.llm-memory-chip-name {
+	white-space: nowrap;
+	color: var(--text-normal);
+}
+
 /* ── Project chip (chip strip) ─────────────────────────────────────────────── */
 /* Shows just the box icon at rest; name + remove button revealed on hover.    */
 

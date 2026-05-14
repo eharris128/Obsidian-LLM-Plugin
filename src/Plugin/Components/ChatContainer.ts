@@ -2027,15 +2027,28 @@ export class ChatContainer {
 		const hasActiveFile = this.plugin.settings.enableFileContext && this.useActiveFileContext && this.activeFileForChip;
 		const hasAdditional = this.plugin.settings.enableFileContext && contextSettings.selectedFiles.length > 0;
 		const hasPinned = pinnedNotes.length > 0;
+		const hasProject = !!activeProject;
 
-		if (!hasActiveFile && !hasAdditional && !hasPinned) {
+		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject) {
 			this.chipContainer.style.display = "none";
 			return;
 		}
 
 		this.chipContainer.style.display = "flex";
 
-		// Pinned project notes first
+		// Project chip first — icon-only at rest, name revealed on hover
+		if (hasProject) {
+			this.buildProjectChip(this.chipContainer, activeProject!.name, () => {
+				this.plugin.settings.projectSettings = {
+					...this.plugin.settings.projectSettings,
+					activeProjectId: null,
+				};
+				this.plugin.saveSettings();
+				this.syncChips();
+			});
+		}
+
+		// Pinned project notes
 		for (const notePath of pinnedNotes) {
 			const { displayName, file } = this.resolvePinnedNote(notePath);
 			this.buildPinnedChip(this.chipContainer, displayName, file);
@@ -2078,6 +2091,23 @@ export class ChatContainer {
 			text: "×",
 			cls: "llm-context-chip-remove",
 		});
+		removeBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			onRemove();
+		});
+		return chip;
+	}
+
+	/**
+	 * Build the project chip. Shows only the box icon at rest; the project name
+	 * (and remove button) are revealed on hover via a CSS max-width transition.
+	 */
+	private buildProjectChip(container: HTMLElement, name: string, onRemove: () => void): HTMLElement {
+		const chip = container.createDiv({ cls: "llm-context-chip llm-project-chip" });
+		const iconEl = chip.createEl("span", { cls: "llm-context-chip-icon" });
+		setIcon(iconEl, "box");
+		chip.createEl("span", { text: name, cls: "llm-context-chip-name llm-project-chip-name" });
+		const removeBtn = chip.createEl("span", { text: "×", cls: "llm-context-chip-remove" });
 		removeBtn.addEventListener("click", (e) => {
 			e.stopPropagation();
 			onRemove();
@@ -2578,6 +2608,51 @@ export class ChatContainer {
 							promptField.inputEl.setSelectionRange(newVal.length, newVal.length);
 						});
 				});
+			}
+
+			// "Add to project" — only available for new chats (no messages yet).
+			// For started chats this option lives in the header more-options menu.
+			if (this.getMessages().length === 0) {
+				const projects = this.plugin.projectManager?.getProjects() ?? [];
+				if (projects.length > 0) {
+					menu.addItem((item) => {
+						item.setTitle("Add to project").setIcon("box");
+						const submenu = (item as any).setSubmenu() as Menu;
+						const activeId = this.plugin.settings.projectSettings?.activeProjectId;
+
+						submenu.addItem((si) => {
+							si.setTitle("No project")
+								.setIcon("x-circle")
+								.setChecked(!activeId)
+								.onClick(() => {
+									this.plugin.settings.projectSettings = {
+										...this.plugin.settings.projectSettings,
+										activeProjectId: null,
+									};
+									this.plugin.saveSettings();
+									this.syncChips();
+								});
+						});
+
+						submenu.addSeparator();
+
+						for (const project of projects) {
+							submenu.addItem((si) => {
+								si.setTitle(project.name)
+									.setIcon("box")
+									.setChecked(project.id === activeId)
+									.onClick(() => {
+										this.plugin.settings.projectSettings = {
+											...this.plugin.settings.projectSettings,
+											activeProjectId: project.id,
+										};
+										this.plugin.saveSettings();
+										this.syncChips();
+									});
+							});
+						}
+					});
+				}
 			}
 
 			if (skills.length > 0) {

@@ -2056,66 +2056,32 @@ details[open] .llm-tool-calls-chevron {
 	max-width: 200px;
 }
 
-/* ── Project switcher (header pill) ───────────────────────────────────────── */
+/* ── Project chip (chip strip) ─────────────────────────────────────────────── */
+/* Shows just the box icon at rest; name + remove button revealed on hover.    */
 
-.llm-project-switcher {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--size-2-1);
-	padding: var(--size-2-1) var(--size-4-2);
-	background: transparent;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
-	cursor: pointer;
-	font-size: var(--font-ui-smaller);
-	color: var(--text-muted);
-	max-width: 160px;
-	white-space: nowrap;
+.llm-project-chip {
+	border: 1px solid var(--interactive-accent);
+	background-color: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+	/* Clamp to icon-only width at rest: horizontal padding (2×8px) + icon (12px) */
+	max-width: 32px;
 	overflow: hidden;
-	transition: background 100ms ease, border-color 100ms ease;
-	box-shadow: none;
-	margin-left: var(--size-2-2);
+	transition: max-width 0.2s ease;
+	cursor: default;
 }
 
-.llm-project-switcher:hover {
-	background: var(--background-modifier-hover);
-	border-color: var(--background-modifier-border-hover);
-	color: var(--text-normal);
+.llm-project-chip:hover {
+	max-width: 220px;
+	background-color: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
 }
 
-.llm-project-switcher--active {
-	border-color: var(--interactive-accent);
-	color: var(--text-normal);
-}
-
-.llm-project-switcher-icon {
-	display: inline-flex;
-	align-items: center;
-	flex-shrink: 0;
-	--icon-size: var(--icon-xs);
-	--icon-stroke: 1.5;
-	color: var(--text-faint);
-}
-
-.llm-project-switcher--active .llm-project-switcher-icon {
+.llm-project-chip .llm-context-chip-icon {
 	color: var(--interactive-accent);
-}
-
-.llm-project-switcher-label {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	min-width: 0;
-	flex: 1;
-}
-
-.llm-project-switcher-chevron {
-	display: inline-flex;
-	align-items: center;
 	flex-shrink: 0;
-	--icon-size: var(--icon-xs);
-	--icon-stroke: 1.5;
-	color: var(--text-faint);
+}
+
+.llm-project-chip-name {
+	white-space: nowrap;
+	color: var(--text-normal);
 }
 
 /* ── Assistant switcher (header pill) ────────────────────────────────────── */

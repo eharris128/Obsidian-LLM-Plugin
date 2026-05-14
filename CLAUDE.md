@@ -308,14 +308,18 @@ created: <ISO date>
 - `LLMPlugin.projectManager` is the singleton instance (always initialized, folder derived from `rootVaultFolder`).
 - `LLMPlugin.settings.projectSettings.activeProjectId` (persisted) holds the active project id or `null`.
 - `LLMPlugin.projectsFolder` getter returns `<rootVaultFolder>/Projects`.
-- Switching projects (via the header pill) calls `chatContainer.newChat()` to start fresh under the new project.
+- Switching projects does **not** auto-start a new chat; the project is set via `plugin.settings.projectSettings.activeProjectId` and the chip strip is refreshed via `chatContainer.syncChips()`.
 - In `ChatContainer.handleGenerateClick()`, if a project is active:
   1. Pinned notes are read from vault and injected into `pendingContextString` as `# Pinned Project Notes` block.
   2. Project system instructions are injected as `# Project Instructions: <name>` block (prepended to context, after pinned notes).
   3. Memory recall passes `activeProject: project.name` to `MemoryContext` so project-scoped memories are included.
 - Saved chat files get a `project: "<name>"` YAML field in frontmatter when a project is active.
 - Project pinned notes appear as non-removable chips (dashed border, pin icon) in the chip strip above the chat input.
-- The project switcher pill in the chat header shows the active project name or "No project"; clicking opens a menu to switch.
+- **Project chip**: when a project is active, a `.llm-project-chip` chip appears first in the chip strip. It shows only the box icon at rest; on hover it expands (CSS `max-width` transition) to reveal the project name and a remove (×) button.
+- **Project selection UI** — two entry points depending on chat state:
+  - *New chat (no messages)*: "Add to project" submenu in the **+ button** menu (`addFilesButton` in `ChatContainer`).
+  - *Started chat*: "Add to project" submenu in the **more-options menu** — chevron button on FAB/StatusBar headers; `more-horizontal` button on Widget/Modal (default) header.
+- There is **no longer a project switcher pill** in the chat header — `buildProjectSwitcher` and `updateProjectSwitcher` have been removed from `Header.ts`.
 - `LLMPlugin.reinitProjectManager()` is called when `rootVaultFolder` changes (Settings → General).
 - Projects are managed (create/edit/delete/activate) via Settings → Features → Projects.
 

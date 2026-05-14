@@ -1080,6 +1080,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
 	max-width: 220px;
+	flex-shrink: 0; /* prevent flex from squishing chips — container scrolls instead */
 }
 
 .llm-context-chip-icon {
@@ -2065,6 +2066,7 @@ details[open] .llm-tool-calls-chevron {
 .llm-memory-chip {
 	border: 1px solid var(--color-purple);
 	background-color: color-mix(in srgb, var(--color-purple) 10%, transparent);
+	min-width: 32px;
 	max-width: 32px;
 	overflow: hidden;
 	transition: max-width 0.2s ease;
@@ -2093,6 +2095,7 @@ details[open] .llm-tool-calls-chevron {
 	border: 1px solid var(--interactive-accent);
 	background-color: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
 	/* Clamp to icon-only width at rest: horizontal padding (2×8px) + icon (12px) */
+	min-width: 32px;
 	max-width: 32px;
 	overflow: hidden;
 	transition: max-width 0.2s ease;

@@ -82,6 +82,7 @@ export class LLMSettingsModal extends Modal {
 				{ id: "tools",          label: "Tools",           icon: "wrench" },
 				{ id: "skills",         label: "Skills",          icon: "scroll-text" },
 				{ id: "memory",         label: "Memory",          icon: "brain" },
+				{ id: "embeddings",     label: "Embeddings",      icon: "database" },
 				{ id: "projects",       label: "Projects",        icon: "folder-open" },
 				{ id: "assistants",     label: "Assistants",      icon: "bot" },
 			],
@@ -96,13 +97,6 @@ export class LLMSettingsModal extends Modal {
 				{ id: "mistral",      label: "Mistral",      icon: "wind" },
 				{ id: "ollama",       label: "Ollama",       icon: "cpu" },
 				{ id: "lmstudio",     label: "LM Studio",   icon: "monitor" },
-			],
-		},
-		{
-			id: "features",
-			label: "Features",
-			items: [
-				{ id: "vault-search", label: "Vault Search", icon: "search" },
 			],
 		},
 	];
@@ -254,7 +248,7 @@ export class LLMSettingsModal extends Modal {
 			case "lmstudio":      this.renderLMStudio();    break;
 			case "chat":          this.renderChat();         break;
 			case "tools":         this.renderTools();        break;
-			case "vault-search":  this.renderVaultSearch();  break;
+			case "embeddings":    this.renderEmbeddings();   break;
 			case "skills":        this.renderSkills();        break;
 			case "memory":        this.renderMemory();        break;
 			case "projects":      this.renderProjects();      break;
@@ -412,6 +406,24 @@ export class LLMSettingsModal extends Modal {
 					await this.plugin.saveSettings();
 					this.plugin.refreshAllEmptyStates();
 				});
+			});
+
+		// Enable vault search (RAG)
+		new Setting(items)
+			.setName("Enable vault search")
+			.setDesc(
+				"Index your vault and allow the AI to semantically search your notes. " +
+				"Tool-capable models (Claude, GPT-4, Gemini) use this automatically; " +
+				"other models get a manual toggle in the chat UI."
+			)
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.ragSettings.enabled)
+					.onChange(async (value) => {
+						this.plugin.settings.ragSettings.enabled = value;
+						await this.plugin.saveSettings();
+						this.plugin.initVaultIndexer();
+					});
 			});
 
 		// Root vault folder
@@ -902,31 +914,9 @@ export class LLMSettingsModal extends Modal {
 		}
 	}
 
-	private renderVaultSearch() {
+	private renderEmbeddings() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Vault Search");
-
-		// Enable toggle
-		const toggleItems = this.addSettingGroup(el);
-		new Setting(toggleItems)
-			.setName("Enable vault search (RAG)")
-			.setDesc(
-				"Index your vault and allow the AI to semantically search your notes. " +
-				"Tool-capable models (Claude, GPT-4, Gemini) use this automatically; " +
-				"other models get a manual toggle in the chat UI."
-			)
-			.addToggle((toggle) => {
-				toggle
-					.setValue(this.plugin.settings.ragSettings.enabled)
-					.onChange(async (value) => {
-						this.plugin.settings.ragSettings.enabled = value;
-						await this.plugin.saveSettings();
-						this.plugin.initVaultIndexer();
-						this.renderTab("vault-search");
-					});
-			});
-
-		if (!this.plugin.settings.ragSettings.enabled) return;
+		this.addTabHeader(el, "Embeddings");
 
 		// Embedding configuration
 		const embeddingItems = this.addSettingGroup(el, "Embedding");
@@ -947,7 +937,7 @@ export class LLMSettingsModal extends Modal {
 					await this.plugin.saveSettings();
 					this.plugin.initVaultIndexer();
 					// Re-render to update the model field placeholder
-					this.renderTab("vault-search");
+					this.renderTab("embeddings");
 				});
 			});
 
@@ -1033,7 +1023,7 @@ export class LLMSettingsModal extends Modal {
 							this.plugin.vaultIndexer.indexedFileCount;
 						await this.plugin.saveSettings();
 						new Notice(`✓ Vault indexed — ${indexed} updated, ${skipped} unchanged.`);
-						this.renderTab("vault-search");
+						this.renderTab("embeddings");
 					} catch (e: any) {
 						if (e instanceof OllamaModelNotFoundError) {
 							new Notice(

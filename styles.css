@@ -1368,6 +1368,58 @@ button.llm-permission-allow {
 	padding: var(--size-4-1) var(--size-4-3);
 }
 
+/* MEMORY SCOPE PICKER (extends permission card) */
+
+.llm-memory-content-preview {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	font-style: italic;
+	background-color: var(--background-modifier-form-field);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-1) var(--size-4-2);
+	margin-bottom: var(--size-4-1);
+}
+
+.llm-memory-scope-label {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	margin-bottom: var(--size-4-1);
+}
+
+.llm-memory-scope-options {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+}
+
+.llm-memory-scope-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	cursor: pointer;
+}
+
+.llm-memory-scope-row input[type="checkbox"] {
+	cursor: pointer;
+	accent-color: var(--interactive-accent);
+}
+
+.llm-memory-scope-row label {
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+}
+
+.llm-memory-scope-row label span.llm-memory-scope-tag {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	background-color: var(--background-modifier-hover);
+	border-radius: var(--radius-s);
+	padding: 1px var(--size-4-1);
+	margin-left: var(--size-4-1);
+}
+
 .llm-status-bar-button:hover {
 	background-color: var(--background-modifier-hover);
 }

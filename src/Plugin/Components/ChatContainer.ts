@@ -901,7 +901,7 @@ export class ChatContainer {
 			let rememberScopeName: string | undefined;
 			if (activeProject) {
 				rememberScope = "project";
-				rememberScopeName = activeProject.name;
+				rememberScopeName = activeProject.id; // id is the folder slug, not the display name
 			} else if (rememberActiveAssistant) {
 				rememberScope = "assistant";
 				rememberScopeName = rememberActiveAssistant.id;
@@ -1458,6 +1458,78 @@ export class ChatContainer {
 	}
 
 	/**
+	 * Render an inline scope-picker card and return the selected scopes,
+	 * or null if the user cancelled. Only shown when there are 2+ scope options.
+	 */
+	private showMemoryScopeUI(
+		content: string,
+		scopes: Array<{ scope: "global" | "project" | "assistant"; label: string; tag: string }>
+	): Promise<Array<{ scope: "global" | "project" | "assistant"; label: string }> | null> {
+		return new Promise((resolve) => {
+			const card = this.historyMessages.createDiv({ cls: "llm-permission-card" });
+
+			// Header
+			const cardHeader = card.createDiv({ cls: "llm-permission-header" });
+			const iconEl = cardHeader.createEl("span", { cls: "llm-permission-icon" });
+			setIcon(iconEl, "brain");
+			cardHeader.createEl("span", {
+				text: "Where should I save this memory?",
+				cls: "llm-permission-title",
+			});
+
+			// Body
+			const body = card.createDiv({ cls: "llm-permission-body" });
+			body.createEl("div", { text: `"${content}"`, cls: "llm-memory-content-preview" });
+			body.createEl("div", { text: "Select one or more destinations:", cls: "llm-memory-scope-label" });
+
+			const optionsEl = body.createDiv({ cls: "llm-memory-scope-options" });
+			const checkboxes: Array<{ cb: HTMLInputElement; scope: "global" | "project" | "assistant"; label: string }> = [];
+
+			for (const { scope, label, tag } of scopes) {
+				const row = optionsEl.createDiv({ cls: "llm-memory-scope-row" });
+				const cb = row.createEl("input", { attr: { type: "checkbox" } }) as HTMLInputElement;
+				cb.checked = true;
+				const lbl = row.createEl("label");
+				lbl.appendText(label);
+				lbl.createEl("span", { text: tag, cls: "llm-memory-scope-tag" });
+				// Clicking the label toggles the checkbox
+				lbl.addEventListener("click", () => { cb.checked = !cb.checked; });
+				checkboxes.push({ cb, scope, label });
+			}
+
+			// Buttons
+			const btnRow = card.createDiv({ cls: "llm-permission-buttons" });
+
+			const cancelBtn = new ButtonComponent(btnRow);
+			cancelBtn.setButtonText("Cancel");
+			cancelBtn.buttonEl.addClass("llm-permission-deny");
+
+			const saveBtn = new ButtonComponent(btnRow);
+			saveBtn.setButtonText("Save");
+			saveBtn.buttonEl.addClass("llm-permission-allow", "mod-cta");
+
+			const cleanup = (
+				e: MouseEvent,
+				result: Array<{ scope: "global" | "project" | "assistant"; label: string }> | null
+			) => {
+				e.stopPropagation();
+				card.remove();
+				resolve(result);
+			};
+
+			cancelBtn.onClick((e) => cleanup(e, null));
+			saveBtn.onClick((e) => {
+				const selected = checkboxes
+					.filter((c) => c.cb.checked)
+					.map((c) => ({ scope: c.scope, label: c.label }));
+				cleanup(e, selected.length > 0 ? selected : null);
+			});
+
+			this.historyMessages.scroll(0, 9999);
+		});
+	}
+
+	/**
 	 * Run the agentic loop for the current prompt, handling tool calls and
 	 * permission prompts, then commit the final response to the message store.
 	 */
@@ -1519,39 +1591,55 @@ export class ChatContainer {
 					},
 					async (input: { content: string; type?: string }) => {
 						const { content, type = "fact" } = input;
-						// Resolve scope at call time from current settings
+						// Build the list of available scopes at call time
 						const projId = this.plugin.settings.projectSettings?.activeProjectId;
 						const proj = projId ? this.plugin.projectManager?.getProject(projId) : null;
 						const asstId = this.plugin.settings.assistantSettings?.activeAssistantId;
 						const asst = asstId ? this.plugin.assistantManager?.getAssistant(asstId) : null;
-						let scope: "global" | "project" | "assistant" = "global";
-						let scopeName: string | undefined;
-						if (proj) {
-							scope = "project";
-							scopeName = proj.name;
-						} else if (asst) {
-							scope = "assistant";
-							scopeName = asst.id;
-						}
-						try {
-							const filePath = await memSvc.saveDirectly(
-								content,
-								type as "fact" | "preference" | "context",
-								scope,
-								scopeName
-							);
-							if (filePath) {
-								const label =
-									scope === "global"
-										? "global memory"
-										: `${scope} memory (${scopeName})`;
-								return { success: true, result: `Saved to ${label}: "${content}"` };
-							} else {
-								return { success: true, result: `Already in memory: "${content}"` };
+
+						type ScopeOption = { scope: "global" | "project" | "assistant"; label: string; tag: string; name?: string };
+						const availableScopes: ScopeOption[] = [];
+						// Use proj.id (folder slug) as the scope name — NOT proj.name (display name)
+						if (proj) availableScopes.push({ scope: "project", label: proj.name, tag: "project", name: proj.id });
+						// Vault assistants: asst.id is the folder slug
+						if (asst) availableScopes.push({ scope: "assistant", label: asst.name ?? asst.id, tag: "assistant", name: asst.id });
+						// Obsidian Agent mode counts as an implicit assistant scope
+						else if (this.isObsidianAgent) availableScopes.push({ scope: "assistant", label: "Obsidian Agent", tag: "agent", name: "Obsidian Agent" });
+						availableScopes.push({ scope: "global", label: "Global memory", tag: "global" });
+
+						// Show scope picker only when there is more than one option
+						let selectedScopes: Array<{ scope: "global" | "project" | "assistant"; label: string; name?: string }>;
+						if (availableScopes.length > 1) {
+							const picked = await this.showMemoryScopeUI(content, availableScopes);
+							if (!picked || picked.length === 0) {
+								return { success: true, result: "Memory save cancelled." };
 							}
-						} catch (e: any) {
-							return { success: false, error: e?.message ?? String(e) };
+							// Map labels back to scope+name
+							selectedScopes = picked.map((p) => {
+								const opt = availableScopes.find((s) => s.scope === p.scope);
+								return { scope: p.scope, label: p.label, name: opt?.name };
+							});
+						} else {
+							// Only global — save directly, no UI
+							selectedScopes = [{ scope: "global", label: "global memory" }];
 						}
+
+						// Save to each selected scope
+						const results: string[] = [];
+						for (const { scope, label, name } of selectedScopes) {
+							try {
+								const filePath = await memSvc.saveDirectly(
+									content,
+									type as "fact" | "preference" | "context",
+									scope,
+									name
+								);
+								results.push(filePath ? `✓ ${label}` : `Already in memory (${label})`);
+							} catch (e: any) {
+								results.push(`✗ ${label}: ${e?.message ?? String(e)}`);
+							}
+						}
+						return { success: true, result: results.join("\n") };
 					}
 				);
 			}
@@ -2598,14 +2686,6 @@ export class ChatContainer {
 				}
 			});
 
-			// "Extract memories" button — triggers manual extraction from current conversation
-			const extractButton = new ButtonComponent(toolbarRight);
-			extractButton.setIcon("download");
-			extractButton.setTooltip("Extract and save memories from this conversation");
-			extractButton.buttonEl.addClass("llm-scan-button");
-			extractButton.onClick(async () => {
-				await this.extractMemories();
-			});
 		}
 
 		// Sync file-context button visibility based on the current setting

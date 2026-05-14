@@ -179,6 +179,16 @@ export class Header {
 					});
 			});
 
+			if (this.plugin.settings.memorySettings?.enabled) {
+				menu.addItem((item) => {
+					item.setTitle("Extract and save memories")
+						.setIcon("download")
+						.onClick(async () => {
+							await chatContainer.extractMemories();
+						});
+				});
+			}
+
 			menu.addSeparator();
 
 			menu.addItem((item) => {

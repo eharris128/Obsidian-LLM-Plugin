@@ -564,6 +564,7 @@ textarea.llm-input-with-mirror {
 
 .im-like-message {
 	padding: var(--size-4-1) var(--size-4-2);
+	width: 100%;
 	p {
 		margin: 0;
 	}
@@ -575,10 +576,6 @@ div.im-like-message.llm-widget-chat-message > p {
 .center-llmgal {
 	margin-top: auto;
 	margin-bottom: auto;
-}
-
-.im-like-message {
-	width: 100%;
 }
 
 .llm-hide {
@@ -662,14 +659,9 @@ div.im-like-message.llm-widget-chat-message > p {
 }
 
 .llm-widget-chat-container,
-.llm-widget-settings-container,
-.llm-widget-chat-history-container {
-	max-height: var(--widget-view-max-height);
-}
-
-.llm-widget-chat-container,
 .llm-widget-chat-history-container,
 .llm-widget-settings-container {
+	max-height: var(--widget-view-max-height);
 	height: calc(100% - 70px);
 }
 

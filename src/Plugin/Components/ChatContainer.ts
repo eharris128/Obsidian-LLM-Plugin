@@ -4,6 +4,7 @@ import {
 	Component,
 	DropdownComponent,
 	MarkdownRenderer,
+	MarkdownView,
 	Menu,
 	Notice,
 	setIcon,
@@ -46,7 +47,6 @@ import {
 	lmStudio,
 	mistral,
 	openAI,
-	TAB_VIEW_TYPE,
 } from "utils/constants";
 
 import assistantLogo from "Plugin/Components/AssistantLogo";
@@ -2220,9 +2220,14 @@ export class ChatContainer extends Component {
 	 * a stale result. Checking the active leaf's view type prevents that.
 	 */
 	private getActiveMarkdownFile(): import("obsidian").TFile | null {
-		const activeLeafType = this.plugin.app.workspace.activeLeaf?.view?.getViewType();
-		if (activeLeafType === TAB_VIEW_TYPE) return null;
-		return this.plugin.app.workspace.getActiveFile();
+		// Use getActiveViewOfType so we only return a file when a markdown editor
+		// is genuinely the active view. Checking activeLeaf?.getViewType() against
+		// TAB_VIEW_TYPE was insufficient: when the FAB popover has focus,
+		// workspace.activeLeaf is null, causing the TAB_VIEW_TYPE guard to miss
+		// and getActiveFile() to return the last-tracked markdown file even though
+		// no markdown view is active.
+		const markdownView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+		return markdownView?.file ?? null;
 	}
 
 	private buildChip(

@@ -7,8 +7,9 @@ import { ItemView, Notice, WorkspaceLeaf } from "obsidian";
 import { classNames } from "utils/classNames";
 import { getSettingType, getViewInfo, setHistoryFilePath, setView } from "utils/utils";
 import { models } from "utils/models";
+import { TAB_VIEW_TYPE } from "utils/constants";
 
-export const TAB_VIEW_TYPE = "tab-view";
+export { TAB_VIEW_TYPE };
 
 export class WidgetView extends ItemView {
 	plugin: LLMPlugin;
@@ -110,6 +111,9 @@ export class WidgetView extends ItemView {
 			// Track the file path so subsequent sends update the right file
 			setHistoryFilePath(this.plugin, "widget", filePath);
 			this.chatContainer.currentHistoryFilePath = filePath;
+
+			// Restore (or clear) the active project based on file location / frontmatter
+			this.chatContainer.restoreProjectFromChat(filePath, meta.project);
 
 			this.header.setHeader(this.plugin.settings[settingType].modelName);
 			this.header.resetHistoryButton();

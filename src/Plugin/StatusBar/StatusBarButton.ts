@@ -357,6 +357,10 @@ export class StatusBarButton {
 				// Track the open file so subsequent messages update it
 				setHistoryFilePath(this.plugin, "floating-action-button", filePath);
 				this.chatContainer!.currentHistoryFilePath = filePath;
+
+				// Restore (or clear) the active project based on file location / frontmatter
+				this.chatContainer!.restoreProjectFromChat(filePath, meta.project);
+
 				this.plugin.saveSettings();
 
 				this.header!.setHeader(this.plugin.settings[settingType].modelName);

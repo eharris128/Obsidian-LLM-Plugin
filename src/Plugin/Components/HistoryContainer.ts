@@ -395,6 +395,10 @@ export class HistoryContainer {
 						setHistoryFilePath(this.plugin, this.viewType, file.path);
 						chat.currentHistoryFilePath = file.path;
 
+						// Restore (or clear) the active project based on where this
+						// file lives and what its frontmatter declares.
+						chat.restoreProjectFromChat(file.path, meta.project);
+
 						header.setHeader(
 							this.plugin.settings[settingType].modelName
 						);

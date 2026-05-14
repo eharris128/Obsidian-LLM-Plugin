@@ -147,6 +147,17 @@
 	flex: 1;
 }
 
+/* Default header (Widget/Tab/Modal): left side shrinks to content width */
+.llm-left-buttons-div--shrink {
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 60%;
+}
+
+.llm-left-buttons-div--shrink .llm-chat-title {
+	flex: 0 1 auto;
+}
+
 /* FAB popover: chat title in the header */
 .llm-chat-title {
 	font-size: var(--font-ui-small);

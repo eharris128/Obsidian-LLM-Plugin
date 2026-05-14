@@ -45,6 +45,7 @@ import {
 	lmStudio,
 	mistral,
 	openAI,
+	TAB_VIEW_TYPE,
 } from "utils/constants";
 
 import assistantLogo from "Plugin/Components/AssistantLogo";
@@ -1805,6 +1806,124 @@ export class ChatContainer {
 		this.prompt = "";
 	}
 
+	/**
+	 * Restore the active project from a loaded chat file path + frontmatter.
+	 *
+	 * Called after loading a conversation from history. Detection order:
+	 *   1. File path inside Projects/<id>/chats/ → use that project id
+	 *   2. meta.project name → match by name against known projects
+	 *   3. Neither → clear active project
+	 *
+	 * Always calls syncChips() so the chip strip reflects the result.
+	 */
+	restoreProjectFromChat(filePath: string, metaProjectName?: string): void {
+		const projectsFolder = this.plugin.projectsFolder;
+		let resolvedId: string | null = null;
+
+		// 1. Try path-based detection (most reliable — survives project renames)
+		if (filePath.startsWith(projectsFolder + "/")) {
+			const relative = filePath.slice(projectsFolder.length + 1);
+			const segments = relative.split("/");
+			// Expected: <projectId>/chats/<filename>.md
+			if (segments.length >= 3 && segments[1] === "chats") {
+				const candidateId = segments[0];
+				if (this.plugin.projectManager?.getProject(candidateId)) {
+					resolvedId = candidateId;
+				}
+			}
+		}
+
+		// 2. Fall back to name matching from frontmatter
+		if (!resolvedId && metaProjectName) {
+			const match = this.plugin.projectManager
+				?.getProjects()
+				.find((p) => p.name === metaProjectName);
+			if (match) resolvedId = match.id;
+		}
+
+		// Apply — only write settings if the value is actually changing
+		const currentId = this.plugin.settings.projectSettings?.activeProjectId ?? null;
+		if (currentId !== resolvedId) {
+			this.plugin.settings.projectSettings = {
+				...this.plugin.settings.projectSettings,
+				activeProjectId: resolvedId,
+			};
+			this.plugin.saveSettings();
+		}
+
+		this.syncChips();
+	}
+
+	/**
+	 * Set (or clear) the active project, moving the current chat file to the
+	 * appropriate folder and patching its frontmatter at the same time.
+	 *
+	 * - projectId = string  → move file into Projects/<id>/chats/
+	 * - projectId = null    → move file back to the default chat history folder
+	 *
+	 * If no chat file exists yet (new chat not yet saved), only the settings
+	 * are updated; the first save will land in the right folder automatically.
+	 */
+	async setActiveProject(projectId: string | null): Promise<void> {
+		const previousId = this.plugin.settings.projectSettings?.activeProjectId ?? null;
+
+		// Determine target folder and project display name
+		let targetFolder: string;
+		let projectName: string | undefined;
+
+		if (projectId) {
+			const project = this.plugin.projectManager?.getProject(projectId);
+			if (!project) {
+				console.warn(`[ChatContainer] setActiveProject: project not found: ${projectId}`);
+				return;
+			}
+			targetFolder = this.plugin.chatHistory.folderForProject(projectId);
+			projectName = project.name;
+		} else {
+			targetFolder = this.plugin.chatHistory.folder;
+			projectName = undefined;
+		}
+
+		// Move the existing file if there is one and the target differs
+		if (this.currentHistoryFilePath) {
+			const currentFile = this.plugin.app.vault.getFileByPath(this.currentHistoryFilePath);
+			if (currentFile) {
+				// Only move if the file isn't already in the target folder
+				const currentFolder = this.currentHistoryFilePath.substring(
+					0,
+					this.currentHistoryFilePath.lastIndexOf("/")
+				);
+				if (currentFolder !== targetFolder) {
+					try {
+						const newPath = await this.plugin.chatHistory.moveToFolder(
+							this.currentHistoryFilePath,
+							targetFolder,
+							projectName
+						);
+						this.currentHistoryFilePath = newPath;
+						setHistoryFilePath(this.plugin, this.viewType, newPath);
+					} catch (e) {
+						console.error("[ChatContainer] Failed to move chat file:", e);
+					}
+				} else {
+					// File is already in the right folder — just patch the frontmatter field
+					await this.plugin.chatHistory.updateProjectField(
+						this.currentHistoryFilePath,
+						projectName
+					);
+				}
+			}
+		}
+
+		// Persist setting and refresh chip strip
+		this.plugin.settings.projectSettings = {
+			...this.plugin.settings.projectSettings,
+			activeProjectId: projectId,
+		};
+		this.plugin.saveSettings();
+		this.syncChips();
+	}
+
 	/** File-based save path — called when chatHistoryEnabled is true. */
 	private async historyPushToFile(
 		params: ChatHistoryItem,
@@ -1857,6 +1976,12 @@ export class ChatContainer {
 			? this.plugin.projectManager?.getProject(activeProjectId)
 			: null;
 
+		// New chats for an active project are saved directly into the project's
+		// chats sub-folder so they are co-located with the project definition.
+		const saveFolder = activeProject
+			? this.plugin.chatHistory.folderForProject(activeProjectId!)
+			: undefined;
+
 		const filePath = await this.plugin.chatHistory.save(
 			null,
 			title,
@@ -1867,7 +1992,8 @@ export class ChatContainer {
 			this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined,
 			activeProject?.name,
 			this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled,
-			this.allModelsByTurn.size > 0 ? this.allModelsByTurn : undefined
+			this.allModelsByTurn.size > 0 ? this.allModelsByTurn : undefined,
+			saveFolder
 		);
 
 		this.currentHistoryFilePath = filePath;
@@ -2039,12 +2165,7 @@ export class ChatContainer {
 		// Project chip first — icon-only at rest, name revealed on hover
 		if (hasProject) {
 			this.buildProjectChip(this.chipContainer, activeProject!.name, () => {
-				this.plugin.settings.projectSettings = {
-					...this.plugin.settings.projectSettings,
-					activeProjectId: null,
-				};
-				this.plugin.saveSettings();
-				this.syncChips();
+				this.setActiveProject(null);
 			});
 		}
 
@@ -2076,6 +2197,20 @@ export class ChatContainer {
 				});
 			}
 		}
+	}
+
+	/**
+	 * Returns the active markdown file, but only when the active Obsidian leaf
+	 * is a real markdown/file view — not the LLM widget itself.
+	 *
+	 * `app.workspace.getActiveFile()` returns the last markdown file Obsidian
+	 * tracked even when a plugin view (our widget) is the current leaf, producing
+	 * a stale result. Checking the active leaf's view type prevents that.
+	 */
+	private getActiveMarkdownFile(): import("obsidian").TFile | null {
+		const activeLeafType = this.plugin.app.workspace.activeLeaf?.view?.getViewType();
+		if (activeLeafType === TAB_VIEW_TYPE) return null;
+		return this.plugin.app.workspace.getActiveFile();
 	}
 
 	private buildChip(
@@ -2624,14 +2759,7 @@ export class ChatContainer {
 							si.setTitle("No project")
 								.setIcon("x-circle")
 								.setChecked(!activeId)
-								.onClick(() => {
-									this.plugin.settings.projectSettings = {
-										...this.plugin.settings.projectSettings,
-										activeProjectId: null,
-									};
-									this.plugin.saveSettings();
-									this.syncChips();
-								});
+								.onClick(() => this.setActiveProject(null));
 						});
 
 						submenu.addSeparator();
@@ -2641,14 +2769,7 @@ export class ChatContainer {
 								si.setTitle(project.name)
 									.setIcon("box")
 									.setChecked(project.id === activeId)
-									.onClick(() => {
-										this.plugin.settings.projectSettings = {
-											...this.plugin.settings.projectSettings,
-											activeProjectId: project.id,
-										};
-										this.plugin.saveSettings();
-										this.syncChips();
-									});
+									.onClick(() => this.setActiveProject(project.id));
 							});
 						}
 					});
@@ -2871,8 +2992,13 @@ export class ChatContainer {
 		// Auto-populate the active file chip when "Include active file" is enabled in settings.
 		// useActiveFileContext is otherwise only set when the scan button is clicked manually,
 		// so without this block the chip never appears on load even when the setting is on.
-		if (this.plugin.settings[settingType].contextSettings.includeActiveFile) {
-			const activeFile = this.plugin.app.workspace.getActiveFile();
+		// Skip for the widget view type (sidebar and tab) — those are standalone chat interfaces,
+		// not popups anchored to a note, so auto-including a neighboring file is misleading.
+		if (
+			this.viewType !== "widget" &&
+			this.plugin.settings[settingType].contextSettings.includeActiveFile
+		) {
+			const activeFile = this.getActiveMarkdownFile();
 			if (activeFile) {
 				this.useActiveFileContext = true;
 				this.activeFileForChip = { name: activeFile.name, path: activeFile.path };
@@ -2894,6 +3020,18 @@ export class ChatContainer {
 			mirrorDiv.style.letterSpacing = cs.letterSpacing;
 			mirrorDiv.style.wordSpacing = cs.wordSpacing;
 		});
+
+		// Clear any stale project association from a previous session when opening with no active chat.
+		// restoreProjectFromChat() will re-set the correct project when a file is subsequently loaded.
+		if (!this.currentHistoryFilePath && this.getMessages().length === 0) {
+			if (this.plugin.settings.projectSettings?.activeProjectId) {
+				this.plugin.settings.projectSettings = {
+					...this.plugin.settings.projectSettings,
+					activeProjectId: null,
+				};
+				this.plugin.saveSettings();
+			}
+		}
 
 		// Restore any chips that were persisted in settings before this session
 		this.syncChips();
@@ -3352,7 +3490,7 @@ export class ChatContainer {
 			if (hasConversation) return;
 
 			// Context is on — update to the currently active file.
-			const activeFile = this.plugin.app.workspace.getActiveFile();
+			const activeFile = this.getActiveMarkdownFile();
 			if (activeFile) {
 				this.activeFileForChip = { name: activeFile.name, path: activeFile.path };
 			} else {
@@ -3362,11 +3500,12 @@ export class ChatContainer {
 				this.scanButton?.buttonEl.removeClass("is-active");
 			}
 			this.syncChips();
-		} else if (includeActiveFile && !this.activeFileForChip && !hasConversation) {
+		} else if (includeActiveFile && !this.activeFileForChip && !hasConversation && this.viewType !== "widget") {
 			// Context was never activated because no file was open at build
 			// time. Try again now that the popover is being shown — but only
 			// if the conversation hasn't started yet.
-			const activeFile = this.plugin.app.workspace.getActiveFile();
+			// Skip for widget view (sidebar/tab) — auto-include doesn't apply there.
+			const activeFile = this.getActiveMarkdownFile();
 			if (activeFile) {
 				this.useActiveFileContext = true;
 				this.activeFileForChip = { name: activeFile.name, path: activeFile.path };
@@ -3703,15 +3842,26 @@ export class ChatContainer {
 
 		const settingType = getSettingType(this.viewType);
 		if (
+			this.viewType !== "widget" &&
 			this.plugin.settings.enableFileContext &&
 			this.plugin.settings[settingType].contextSettings.includeActiveFile
 		) {
-			const activeFile = this.plugin.app.workspace.getActiveFile();
+			const activeFile = this.getActiveMarkdownFile();
 			if (activeFile) {
 				this.useActiveFileContext = true;
 				this.activeFileForChip = { name: activeFile.name, path: activeFile.path };
 				this.scanButton?.buttonEl.addClass("is-active");
 			}
+		}
+
+		// A new chat has no project association — clear so the chip strip
+		// doesn't carry over a project from the previously loaded conversation.
+		if (this.plugin.settings.projectSettings?.activeProjectId) {
+			this.plugin.settings.projectSettings = {
+				...this.plugin.settings.projectSettings,
+				activeProjectId: null,
+			};
+			this.plugin.saveSettings();
 		}
 
 		this.syncChips();

@@ -39,12 +39,22 @@ export class ChatHistory {
 		return this.plugin.settings.chatHistoryFolder || "LLM Chats";
 	}
 
+	/** Return the chats sub-folder path for a given project id. */
+	folderForProject(projectId: string): string {
+		return `${this.plugin.projectsFolder}/${projectId}/chats`;
+	}
+
 	// ─── Folder ──────────────────────────────────────────────────────────────
 
 	async ensureFolder(): Promise<void> {
-		const exists = await this.plugin.app.vault.adapter.exists(this.folder);
+		await this.ensureFolderPath(this.folder);
+	}
+
+	/** Recursively ensure an arbitrary vault folder exists. */
+	async ensureFolderPath(folder: string): Promise<void> {
+		const exists = await this.plugin.app.vault.adapter.exists(folder);
 		if (!exists) {
-			await this.plugin.app.vault.createFolder(this.folder);
+			await this.plugin.app.vault.createFolder(folder);
 		}
 	}
 
@@ -62,11 +72,11 @@ export class ChatHistory {
 	}
 
 	/**
-	 * Return a path that doesn't collide with existing files.
+	 * Return a collision-free path inside the given folder.
 	 * Appends -2, -3 … when the base name is already taken.
 	 */
-	async uniquePath(slug: string): Promise<string> {
-		const base = `${this.folder}/${slug}`;
+	async uniquePathInFolder(slug: string, folder: string): Promise<string> {
+		const base = `${folder}/${slug}`;
 		let path = `${base}.md`;
 		let counter = 2;
 		while (await this.plugin.app.vault.adapter.exists(path)) {
@@ -74,6 +84,65 @@ export class ChatHistory {
 			counter++;
 		}
 		return path;
+	}
+
+	/**
+	 * Return a path that doesn't collide with existing files (uses default chat folder).
+	 * Appends -2, -3 … when the base name is already taken.
+	 */
+	async uniquePath(slug: string): Promise<string> {
+		return this.uniquePathInFolder(slug, this.folder);
+	}
+
+	/**
+	 * Move a chat file to a new folder, preserving the filename.
+	 * Updates the `project` frontmatter field to match `projectName` (omit to clear).
+	 * Returns the new file path.
+	 */
+	async moveToFolder(filePath: string, targetFolder: string, projectName?: string): Promise<string> {
+		const file = this.plugin.app.vault.getFileByPath(filePath);
+		if (!file) throw new Error(`Chat file not found: ${filePath}`);
+
+		await this.ensureFolderPath(targetFolder);
+
+		// Compute a collision-free destination path
+		const slug = file.basename;
+		const newPath = await this.uniquePathInFolder(slug, targetFolder);
+
+		// Move the file (updates internal links in the vault)
+		await this.plugin.app.fileManager.renameFile(file, newPath);
+
+		// Patch the frontmatter project field in the moved file
+		await this.updateProjectField(newPath, projectName);
+
+		return newPath;
+	}
+
+	/**
+	 * Rewrite the `project:` frontmatter field in an existing chat file.
+	 * Pass `undefined` to remove the field entirely.
+	 */
+	async updateProjectField(filePath: string, projectName: string | undefined): Promise<void> {
+		const file = this.plugin.app.vault.getFileByPath(filePath);
+		if (!file) return;
+
+		const existing = await this.load(filePath);
+		const updatedMeta: ChatFileMeta = { ...existing.meta };
+		if (projectName) {
+			updatedMeta.project = projectName;
+		} else {
+			delete updatedMeta.project;
+		}
+
+		const content = this.buildFileContent(
+			updatedMeta,
+			existing.messages,
+			undefined,
+			existing.toolCallsByTurn.size > 0 ? existing.toolCallsByTurn : undefined,
+			existing.skillsByTurn.size > 0 ? existing.skillsByTurn : undefined,
+			existing.modelsByTurn.size > 0 ? existing.modelsByTurn : undefined
+		);
+		await this.plugin.app.vault.modify(file, content);
 	}
 
 	// ─── Serialisation ───────────────────────────────────────────────────────
@@ -260,9 +329,12 @@ export class ChatHistory {
 		skillsByTurn?: Map<number, string>,
 		projectName?: string,
 		isAgent?: boolean,
-		modelsByTurn?: Map<number, string>
+		modelsByTurn?: Map<number, string>,
+		/** Override the folder for new file creation (e.g. a project's chats folder). */
+		saveFolder?: string
 	): Promise<string> {
-		await this.ensureFolder();
+		const targetFolder = saveFolder ?? this.folder;
+		await this.ensureFolderPath(targetFolder);
 
 		const now = new Date().toISOString();
 		const provider = this.inferProvider(item.model);
@@ -288,7 +360,7 @@ export class ChatHistory {
 		} else {
 			// ── Create new file ───────────────────────────────────────────
 			const slug = this.slugify(title);
-			const newPath = await this.uniquePath(slug);
+			const newPath = await this.uniquePathInFolder(slug, targetFolder);
 			const meta: ChatFileMeta = {
 				type: "Chat",
 				title,
@@ -421,14 +493,27 @@ export class ChatHistory {
 	}
 
 	/**
-	 * List all chat files in the history folder, newest first.
+	 * List all chat files — default folder + all project chats subfolders — newest first.
 	 * Uses file mtime so the list stays current without re-reading content.
 	 */
 	async list(): Promise<TFile[]> {
-		const prefix = this.folder + "/";
+		const defaultPrefix = this.folder + "/";
+		const projectsFolder = this.plugin.projectsFolder + "/";
+
 		return this.plugin.app.vault
 			.getFiles()
-			.filter((f) => f.path.startsWith(prefix) && f.extension === "md")
+			.filter((f) => {
+				if (f.extension !== "md") return false;
+				// Default chat history folder
+				if (f.path.startsWith(defaultPrefix)) return true;
+				// Project chats: Projects/<id>/chats/<file>.md (exactly 3 segments deep)
+				if (f.path.startsWith(projectsFolder)) {
+					const relative = f.path.slice(projectsFolder.length);
+					const segments = relative.split("/");
+					return segments.length === 3 && segments[1] === "chats";
+				}
+				return false;
+			})
 			.sort((a, b) => b.stat.mtime - a.stat.mtime);
 	}
 

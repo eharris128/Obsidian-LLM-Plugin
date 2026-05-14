@@ -1,3 +1,6 @@
+// Obsidian registered view type for the LLM widget (sidebar + tab).
+export const TAB_VIEW_TYPE = "tab-view";
+
 export const claude = "claude"
 export const claudeCode = "claudeCode"
 export const openAI = "openAI"

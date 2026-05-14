@@ -314,6 +314,9 @@ created: <ISO date>
   2. Project system instructions are injected as `# Project Instructions: <name>` block (prepended to context, after pinned notes).
   3. Memory recall passes `activeProject: project.name` to `MemoryContext` so project-scoped memories are included.
 - Saved chat files get a `project: "<name>"` YAML field in frontmatter when a project is active.
+- **Chat files are co-located with their project**: new chats saved while a project is active land in `<rootVaultFolder>/Projects/<projectId>/chats/` instead of the default chat folder. Adding a project to an existing chat moves the file there immediately; removing it moves it back to the default folder. Use `ChatHistory.moveToFolder()` and `ChatHistory.updateProjectField()` for this.
+- **`ChatContainer.setActiveProject(projectId | null)`** is the single authority for changing the active project at runtime. It moves the file, patches frontmatter, updates `activeProjectId` in settings, and calls `syncChips()`. Never mutate `activeProjectId` directly in UI handlers — always call this method.
+- **`ChatContainer.restoreProjectFromChat(filePath, metaProjectName?)`** is called after every chat file load (HistoryContainer, Widget, StatusBarButton). It detects project membership from the file path first (`Projects/<id>/chats/`), falls back to `meta.project` name matching, and clears `activeProjectId` if neither matches. This ensures the project chip always reflects the loaded chat.
 - Project pinned notes appear as non-removable chips (dashed border, pin icon) in the chip strip above the chat input.
 - **Project chip**: when a project is active, a `.llm-project-chip` chip appears first in the chip strip. It shows only the box icon at rest; on hover it expands (CSS `max-width` transition) to reveal the project name and a remove (×) button.
 - **Project selection UI** — two entry points depending on chat state:

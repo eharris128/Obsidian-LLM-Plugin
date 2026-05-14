@@ -15,6 +15,7 @@ export class Header {
 	}
 	modelEl?: HTMLElement;
 	titleEl: HTMLElement | null = null;
+	moreOptionsButtonEl: HTMLElement | null = null;
 	chatHistoryButton?: ButtonComponent;
 	newChatButton?: ButtonComponent;
 	settingsButton?: ButtonComponent;
@@ -26,6 +27,14 @@ export class Header {
 	setTitle(title: string) {
 		if (this.titleEl) {
 			this.titleEl.textContent = title || "";
+		}
+		// Show the more-options button only when a chat is loaded
+		if (this.moreOptionsButtonEl) {
+			if (title) {
+				this.moreOptionsButtonEl.show();
+			} else {
+				this.moreOptionsButtonEl.hide();
+			}
 		}
 	}
 
@@ -82,14 +91,7 @@ export class Header {
 				si.setTitle("No project")
 					.setIcon("x-circle")
 					.setChecked(!activeId)
-					.onClick(() => {
-						this.plugin.settings.projectSettings = {
-							...this.plugin.settings.projectSettings,
-							activeProjectId: null,
-						};
-						this.plugin.saveSettings();
-						chatContainer.syncChips();
-					});
+					.onClick(() => chatContainer.setActiveProject(null));
 			});
 
 			if (projects.length > 0) {
@@ -99,14 +101,7 @@ export class Header {
 						si.setTitle(project.name)
 							.setIcon("box")
 							.setChecked(project.id === activeId)
-							.onClick(() => {
-								this.plugin.settings.projectSettings = {
-									...this.plugin.settings.projectSettings,
-									activeProjectId: project.id,
-								};
-								this.plugin.saveSettings();
-								chatContainer.syncChips();
-							});
+							.onClick(() => chatContainer.setActiveProject(project.id));
 					});
 				}
 			} else {
@@ -359,11 +354,27 @@ export class Header {
 		settingsContainer: SettingsContainer
 	) {
 		const leftButtonDiv = titleDiv.createDiv();
-		leftButtonDiv.addClass("llm-left-buttons-div", "llm-flex");
+		leftButtonDiv.addClass("llm-left-buttons-div", "llm-left-buttons-div--shrink", "llm-flex");
 
 		// Chat title on the left
 		this.titleEl = leftButtonDiv.createEl("span");
 		this.titleEl.addClass("llm-chat-title");
+
+		// More options button — immediately to the right of the title; hidden until a chat is loaded
+		const moreOptionsButton = new ButtonComponent(leftButtonDiv);
+		moreOptionsButton.buttonEl.addClass("clickable-icon");
+		moreOptionsButton.setIcon("more-horizontal");
+		moreOptionsButton.setTooltip("More options");
+		moreOptionsButton.buttonEl.hide();
+		this.moreOptionsButtonEl = moreOptionsButton.buttonEl;
+		moreOptionsButton.onClick((evt: MouseEvent) => {
+			const menu = new Menu();
+			// "Add to project" only appears once the chat has messages
+			if (chatContainer.getMessages().length > 0) {
+				this.buildAddToProjectMenu(menu, chatContainer);
+			}
+			menu.showAtMouseEvent(evt);
+		});
 
 		const rightButtonsDiv = titleDiv.createDiv();
 		rightButtonsDiv.addClass("llm-right-buttons-div", "llm-flex");
@@ -439,19 +450,5 @@ export class Header {
 		this.chatHistoryButton.setIcon("messages-square");
 		this.settingsButton.setIcon("settings-2");
 		this.newChatButton.setIcon("plus");
-
-		// More options button — surfaces "Add to project" when a chat has started
-		const moreOptionsButton = new ButtonComponent(rightButtonsDiv);
-		moreOptionsButton.buttonEl.addClass("clickable-icon");
-		moreOptionsButton.setIcon("more-horizontal");
-		moreOptionsButton.setTooltip("More options");
-		moreOptionsButton.onClick((evt: MouseEvent) => {
-			const menu = new Menu();
-			// "Add to project" only appears once the chat has messages
-			if (chatContainer.getMessages().length > 0) {
-				this.buildAddToProjectMenu(menu, chatContainer);
-			}
-			menu.showAtMouseEvent(evt);
-		});
 	}
 }

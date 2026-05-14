@@ -159,6 +159,19 @@ export class ChatContainer extends Component {
 	addFilesButton: ButtonComponent | null = null;
 	scanButton: ButtonComponent | null = null;
 	activeFileForChip: { name: string; path: string } | null = null;
+	/** Mic button for voice input — null when Whisper is disabled. */
+	private micButton: ButtonComponent | null = null;
+	/** Current recording state for the mic button. */
+	private micState: "idle" | "recording" | "transcribing" = "idle";
+	/** Active MediaRecorder instance during a voice recording. */
+	private mediaRecorder: MediaRecorder | null = null;
+	/** Accumulated audio chunks while recording. */
+	private audioChunks: Blob[] = [];
+	/**
+	 * Closure wired up by generateChatContainer so voice auto-send can trigger
+	 * the send action without needing direct access to header/sendButton.
+	 */
+	private _triggerSend: (() => void) | null = null;
 	/** Stored so StatusBarButton (and FAB) can re-sync the displayed model after settings change. */
 	private modelDropdown: DropdownComponent | null = null;
 	/** The <optgroup> for assistants inside the model dropdown — refreshed on hot-reload. */
@@ -241,6 +254,11 @@ export class ChatContainer extends Component {
 		this.messageStore.unsubscribe(this.boundUpdateMessages);
 		this.slashMenuEl?.remove();
 		this.slashMenuEl = null;
+		// Stop any in-flight recording so the microphone is released
+		if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+			this.mediaRecorder.stop();
+		}
+		this.mediaRecorder = null;
 		this.unload();
 	}
 
@@ -2911,6 +2929,33 @@ export class ChatContainer extends Component {
 		// Sync file-context button visibility based on the current setting
 		this.syncFileContextButtons();
 
+		// ── Mic button (voice input — Feature 1) ────────────────────────────
+		// Shown only when Whisper is enabled. Visibility is refreshed whenever
+		// settings change via syncMicButton() called from the settings modal.
+		if (this.plugin.settings.whisperSettings?.enabled) {
+			this.micButton = new ButtonComponent(toolbarRight);
+			this.micButton.setIcon("mic");
+			this.micButton.setTooltip("Record voice message");
+			this.micButton.buttonEl.addClass("llm-scan-button", "llm-mic-button");
+
+			this.micButton.onClick(async () => {
+				try {
+					if (this.micState === "idle") {
+						await this.startRecording(promptField);
+					} else if (this.micState === "recording") {
+						this.stopRecording();
+					}
+					// "transcribing" state: button is disabled — click is a no-op
+				} catch (err) {
+					new Notice(
+						`Mic error: ${err instanceof Error ? err.message : String(err)}`,
+						7000,
+					);
+					console.error("[LLM Plugin] Mic button error:", err);
+				}
+			});
+		}
+
 		// Send button
 		const sendButton = new ButtonComponent(toolbarRight);
 		sendButton.buttonEl.addClass(
@@ -2922,14 +2967,18 @@ export class ChatContainer extends Component {
 
 		promptField.setPlaceholder("Send a message...");
 
-		// Helper to sync send button enabled/disabled state with input content
 		const updateSendButton = (value: string) => {
 			const isEmpty = value.trim().length === 0;
 			sendButton.setDisabled(isEmpty);
 			sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
+			// When Whisper is enabled and mic is idle, swap visibility with send button
+			if (this.micButton && this.micState === "idle") {
+				this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
+				sendButton.buttonEl.style.display     = isEmpty ? "none" : "";
+			}
 		};
 
-		// Disable send button initially (empty input)
+		// Set initial state (empty input on load)
 		updateSendButton("");
 
 		promptField.onChange((change: string) => {
@@ -3012,6 +3061,13 @@ export class ChatContainer extends Component {
 			this.handleGenerateClick(header, sendButton);
 			clearPromptField();
 		});
+
+		// Expose a send trigger so voice auto-send can fire without holding references
+		// to header/sendButton (which are local to this closure).
+		this._triggerSend = () => {
+			this.handleGenerateClick(header, sendButton);
+			clearPromptField();
+		};
 
 		// Auto-populate the active file chip when "Include active file" is enabled in settings.
 		// useActiveFileContext is otherwise only set when the scan button is clicked manually,
@@ -3433,6 +3489,14 @@ export class ChatContainer extends Component {
 				this.regenerateOutput();
 			});
 		}
+
+		// Obsidian Agent brand icon — shown at the end of the last assistant
+		// message when running in agent mode, mirroring how Claude shows its logo.
+		if (finalMessage && assistant && this.isObsidianAgent) {
+			const brandEl = messageWrapper.createDiv({ cls: "llm-obsidian-agent-brand" });
+			const iconEl = brandEl.createSpan({ cls: "llm-obsidian-agent-brand-icon" });
+			setIcon(iconEl, "stone");
+		}
 	}
 
 	async generateIMLikeMessages(messages: Message[], gen?: number) {
@@ -3641,6 +3705,205 @@ export class ChatContainer extends Component {
 		const enabled = this.plugin.settings.enableFileContext;
 		this.addFilesButton?.buttonEl.toggleClass("llm-hidden", !enabled);
 		this.scanButton?.buttonEl.toggleClass("llm-hidden", !enabled);
+	}
+
+	// ── Voice recording (Feature 1) ────────────────────────────────────────
+
+	/** Transition the mic button to a new visual state. */
+	private setMicState(state: "idle" | "recording" | "transcribing") {
+		this.micState = state;
+		if (!this.micButton) return;
+		const el = this.micButton.buttonEl;
+		el.removeClass("llm-mic-recording", "llm-mic-transcribing");
+		this.micButton.setDisabled(false);
+		if (state === "idle") {
+			this.micButton.setIcon("mic");
+			this.micButton.setTooltip("Record voice message");
+			// Mic returns to idle — re-evaluate visibility based on current input content
+			// (the updateSendButton closure is not in scope here, so we drive it directly)
+			this.syncMicSendVisibility();
+		} else if (state === "recording") {
+			this.micButton.setIcon("square");
+			this.micButton.setTooltip("Stop recording");
+			el.addClass("llm-mic-recording");
+			// While recording or transcribing, always show the mic button (it acts as stop/status)
+			// and keep the send button hidden so the layout doesn't jump
+		} else {
+			this.micButton.setIcon("loader");
+			this.micButton.setTooltip("Transcribing…");
+			el.addClass("llm-mic-transcribing");
+			this.micButton.setDisabled(true);
+		}
+	}
+
+	/**
+	 * Sync mic button visibility when returning to idle state.
+	 * The send button's display is handled by updateSendButton (in scope during build);
+	 * here we only need to show/hide the mic button based on whether the prompt is empty.
+	 */
+	syncMicSendVisibility(): void {
+		if (!this.micButton || !this.plugin.settings.whisperSettings?.enabled) return;
+		const isEmpty = (this.prompt ?? "").trim().length === 0;
+		this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
+		// Send button: opposite of mic — reach it as the next DOM sibling
+		const sendEl = this.micButton.buttonEl.nextElementSibling as HTMLElement | null;
+		if (sendEl) sendEl.style.display = isEmpty ? "none" : "";
+	}
+
+	/**
+	 * Request microphone access and start recording.
+	 * `promptField` is passed so the transcript can be inserted on completion.
+	 */
+	private async startRecording(promptField: import("obsidian").TextAreaComponent): Promise<void> {
+		let stream: MediaStream;
+		// Check API availability first (not all Electron contexts expose this)
+		if (!navigator.mediaDevices?.getUserMedia) {
+			new Notice(
+				"Microphone API not available. Try restarting Obsidian or checking system permissions.",
+				6000,
+			);
+			return;
+		}
+
+		// On macOS, Electron requires an explicit permission request via systemPreferences
+		// before getUserMedia will trigger the system dialog. Without this the call
+		// silently fails or never shows the OS permission prompt.
+		try {
+			const electron = require("electron") as any;
+			const sp = electron?.remote?.systemPreferences ?? electron?.systemPreferences;
+			if (sp?.askForMediaAccess) {
+				const granted = await sp.askForMediaAccess("microphone");
+				if (!granted) {
+					new Notice(
+						"Microphone access denied. Open System Settings → Privacy & Security → Microphone and enable Obsidian.",
+						8000,
+					);
+					return;
+				}
+			}
+		} catch {
+			// systemPreferences not available (Linux/Windows) — continue to getUserMedia
+		}
+
+		try {
+			stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+		} catch (err: any) {
+			const msg =
+				err?.name === "NotAllowedError"
+					? "Microphone access denied. Open System Settings → Privacy & Security → Microphone and enable Obsidian."
+					: err?.name === "NotFoundError"
+					? "No microphone found. Please connect one and try again."
+					: `Microphone error: ${err?.name} — ${err?.message ?? err}`;
+			new Notice(msg, 7000);
+			console.error("[LLM Plugin] getUserMedia failed:", err);
+			return;
+		}
+
+		// Confirm recording has started
+		const recordingNotice = new Notice("🎙 Recording… click the button again to stop.", 0);
+
+		this.audioChunks = [];
+
+		// Pick the best available MIME type for this browser/Electron version
+		const preferredMime =
+			["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"]
+				.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
+
+		this.mediaRecorder = new MediaRecorder(stream, preferredMime ? { mimeType: preferredMime } : {});
+
+		this.mediaRecorder.ondataavailable = (e: BlobEvent) => {
+			if (e.data.size > 0) this.audioChunks.push(e.data);
+		};
+
+		this.mediaRecorder.onstop = async () => {
+			// Stop all microphone tracks so the OS recording indicator goes away
+			stream.getTracks().forEach((t) => t.stop());
+			recordingNotice.hide();
+
+			this.setMicState("transcribing");
+			try {
+				await this.handleTranscription(promptField);
+			} catch (err) {
+				// Unexpected error — show a notice so it's not silent
+				new Notice(
+					`Transcription error: ${err instanceof Error ? err.message : String(err)}`,
+					5000,
+				);
+			} finally {
+				// Always return the button to idle — no matter what happened
+				this.setMicState("idle");
+			}
+		};
+
+		this.mediaRecorder.start();
+		this.setMicState("recording");
+	}
+
+	/** Stop an active recording — triggers `onstop` which runs the transcription. */
+	private stopRecording(): void {
+		if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
+			this.mediaRecorder.stop();
+		}
+	}
+
+	/** Send accumulated audio chunks to WhisperService and insert/send the transcript. */
+	private async handleTranscription(promptField: import("obsidian").TextAreaComponent): Promise<void> {
+		if (!this.plugin.whisperService) {
+			this.plugin.initWhisperService();
+		}
+		if (!this.plugin.whisperService) {
+			new Notice("Whisper is not configured. Enable it in Settings → Transcription.");
+			return;
+		}
+
+		const mimeType = this.mediaRecorder?.mimeType ?? "audio/webm";
+		const audioBlob = new Blob(this.audioChunks, { type: mimeType });
+		this.audioChunks = [];
+
+		let transcript: string;
+		try {
+			const result = await this.plugin.whisperService.transcribeBlob(audioBlob, mimeType);
+			transcript = result.transcript.trim();
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			new Notice(`Transcription failed: ${msg}`, 5000);
+			return;
+		}
+
+		if (!transcript) {
+			new Notice("No speech detected.");
+			return;
+		}
+
+		const ws = this.plugin.settings.whisperSettings;
+
+		/**
+		 * Fire a synthetic `input` event after programmatically setting the textarea
+		 * value. Obsidian's TextAreaComponent.onChange listens to this event, so
+		 * without it the send button stays disabled and this.prompt isn't updated.
+		 */
+		const fireInputEvent = () => {
+			promptField.inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+		};
+
+		if (ws.autoSend && this._triggerSend) {
+			// Inject transcript directly as a user message and send
+			this.prompt = transcript;
+			promptField.setValue(transcript);
+			fireInputEvent();
+			this._triggerSend();
+		} else {
+			// Append to whatever the user already typed (don't overwrite)
+			const existing = promptField.getValue();
+			const newVal   = existing ? `${existing} ${transcript}` : transcript;
+			promptField.setValue(newVal);
+			fireInputEvent(); // updates send-button state + this.prompt via onChange
+			promptField.inputEl.focus();
+			// Scroll textarea to end
+			promptField.inputEl.setSelectionRange(newVal.length, newVal.length);
+		}
+
+		new Notice("✓ Transcript ready", 2000);
 	}
 
 	/**

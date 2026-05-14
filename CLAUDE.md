@@ -101,6 +101,35 @@ Provider SDKs used:
 - LM Studio — uses `openai` SDK with custom baseURL (default `http://localhost:1234/v1`); models discovered dynamically via `/v1/models`; no real API key required (uses `"lm-studio"` as placeholder)
 - GPT4All connects to local server on port 4891
 
+### Whisper Transcription
+
+The plugin supports two speech-to-text features gated behind `plugin.settings.whisperSettings.enabled`:
+
+- **Feature 1 — Voice input**: A mic button in the chat input toolbar. Three states: idle / recording / transcribing. Uses the browser `MediaRecorder` API; audio is sent to `WhisperService` on stop. Transcript is inserted into the input field (or auto-sent if `autoSend` is true).
+- **Feature 2 — File transcription → note**: Command palette entry "Transcribe audio file". Opens the system file picker via Electron's `remote.dialog`, reads the selected file with Node.js `fs`, posts it to `WhisperService`, and writes a markdown note to the configured `outputFolder`.
+
+**Two backends — both implemented in `src/Whisper/WhisperService.ts`:**
+- `"openai"`: OpenAI `/audio/transcriptions` endpoint (whisper-1, `verbose_json`). Uses the existing `openAIAPIKey`. Audio leaves the machine.
+- `"sidecar"`: Local Python `whisper-server.py` (faster-whisper). Uses browser `fetch` with `FormData` (not `requestUrl` — sidecar needs multipart). Fully private.
+
+**Key files:**
+- `src/Whisper/WhisperService.ts` — service class; `transcribeBlob()`, `transcribeFilePath()`, `checkHealth()`, `buildNoteContent()`, `formatForNote()`
+- `src/Whisper/SidecarManager.ts` — detects `python3`/`pip3`, installs deps via `pip3` with streaming output, starts/stops `whisper-server.py` as a child process. Always instantiated as `plugin.sidecarManager` (not gated on enabled flag).
+- `src/Whisper/TranscribeCommand.ts` — Feature 2 command handler (file picker → transcribe → vault write)
+- `src/Whisper/TranscribeUtils.ts` — `createFolderOrPrompt()` modal helper
+- `whisper-server.py` — FastAPI + faster-whisper sidecar (ships in plugin root); `POST /transcribe`, `GET /health`
+
+**Integration points:**
+- `LLMPlugin.whisperService: WhisperService | null` — null when disabled. Call `plugin.initWhisperService()` after toggling `whisperSettings.enabled`.
+- `LLMPlugin.sidecarManager: SidecarManager` — always available; used by the settings wizard to detect Python, install deps, and start/stop the server. `isServerOwned` is true only when we spawned the process ourselves.
+- `ChatContainer._triggerSend: (() => void) | null` — closure wired by `generateChatContainer` so voice auto-send can fire the full send action (including clearing the field) without holding references to `header`/`sendButton`.
+- `ChatContainer.micButton` — only created when Whisper is enabled at container build time. Three CSS states: `llm-mic-recording` (pulsing red), `llm-mic-transcribing` (muted, disabled), default (inherits `.llm-scan-button`).
+- Settings: `whisperSettings: WhisperSettings` — deep-merged in `loadSettings()`. Includes `backend`, `sidecarHost`, `whisperModel`, `language`, `includeTimestamps`, `outputFolder`, `autoOpenNote`, `autoSend`, `lastPickerDirectory`.
+
+**Electron note:** `require("electron")` is cast as `any` — `@types/electron` is not installed. Do not add a typed import.
+
+**Deferred:** Feature 3 (AI-assisted transcription) and Transformers.js local backend — see memory for design notes.
+
 ### RAG / Vault Search
 
 The plugin supports semantic search over the user's vault via three classes in `src/RAG/`:

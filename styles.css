@@ -2245,6 +2245,29 @@ details[open] .llm-tool-calls-chevron {
 	max-width: 220px;
 }
 
+/* ── Obsidian Agent brand icon (end of last agent message) ─────────────────── */
+
+.llm-obsidian-agent-brand {
+	display: flex;
+	align-items: center;
+	padding: var(--size-4-1) var(--size-4-2) var(--size-4-2);
+}
+
+.llm-obsidian-agent-brand-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--icon-xl);
+	height: var(--icon-xl);
+	color: var(--interactive-accent);
+	opacity: 0.9;
+}
+
+.llm-obsidian-agent-brand-icon svg {
+	width: var(--icon-xl);
+	height: var(--icon-xl);
+}
+
 /* ── Agent guidance textarea in settings ───────────────────────────────────── */
 
 .llm-agent-guidance-textarea {
@@ -2271,4 +2294,122 @@ details[open] .llm-tool-calls-chevron {
 .llm-context-chip--clickable:hover {
 	background-color: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
 	border-color: var(--interactive-accent-hover);
+}
+
+/* ── Whisper: mic button states ────────────────────────────────────────────── */
+
+/* Recording — button pulses red */
+button.llm-mic-button.llm-mic-recording {
+	color: var(--color-red);
+	animation: llm-mic-pulse 1.2s ease-in-out infinite;
+}
+
+button.llm-mic-button.llm-mic-recording:hover {
+	color: var(--color-red);
+}
+
+/* Transcribing — button is muted and disabled */
+button.llm-mic-button.llm-mic-transcribing {
+	color: var(--text-faint);
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+@keyframes llm-mic-pulse {
+	0%, 100% { opacity: 1; }
+	50%       { opacity: 0.4; }
+}
+
+/* ── Whisper: settings tab UI ──────────────────────────────────────────────── */
+
+/* Sidecar setup instructions panel */
+.llm-whisper-setup-panel {
+	margin-top: var(--size-4-2);
+}
+
+.llm-whisper-setup-code {
+	user-select: text;
+	-webkit-user-select: text;
+	cursor: text;
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2) var(--size-4-3);
+	margin: var(--size-4-2) 0;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-normal);
+	white-space: pre;
+	overflow-x: auto;
+}
+
+/* Test connection status line */
+.llm-whisper-status {
+	margin-top: var(--size-4-1);
+	font-size: var(--font-ui-smaller);
+}
+
+.llm-whisper-status-ok {
+	color: var(--color-green);
+}
+
+.llm-whisper-status-err {
+	color: var(--color-red);
+}
+
+/* Warning text when OpenAI key is missing */
+.llm-whisper-warning {
+	color: var(--color-orange);
+}
+
+/* ── Whisper: sidecar setup wizard ─────────────────────────────────────────── */
+
+.llm-whisper-env-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) 0;
+	font-size: var(--font-ui-small);
+}
+
+.llm-whisper-env-icon {
+	font-size: var(--font-ui-small);
+	flex-shrink: 0;
+	width: 1.2em;
+	text-align: center;
+}
+
+.llm-whisper-env-ok   { color: var(--color-green); }
+.llm-whisper-env-err  { color: var(--color-red); }
+.llm-whisper-env-warn { color: var(--color-orange); }
+.llm-whisper-env-checking { color: var(--text-faint); }
+
+.llm-whisper-env-label {
+	color: var(--text-normal);
+}
+
+.llm-whisper-env-link {
+	color: var(--link-color);
+	text-decoration: underline;
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+}
+
+.llm-whisper-btn-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-3);
+}
+
+.llm-whisper-setup-log {
+	margin-top: var(--size-4-2);
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2) var(--size-4-3);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	white-space: pre-wrap;
+	max-height: 180px;
+	overflow-y: auto;
 }

@@ -298,3 +298,38 @@ export type RAGSettings = {
 	/** Number of files in the current index. */
 	indexedFileCount: number;
 };
+
+export type WhisperBackend = "openai" | "sidecar";
+
+export type WhisperSettings = {
+	/** Whether Whisper transcription is enabled at all. */
+	enabled: boolean;
+	/**
+	 * Which backend to use:
+	 * - "openai": OpenAI Whisper API (requires openAIAPIKey; audio sent to OpenAI).
+	 * - "sidecar": Local Python whisper-server.py (fully private, no API key needed).
+	 */
+	backend: WhisperBackend;
+	/** URL of the local Python sidecar server (default: http://localhost:8765). */
+	sidecarHost: string;
+	/**
+	 * Whisper model size to request from the sidecar server.
+	 * Ignored when backend is "openai" (always uses whisper-1).
+	 */
+	whisperModel: string;
+	/** ISO language code (e.g. "en", "ja") or "" for auto-detect. */
+	language: string;
+	/** Whether to include [MM:SS] timestamps in transcription notes (Feature 2). */
+	includeTimestamps: boolean;
+	/** Vault-relative folder where transcription notes are saved (e.g. "Transcripts"). */
+	outputFolder: string;
+	/** Open the transcription note automatically after creation. */
+	autoOpenNote: boolean;
+	/**
+	 * Voice input (Feature 1): if true, the transcript is sent immediately as a chat
+	 * message; if false, it is inserted into the input field for review first.
+	 */
+	autoSend: boolean;
+	/** Last directory used in the audio file picker — persisted so the dialog reopens there. */
+	lastPickerDirectory: string;
+};

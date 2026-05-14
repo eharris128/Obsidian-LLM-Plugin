@@ -12,7 +12,10 @@ import {
 	SkillsSettings,
 	ToolSettings,
 	ViewSettings,
+	WhisperSettings,
 } from "./Types/types";
+import { WhisperService } from "./Whisper/WhisperService";
+import { SidecarManager } from "./Whisper/SidecarManager";
 import { ObsidianAgent } from "Plugin/ObsidianAgent/ObsidianAgent";
 import { AssistantManager } from "Assistants/AssistantManager";
 import { ProjectManager } from "Projects/ProjectManager";
@@ -98,6 +101,8 @@ export interface LLMPluginSettings {
 	assistantSettings: AssistantSettings;
 	toolSettings: ToolSettings;
 	obsidianAgentSettings: ObsidianAgentSettings;
+	/** Whisper speech-to-text settings (voice input + file transcription). */
+	whisperSettings: WhisperSettings;
 	/**
 	 * Root vault folder for all AI feature data (default "AI").
 	 * Skills live at <rootVaultFolder>/Skills/<skill-name>/SKILL.md.
@@ -215,6 +220,18 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		availableAssistants: {},
 		vaultGuidance: "",
 	},
+	whisperSettings: {
+		enabled: false,
+		backend: "openai" as const,
+		sidecarHost: "http://localhost:8765",
+		whisperModel: "medium.en",
+		language: "",
+		includeTimestamps: false,
+		outputFolder: "Transcripts",
+		autoOpenNote: true,
+		autoSend: false,
+		lastPickerDirectory: "",
+	},
 	rootVaultFolder: "AI",
 };
 
@@ -247,6 +264,10 @@ export default class LLMPlugin extends Plugin {
 	assistantManager: AssistantManager;
 	/** Obsidian Agent — always initialized; active when obsidianAgentSettings.enabled is true. */
 	obsidianAgent: ObsidianAgent;
+	/** Whisper transcription service — null if whisperSettings.enabled is false. */
+	whisperService: WhisperService | null = null;
+	/** Manages the local Python sidecar server lifecycle and dependency detection. */
+	sidecarManager: SidecarManager = new SidecarManager(this);
 
 	async onload() {
 		// Register custom icons that aren't in the Obsidian-bundled version of Lucide.
@@ -271,6 +292,7 @@ export default class LLMPlugin extends Plugin {
 		await this.loadSettings();
 		this.initVaultIndexer();
 		this.initMemoryService();
+		this.initWhisperService();
 		this.registerRagVaultEvents();
 		this.skillRegistry = new SkillRegistry(this.app);
 		this.projectManager = new ProjectManager(this.app);
@@ -691,6 +713,18 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	/**
+	 * Initialise (or tear down) the WhisperService based on current settings.
+	 * Safe to call after any settings change that affects whisper configuration.
+	 */
+	initWhisperService(): void {
+		if (!this.settings.whisperSettings?.enabled) {
+			this.whisperService = null;
+			return;
+		}
+		this.whisperService = new WhisperService(this);
+	}
+
+	/**
 	 * Re-initialise the SkillRegistry from current settings.
 	 * Call after the root vault folder setting changes.
 	 */
@@ -781,6 +815,21 @@ export default class LLMPlugin extends Plugin {
 			name: "Open Obsidian Agent",
 			callback: () => {
 				new ChatModal2(this, true).open();
+			},
+		});
+
+		// ── Whisper commands ──────────────────────────────────────────────────
+		this.addCommand({
+			id: "transcribe-audio-file",
+			name: "Transcribe audio file",
+			callback: async () => {
+				if (!this.settings.whisperSettings?.enabled) {
+					const { Notice } = await import("obsidian");
+					new Notice("Enable Whisper in Settings → Transcription first.");
+					return;
+				}
+				const { transcribeAudioFile } = await import("./Whisper/TranscribeCommand");
+				await transcribeAudioFile(this);
 			},
 		});
 	}
@@ -929,6 +978,12 @@ export default class LLMPlugin extends Plugin {
 			this.settings.assistantSettings = {
 				...DEFAULT_SETTINGS.assistantSettings,
 				...(dataJSON.assistantSettings ?? {}),
+			};
+
+			// Deep-merge whisperSettings so new fields get defaults if missing from saved data
+			this.settings.whisperSettings = {
+				...DEFAULT_SETTINGS.whisperSettings,
+				...(dataJSON.whisperSettings ?? {}),
 			};
 
 			// Ensure rootVaultFolder has a value (new field — may be absent in old saves)

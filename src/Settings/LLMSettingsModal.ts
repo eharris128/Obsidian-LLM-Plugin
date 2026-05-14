@@ -85,6 +85,7 @@ export class LLMSettingsModal extends Modal {
 				{ id: "embeddings",     label: "Embeddings",      icon: "database" },
 				{ id: "projects",       label: "Projects",        icon: "folder-open" },
 				{ id: "assistants",     label: "Assistants",      icon: "bot" },
+				{ id: "transcription",  label: "Transcription",   icon: "mic" },
 			],
 		},
 		{
@@ -236,6 +237,9 @@ export class LLMSettingsModal extends Modal {
 	}
 
 	private renderTab(tabId: string) {
+		// Stop any background poll (e.g. sidecar startup check) before wiping the DOM
+		this._sidecarPollCleanup?.();
+		this._sidecarPollCleanup = null;
 		this.mainContentEl.empty();
 		switch (tabId) {
 			case "general":       this.renderGeneral();     break;
@@ -254,6 +258,7 @@ export class LLMSettingsModal extends Modal {
 			case "projects":      this.renderProjects();      break;
 			case "assistants":      this.renderAssistants();      break;
 			case "obsidian-agent":  this.renderObsidianAgent();   break;
+			case "transcription":   this.renderTranscription();   break;
 		}
 	}
 
@@ -1652,7 +1657,370 @@ export class LLMSettingsModal extends Modal {
 			});
 	}
 
+	// ── Transcription ─────────────────────────────────────────────────────────
+
+	private renderTranscription() {
+		const el = this.mainContentEl;
+		this.addTabHeader(el, "Transcription");
+
+		const s = this.plugin.settings.whisperSettings;
+
+		// ── Enable ───────────────────────────────────────────────────────────
+		const enableGroup = this.addSettingGroup(el);
+		new Setting(enableGroup)
+			.setName("Enable Whisper transcription")
+			.setDesc(
+				"Adds a microphone button to the chat input for voice messages, and a " +
+				'"Transcribe audio file" command for converting audio files to notes.'
+			)
+			.addToggle((toggle) => {
+				toggle.setValue(s.enabled).onChange(async (value) => {
+					this.plugin.settings.whisperSettings.enabled = value;
+					await this.plugin.saveSettings();
+					this.plugin.initWhisperService();
+					this.renderTab("transcription");
+				});
+			});
+
+		if (!s.enabled) return;
+
+		// ── Backend ──────────────────────────────────────────────────────────
+		const backendGroup = this.addSettingGroup(el, "Backend");
+		new Setting(backendGroup)
+			.setName("Transcription backend")
+			.setDesc(
+				"OpenAI uses your existing API key — zero setup, audio sent to OpenAI. " +
+				"Local sidecar uses a Python server running on your machine — fully private."
+			)
+			.addDropdown((dropdown) => {
+				dropdown.addOption("openai",  "OpenAI Whisper API");
+				dropdown.addOption("sidecar", "Local sidecar (whisper-server.py)");
+				dropdown.setValue(s.backend);
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.whisperSettings.backend = value as "openai" | "sidecar";
+					await this.plugin.saveSettings();
+					this.renderTab("transcription");
+				});
+			});
+
+		// Backend-specific settings
+		if (s.backend === "openai") {
+			const hasKey = !!this.plugin.settings.openAIAPIKey;
+			const keyNote = backendGroup.createEl("p", {
+				cls: "setting-item-description",
+				text: hasKey
+					? "✓ OpenAI API key is configured. Uses the whisper-1 model."
+					: "⚠ No OpenAI API key found. Add one under Settings → OpenAI.",
+			});
+			if (!hasKey) keyNote.addClass("llm-whisper-warning");
+		} else {
+			// Sidecar-specific settings
+			new Setting(backendGroup)
+				.setName("Sidecar server URL")
+				.setDesc("URL of your running whisper-server.py instance.")
+				.addText((text) => {
+					text.setPlaceholder("http://localhost:8765");
+					text.setValue(s.sidecarHost);
+					text.onChange(async (value) => {
+						this.plugin.settings.whisperSettings.sidecarHost = value;
+						await this.plugin.saveSettings();
+					});
+				});
+
+			new Setting(backendGroup)
+				.setName("Model")
+				.setDesc("Whisper model loaded by the sidecar. Larger models are more accurate but slower and require more RAM.")
+				.addDropdown((dropdown) => {
+					const whisperModels = [
+						"tiny", "tiny.en",
+						"base", "base.en",
+						"small", "small.en",
+						"medium", "medium.en",
+						"large-v2", "large-v3",
+					];
+					for (const m of whisperModels) dropdown.addOption(m, m);
+					dropdown.setValue(s.whisperModel || "medium.en");
+					dropdown.onChange(async (value) => {
+						this.plugin.settings.whisperSettings.whisperModel = value;
+						await this.plugin.saveSettings();
+					});
+				});
+
+			// ── Interactive sidecar setup wizard ────────────────────────────
+			const setupGroup = this.addSettingGroup(el, "Sidecar Setup");
+
+			// Status rows
+			const pythonRow = setupGroup.createDiv({ cls: "llm-whisper-env-row" });
+			const depsRow   = setupGroup.createDiv({ cls: "llm-whisper-env-row" });
+			const serverRow = setupGroup.createDiv({ cls: "llm-whisper-env-row" });
+
+			const setRow = (
+				row:    HTMLElement,
+				icon:   string,
+				label:  string,
+				mod:    "ok" | "warn" | "err" | "checking",
+			) => {
+				row.empty();
+				const iconEl  = row.createSpan({ cls: `llm-whisper-env-icon llm-whisper-env-${mod}` });
+				iconEl.textContent = icon;
+				row.createSpan({ cls: "llm-whisper-env-label", text: label });
+			};
+
+			// Placeholders while we check
+			setRow(pythonRow, "⏳", "Checking Python…",      "checking");
+			setRow(depsRow,   "⏳", "Checking dependencies…", "checking");
+			setRow(serverRow, "⏳", "Checking server…",       "checking");
+
+			// Output log (shown during install / server startup)
+			const logEl = setupGroup.createEl("pre", { cls: "llm-whisper-setup-log llm-hidden" });
+
+			// Action buttons
+			const btnRow      = setupGroup.createDiv({ cls: "llm-whisper-btn-row" });
+			let installBtn: ButtonComponent | null = null;
+			let serverBtn:  ButtonComponent | null = null;
+			let pollTimer:  ReturnType<typeof setInterval> | null = null;
+
+			// Stop auto-polling whenever we leave the tab or rebuild
+			const stopPolling = () => {
+				if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null; }
+			};
+
+			const refreshStatus = async () => {
+				const mgr    = this.plugin.sidecarManager;
+				const status = await mgr.getEnvStatus();
+
+				// Python row
+				if (status.python.found) {
+					setRow(pythonRow, "✓", `Python ${status.python.version}`, "ok");
+				} else {
+					setRow(pythonRow, "✗", "Python 3 not found", "err");
+					const link = pythonRow.createEl("a", {
+						text: " → Download Python",
+						href: "#",
+						cls:  "llm-whisper-env-link",
+					});
+					link.addEventListener("click", (e) => {
+						e.preventDefault();
+						mgr.openPythonDownloadPage();
+					});
+				}
+
+				// Deps row
+				if (!status.python.found) {
+					setRow(depsRow, "–", "Install Python first", "warn");
+				} else if (status.deps.installed) {
+					setRow(depsRow, "✓", "Dependencies installed", "ok");
+				} else {
+					setRow(depsRow, "✗", `Missing: ${status.deps.missing.join(", ")}`, "err");
+				}
+
+				// Server row
+				const serverOwned = this.plugin.sidecarManager.isServerOwned;
+				if (status.server.running) {
+					setRow(serverRow, "✓", `Server running — model: ${status.server.model}`, "ok");
+					stopPolling(); // health confirmed — no need to keep polling
+				} else if (serverOwned) {
+					setRow(serverRow, "⏳", "Server starting… (model may be downloading)", "checking");
+					// Auto-poll every 5 s until the health endpoint responds
+					if (pollTimer === null) {
+						pollTimer = setInterval(async () => {
+							const s = await this.plugin.sidecarManager.getServerStatus();
+							if (s.running) {
+								stopPolling();
+								await refreshStatus();
+							}
+						}, 5000);
+					}
+				} else {
+					setRow(serverRow, "○", "Server not running", "warn");
+					stopPolling();
+				}
+
+				// Rebuild action buttons
+				btnRow.empty();
+				installBtn = null;
+				serverBtn  = null;
+
+				// "Install dependencies" — only when Python exists and deps are missing
+				if (status.python.found && !status.deps.installed) {
+					installBtn = new ButtonComponent(btnRow);
+					installBtn.setButtonText("Install dependencies");
+					installBtn.setCta();
+					installBtn.onClick(async () => {
+						installBtn!.setButtonText("Installing…");
+						installBtn!.setDisabled(true);
+						logEl.textContent = "";
+						logEl.removeClass("llm-hidden");
+
+						try {
+							await this.plugin.sidecarManager.installDependencies((line) => {
+								logEl.textContent += line + "\n";
+								logEl.scrollTop = logEl.scrollHeight;
+							});
+							logEl.textContent += "\n✓ Done! Refreshing status…";
+						} catch (err) {
+							logEl.textContent += `\n✗ ${err instanceof Error ? err.message : String(err)}`;
+						}
+
+						await refreshStatus();
+					});
+				}
+
+				// "Start server" / "Stop server"
+				if (status.python.found && status.deps.installed) {
+					serverBtn = new ButtonComponent(btnRow);
+					if (status.server.running || this.plugin.sidecarManager.isServerOwned) {
+						serverBtn.setButtonText("Stop server");
+						serverBtn.onClick(async () => {
+							this.plugin.sidecarManager.stopServer();
+							await new Promise((r) => setTimeout(r, 800));
+							await refreshStatus();
+						});
+					} else {
+						serverBtn.setButtonText("Start server");
+						serverBtn.setCta();
+						serverBtn.onClick(async () => {
+							logEl.textContent = "";
+							logEl.removeClass("llm-hidden");
+							this.plugin.sidecarManager.startServer((line) => {
+								logEl.textContent += line + "\n";
+								logEl.scrollTop = logEl.scrollHeight;
+							});
+							// Give the server 2 s to spin up then re-check
+							serverBtn!.setButtonText("Starting…");
+							serverBtn!.setDisabled(true);
+							await new Promise((r) => setTimeout(r, 2500));
+							await refreshStatus();
+						});
+					}
+				}
+
+				// Refresh button (always)
+				const refreshBtn = new ButtonComponent(btnRow);
+				refreshBtn.setButtonText("Refresh");
+				refreshBtn.onClick(() => refreshStatus());
+			};
+
+			// Stop any stale poll if the tab is re-rendered (e.g. backend toggle)
+			this.registerSidecarPollCleanup(stopPolling);
+
+			// Kick off the initial check
+			refreshStatus();
+		}
+
+		// ── Test Connection ──────────────────────────────────────────────────
+		const testGroup = this.addSettingGroup(el, "Connection");
+		const statusEl  = testGroup.createEl("p", {
+			cls: "setting-item-description llm-whisper-status",
+		});
+
+		new Setting(testGroup)
+			.setName("Test connection")
+			.setDesc("Verify the backend is reachable and the API key / server URL is correct.")
+			.addButton((button) => {
+				button.setButtonText("Test connection");
+				button.onClick(async () => {
+					button.setButtonText("Testing…");
+					button.setDisabled(true);
+					statusEl.setText("");
+					statusEl.removeClass("llm-whisper-status-ok", "llm-whisper-status-err");
+
+					if (!this.plugin.whisperService) this.plugin.initWhisperService();
+					const result = await this.plugin.whisperService!.checkHealth();
+
+					if (result.ok) {
+						statusEl.setText(`✓ Connected — model: ${result.model}`);
+						statusEl.addClass("llm-whisper-status-ok");
+					} else {
+						statusEl.setText(`✗ ${result.error ?? "Could not connect"}`);
+						statusEl.addClass("llm-whisper-status-err");
+					}
+
+					button.setButtonText("Test connection");
+					button.setDisabled(false);
+				});
+			});
+
+		// ── Language ─────────────────────────────────────────────────────────
+		const langGroup = this.addSettingGroup(el, "Transcription Options");
+		new Setting(langGroup)
+			.setName("Language")
+			.setDesc(
+				'ISO language code for transcription (e.g. "en", "ja", "fr"). ' +
+				"Leave blank for automatic language detection."
+			)
+			.addText((text) => {
+				text.setPlaceholder("auto-detect");
+				text.setValue(s.language);
+				text.onChange(async (value) => {
+					this.plugin.settings.whisperSettings.language = value.trim();
+					await this.plugin.saveSettings();
+				});
+			});
+
+		new Setting(langGroup)
+			.setName("Include timestamps")
+			.setDesc("Prefix each segment with a [MM:SS] timestamp in transcription notes.")
+			.addToggle((toggle) => {
+				toggle.setValue(s.includeTimestamps).onChange(async (value) => {
+					this.plugin.settings.whisperSettings.includeTimestamps = value;
+					await this.plugin.saveSettings();
+				});
+			});
+
+		// ── Voice input ───────────────────────────────────────────────────────
+		const voiceGroup = this.addSettingGroup(el, "Voice Input");
+		new Setting(voiceGroup)
+			.setName("Auto-send voice transcript")
+			.setDesc(
+				"When enabled, voice recordings are sent as chat messages immediately after " +
+				"transcription. When disabled, the transcript is placed in the input field for review first."
+			)
+			.addToggle((toggle) => {
+				toggle.setValue(s.autoSend).onChange(async (value) => {
+					this.plugin.settings.whisperSettings.autoSend = value;
+					await this.plugin.saveSettings();
+				});
+			});
+
+		// ── File transcription ────────────────────────────────────────────────
+		const fileGroup = this.addSettingGroup(el, "File Transcription");
+		new Setting(fileGroup)
+			.setName("Output folder")
+			.setDesc('Vault folder where transcription notes are created (e.g. "Transcripts").')
+			.addText((text) => {
+				text.setPlaceholder("Transcripts");
+				text.setValue(s.outputFolder);
+				text.onChange(async (value) => {
+					this.plugin.settings.whisperSettings.outputFolder = value.trim() || "Transcripts";
+					await this.plugin.saveSettings();
+				});
+			});
+
+		new Setting(fileGroup)
+			.setName("Auto-open note after transcription")
+			.setDesc("Automatically open the created note when transcription completes.")
+			.addToggle((toggle) => {
+				toggle.setValue(s.autoOpenNote).onChange(async (value) => {
+					this.plugin.settings.whisperSettings.autoOpenNote = value;
+					await this.plugin.saveSettings();
+				});
+			});
+	}
+
 	// ── Helpers ────────────────────────────────────────────────────────────────
+
+	/**
+	 * Register a cleanup callback that fires the next time renderTab() clears
+	 * the main content area. Used to stop the sidecar status-poll interval when
+	 * the user navigates away from the Transcription tab.
+	 */
+	private _sidecarPollCleanup: (() => void) | null = null;
+	private registerSidecarPollCleanup(fn: () => void) {
+		// Stop any previously registered cleanup first
+		this._sidecarPollCleanup?.();
+		this._sidecarPollCleanup = fn;
+	}
 
 	private addTabHeader(el: HTMLElement, title: string) {
 		const header = el.createDiv("llm-dedicated-settings-tab-header");

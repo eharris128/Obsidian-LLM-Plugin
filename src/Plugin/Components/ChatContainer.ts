@@ -1,6 +1,7 @@
 import LLMPlugin from "main";
 import {
 	ButtonComponent,
+	Component,
 	DropdownComponent,
 	MarkdownRenderer,
 	Menu,
@@ -88,7 +89,7 @@ const avatarSvgs: Record<string, string> = {
 	"ninja-cat": ninjaCatLogo,
 };
 
-export class ChatContainer {
+export class ChatContainer extends Component {
 	historyMessages: HTMLElement;
 	prompt: string;
 	messages: Message[];
@@ -202,6 +203,8 @@ export class ChatContainer {
 		viewType: ViewType,
 		registry: ConversationRegistry
 	) {
+		super();
+		this.load();
 		this.viewType = viewType;
 		this.registry = registry;
 		// Each view starts with its own fresh ephemeral store.
@@ -239,6 +242,7 @@ export class ChatContainer {
 		this.messageStore.unsubscribe(this.boundUpdateMessages);
 		this.slashMenuEl?.remove();
 		this.slashMenuEl = null;
+		this.unload();
 	}
 
 	private updateMessages(messages: Message[]) {
@@ -925,7 +929,7 @@ export class ChatContainer {
 					response,
 					this.streamingDiv,
 					"",
-					this.plugin
+					this
 				);
 				this.messageStore.addMessage({ role: assistant, content: response });
 			} catch (e) {
@@ -1152,7 +1156,7 @@ export class ChatContainer {
 					response,
 					this.streamingDiv,
 					"",
-					this.plugin
+					this
 				);
 				this.messageStore.addMessage({ role: assistant, content: response });
 				if (this.activeSkillId) {
@@ -3201,7 +3205,7 @@ export class ChatContainer {
 			this.linkifyMdRefs(content),
 			container,
 			sourcePath,
-			this.plugin
+			this
 		);
 		// Hide inline copy-code buttons (we have our own copy action).
 		container

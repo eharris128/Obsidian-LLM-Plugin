@@ -12,6 +12,16 @@ npm run version  # Bump version in manifest.json and versions.json
 
 Output is bundled to `main.js` in the root directory.
 
+### CSS / Styling Convention (repeated below — see full entry near bottom)
+
+## Obsidian Review Compliance
+
+### `MarkdownRenderer.render` — use `this`, not `this.plugin`
+
+`ChatContainer extends Component`. Always pass `this` (the `ChatContainer` instance) as the 5th `Component` argument to `MarkdownRenderer.render()`. Never pass `this.plugin`. The plugin instance lives for the entire Obsidian session, so passing it prevents cleanup of rendered markdown children and triggers Obsidian's automated review warning: *"Avoid using the main plugin instance as a component. Its lifecycle is too long, which can cause memory leaks."*
+
+`ChatContainer` calls `this.load()` in its constructor and `this.unload()` in `destroy()`, so rendered content is properly cleaned up when the view closes.
+
 ## Architecture Overview
 
 This is an Obsidian plugin that provides LLM chat interfaces with support for OpenAI, Anthropic Claude, Google Gemini, Mistral AI, local Ollama, local LM Studio, and local GPT4All.

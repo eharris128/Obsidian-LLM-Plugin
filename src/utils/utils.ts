@@ -1,4 +1,4 @@
-import LLMPlugin, { LLMPluginSettings } from "main";
+import LLMPlugin from "main";
 import { Editor, Platform, requestUrl, RequestUrlParam } from "obsidian";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
@@ -10,7 +10,6 @@ import {
 	gemini,
 	gemini2FlashStableModel,
 	images,
-	ollama,
 } from "utils/constants";
 import { query as claudeCodeQuery } from "@anthropic-ai/claude-agent-sdk";
 import { ensureSDKInstalled } from "services/ClaudeAgentSDKInstaller";
@@ -19,22 +18,23 @@ import { ensureSDKInstalled } from "services/ClaudeAgentSDKInstaller";
 // The Agent SDK calls setMaxListeners(n, abortSignal), but Electron's
 // renderer-process AbortSignal doesn't extend Node.js EventTarget,
 // causing a TypeError. This wrapper catches and ignores that case.
-const events = require("events");
-const _origSetMaxListeners = events.setMaxListeners;
-if (_origSetMaxListeners) {
-	events.setMaxListeners = function (n: number, ...eventTargets: unknown[]) {
-		try {
-			return _origSetMaxListeners(n, ...eventTargets);
-		} catch {
-			// Electron: browser AbortSignal is not a Node.js EventTarget
-		}
-	};
+if (Platform.isDesktop) {
+	const events = require("events");
+	const _origSetMaxListeners = events.setMaxListeners;
+	if (_origSetMaxListeners) {
+		events.setMaxListeners = function (n: number, ...eventTargets: unknown[]) {
+			try {
+				return _origSetMaxListeners(n, ...eventTargets);
+			} catch {
+				// Electron: browser AbortSignal is not a Node.js EventTarget
+			}
+		};
+	}
 }
 import { models, modelNames } from "utils/models";
 import {
 	ChatParams,
 	ImageParams,
-	Message,
 	ProviderKeyPair,
 	ViewSettings,
 	ViewType,
@@ -172,7 +172,7 @@ export async function mistralMessage(params: ChatParams, mistralAPIKey: string) 
 					}
 				}
 			}
-			return globalThis.fetch(url, init);
+			return activeWindow.fetch(url, init);
 		},
 	});
 
@@ -231,8 +231,6 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 					providerKeyPair.provider
 				)}.`
 			);
-		} else {
-			console.log("An error occurred:", error.message);
 		}
 		return false;
 	}

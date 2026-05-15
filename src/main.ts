@@ -857,7 +857,7 @@ export default class LLMPlugin extends Plugin {
 
 	private registerRibbonIcons() {
 		if (this.settings.showRibbonIcon) {
-			this.ribbonIconEl = this.addRibbonIcon("bot", "Ask a question", (evt: MouseEvent) => {
+			this.ribbonIconEl = this.addRibbonIcon("bot", "Ask a question", (_evt: MouseEvent) => {
 				new ChatModal2(this).open();
 			});
 		}

@@ -39,7 +39,7 @@ export class MobileFileSystem implements FileSystem {
         this.plugin = plugin;
     }
 
-    existsSync(path: string) {
+    existsSync(_path: string) {
         return false;
     }
 

@@ -1463,16 +1463,16 @@ export class ChatContainer extends Component {
 
 			// Header row
 			const cardHeader = card.createDiv({ cls: "llm-permission-header" });
-			const iconEl = cardHeader.createEl("span", { cls: "llm-permission-icon" });
+			const iconEl = cardHeader.createSpan({ cls: "llm-permission-icon" });
 			setIcon(iconEl, "wand-sparkles");
-			cardHeader.createEl("span", {
+			cardHeader.createSpan({
 				text: "Agent wants to perform an action",
 				cls: "llm-permission-title",
 			});
 
 			// Body
 			const body = card.createDiv({ cls: "llm-permission-body" });
-			body.createEl("div", {
+			body.createDiv({
 				text: toolDescription,
 				cls: "llm-permission-description",
 			});
@@ -1521,17 +1521,17 @@ export class ChatContainer extends Component {
 
 			// Header
 			const cardHeader = card.createDiv({ cls: "llm-permission-header" });
-			const iconEl = cardHeader.createEl("span", { cls: "llm-permission-icon" });
+			const iconEl = cardHeader.createSpan({ cls: "llm-permission-icon" });
 			setIcon(iconEl, "brain");
-			cardHeader.createEl("span", {
+			cardHeader.createSpan({
 				text: "Where should I save this memory?",
 				cls: "llm-permission-title",
 			});
 
 			// Body
 			const body = card.createDiv({ cls: "llm-permission-body" });
-			body.createEl("div", { text: `"${content}"`, cls: "llm-memory-content-preview" });
-			body.createEl("div", { text: "Select one or more destinations:", cls: "llm-memory-scope-label" });
+			body.createDiv({ text: `"${content}"`, cls: "llm-memory-content-preview" });
+			body.createDiv({ text: "Select one or more destinations:", cls: "llm-memory-scope-label" });
 
 			const optionsEl = body.createDiv({ cls: "llm-memory-scope-options" });
 			const checkboxes: Array<{ cb: HTMLInputElement; scope: "global" | "project" | "assistant"; label: string }> = [];
@@ -1542,7 +1542,7 @@ export class ChatContainer extends Component {
 				cb.checked = true;
 				const lbl = row.createEl("label");
 				lbl.appendText(label);
-				lbl.createEl("span", { text: tag, cls: "llm-memory-scope-tag" });
+				lbl.createSpan({ text: tag, cls: "llm-memory-scope-tag" });
 				// Clicking the label toggles the checkbox
 				lbl.addEventListener("click", () => { cb.checked = !cb.checked; });
 				checkboxes.push({ cb, scope, label });
@@ -2284,10 +2284,10 @@ export class ChatContainer extends Component {
 		onRemove: () => void
 	): HTMLElement {
 		const chip = container.createDiv({ cls: "llm-context-chip" });
-		const fileIcon = chip.createEl("span", { cls: "llm-context-chip-icon" });
+		const fileIcon = chip.createSpan({ cls: "llm-context-chip-icon" });
 		setIcon(fileIcon, "file-text");
-		chip.createEl("span", { text: name, cls: "llm-context-chip-name" });
-		const removeBtn = chip.createEl("span", {
+		chip.createSpan({ text: name, cls: "llm-context-chip-name" });
+		const removeBtn = chip.createSpan({
 			text: "×",
 			cls: "llm-context-chip-remove",
 		});
@@ -2304,10 +2304,10 @@ export class ChatContainer extends Component {
 	 */
 	private buildProjectChip(container: HTMLElement, name: string, onRemove: () => void): HTMLElement {
 		const chip = container.createDiv({ cls: "llm-context-chip llm-project-chip" });
-		const iconEl = chip.createEl("span", { cls: "llm-context-chip-icon" });
+		const iconEl = chip.createSpan({ cls: "llm-context-chip-icon" });
 		setIcon(iconEl, "box");
-		chip.createEl("span", { text: name, cls: "llm-context-chip-name llm-project-chip-name" });
-		const removeBtn = chip.createEl("span", { text: "×", cls: "llm-context-chip-remove" });
+		chip.createSpan({ text: name, cls: "llm-context-chip-name llm-project-chip-name" });
+		const removeBtn = chip.createSpan({ text: "×", cls: "llm-context-chip-remove" });
 		removeBtn.addEventListener("click", (e) => {
 			e.stopPropagation();
 			onRemove();
@@ -2318,10 +2318,10 @@ export class ChatContainer extends Component {
 	/** Build a memory-recall chip — icon-only at rest, expands on hover to show label + remove. */
 	private buildMemoryChip(container: HTMLElement, onRemove: () => void): HTMLElement {
 		const chip = container.createDiv({ cls: "llm-context-chip llm-memory-chip" });
-		const iconEl = chip.createEl("span", { cls: "llm-context-chip-icon" });
+		const iconEl = chip.createSpan({ cls: "llm-context-chip-icon" });
 		setIcon(iconEl, "brain");
-		chip.createEl("span", { text: "Memory", cls: "llm-context-chip-name llm-memory-chip-name" });
-		const removeBtn = chip.createEl("span", { text: "×", cls: "llm-context-chip-remove" });
+		chip.createSpan({ text: "Memory", cls: "llm-context-chip-name llm-memory-chip-name" });
+		const removeBtn = chip.createSpan({ text: "×", cls: "llm-context-chip-remove" });
 		removeBtn.addEventListener("click", (e) => {
 			e.stopPropagation();
 			onRemove();
@@ -2332,9 +2332,9 @@ export class ChatContainer extends Component {
 	/** Build a non-removable pinned-note chip (for project pinned notes). */
 	private buildPinnedChip(container: HTMLElement, name: string, file: TFile | null): HTMLElement {
 		const chip = container.createDiv({ cls: "llm-context-chip llm-context-chip--pinned" });
-		const pinIcon = chip.createEl("span", { cls: "llm-context-chip-icon" });
+		const pinIcon = chip.createSpan({ cls: "llm-context-chip-icon" });
 		setIcon(pinIcon, "pin");
-		chip.createEl("span", { text: name, cls: "llm-context-chip-name" });
+		chip.createSpan({ text: name, cls: "llm-context-chip-name" });
 		if (file) {
 			chip.addClass("llm-context-chip--clickable");
 			chip.addEventListener("click", () => {
@@ -3986,19 +3986,19 @@ export class ChatContainer extends Component {
 		const details = container.createEl("details", { cls: "llm-tool-calls" });
 
 		const summary = details.createEl("summary", { cls: "llm-tool-calls-summary" });
-		const iconEl = summary.createEl("span", { cls: "llm-tool-calls-icon" });
+		const iconEl = summary.createSpan({ cls: "llm-tool-calls-icon" });
 		setIcon(iconEl, "wrench");
-		summary.createEl("span", {
+		summary.createSpan({
 			cls: "llm-tool-calls-label",
 			text: count === 1 ? "1 tool call" : `${count} tool calls`,
 		});
-		const chevronEl = summary.createEl("span", { cls: "llm-tool-calls-chevron" });
+		const chevronEl = summary.createSpan({ cls: "llm-tool-calls-chevron" });
 		setIcon(chevronEl, "chevron-down");
 
-		const body = details.createEl("div", { cls: "llm-tool-calls-body" });
+		const body = details.createDiv({ cls: "llm-tool-calls-body" });
 		for (const tc of toolCalls) {
-			const item = body.createEl("div", { cls: "llm-tool-call-item" });
-			item.createEl("span", { cls: "llm-tool-call-name", text: tc.name });
+			const item = body.createDiv({ cls: "llm-tool-call-item" });
+			item.createSpan({ cls: "llm-tool-call-name", text: tc.name });
 			const inputStr = JSON.stringify(tc.input);
 			const truncated = inputStr.length > 300 ? inputStr.slice(0, 297) + "…" : inputStr;
 			item.createEl("code", { cls: "llm-tool-call-input", text: truncated });

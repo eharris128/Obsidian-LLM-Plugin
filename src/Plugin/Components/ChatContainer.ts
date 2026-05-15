@@ -404,7 +404,6 @@ export class ChatContainer extends Component {
 			modelName,
 		} = getViewInfo(this.plugin, this.viewType);
 		let shouldHaveAPIKey = modelType !== GPT4All && modelType !== ollama && modelType !== lmStudio && modelType !== mistral && modelEndpoint !== claudeCodeEndpoint;
-		const messagesForParams = this.getMessages();
 		if (shouldHaveAPIKey) {
 			let API_KEY: string | undefined;
 			if (modelType === openAI) API_KEY = this.plugin.settings.openAIAPIKey;
@@ -3209,7 +3208,7 @@ export class ChatContainer extends Component {
 	setDiv(streaming: boolean) {
 		const parent = this.historyMessages.createDiv();
 		parent.addClass("llm-flex");
-		const assistant = parent.createEl("div", { cls: "llm-assistant-logo" });
+		const assistant = parent.createDiv({ cls: "llm-assistant-logo" });
 		if (this.plugin.settings.showAssistantLogo) {
 			assistant.appendChild(assistantLogo());
 		}
@@ -3217,7 +3216,7 @@ export class ChatContainer extends Component {
 		this.loadingDivContainer = parent.createDiv();
 		this.streamingDiv = this.loadingDivContainer.createDiv();
 
-		const buttonsContainer = this.loadingDivContainer.createEl("div", {
+		const buttonsContainer = this.loadingDivContainer.createDiv({
 			cls: "llm-assistant-buttons llm-hide",
 		});
 		const copyToClipboardButton = new ButtonComponent(buttonsContainer);
@@ -3261,7 +3260,7 @@ export class ChatContainer extends Component {
 
 	showThinkingAnimation() {
 		this.streamingDiv.empty();
-		const thinkingContainer = this.streamingDiv.createEl("div", {
+		const thinkingContainer = this.streamingDiv.createDiv({
 			cls: "llm-thinking-animation"
 		});
 		thinkingContainer.createSpan({
@@ -3482,7 +3481,7 @@ export class ChatContainer extends Component {
 		if (assistant) {
 			// Logo sits to the left of the content as a sibling inside the container
 			imLikeMessageContainer.addClass("llm-flex");
-			const logoEl = imLikeMessageContainer.createEl("div", { cls: "llm-assistant-logo" });
+			const logoEl = imLikeMessageContainer.createDiv({ cls: "llm-assistant-logo" });
 			if (this.plugin.settings.showAssistantLogo) {
 				logoEl.appendChild(assistantLogo());
 			}

@@ -58,13 +58,13 @@ export class HistoryContainer {
 
 		createChatButton.onClick(() => {
 			parentElement.hide();
-			const activeHistoryButton = document.querySelector(
+			const activeHistoryButton = activeDocument.querySelector(
 				".chat-history.is-active"
 			);
 			activeHistoryButton?.classList.remove("is-active");
 
 			const prefix = this.getChatContainerClassPrefix();
-			const chatContainer = document.querySelector(
+			const chatContainer = activeDocument.querySelector(
 				`[class*="${prefix}-chat-container"]`
 			) as HTMLElement;
 

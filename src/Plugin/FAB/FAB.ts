@@ -182,7 +182,7 @@ export class FAB {
 				}
 			});
 
-		document.body
+		activeDocument.body
 			.querySelector(ROOT_WORKSPACE_CLASS)
 			?.insertAdjacentElement("afterbegin", fabContainer);
 	}
@@ -213,7 +213,7 @@ export class FAB {
 	removeFab() {
 		this.chatContainer?.destroy();
 		this.chatContainer = null;
-		const FAB = document.getElementById("_floating-action-button");
+		const FAB = activeDocument.getElementById("_floating-action-button");
 		if (FAB) {
 			FAB.remove();
 		}

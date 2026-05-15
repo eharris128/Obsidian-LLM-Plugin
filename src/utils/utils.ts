@@ -274,6 +274,7 @@ export async function geminiMessage(
 // Resolve the absolute path to `node` by checking common install locations.
 // Electron's renderer process has a limited PATH, so we check the filesystem directly.
 function resolveNodePath(): string {
+	if (!Platform.isDesktop) return "";
 	const fs = require("fs");
 	const homedir = require("os").homedir();
 	const candidates: string[] = [];

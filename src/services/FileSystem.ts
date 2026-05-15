@@ -1,3 +1,4 @@
+import { Platform } from "obsidian";
 import LLMPlugin from "main";
 
 export interface FileSystem {
@@ -9,6 +10,7 @@ export class DesktopFileSystem implements FileSystem {
     private fs: typeof import('fs');
 
     constructor() {
+        if (!Platform.isDesktop) throw new Error("DesktopFileSystem is not available on mobile.");
         this.fs = require('fs');
     }
 

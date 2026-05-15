@@ -4,6 +4,7 @@ const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk@0.2.37";
 const INSTALL_TIMEOUT_MS = 120_000;
 
 function resolveNpmPath(): string {
+	if (!Platform.isDesktop) return "npm";
 	const fs = require("fs");
 	const homedir = require("os").homedir();
 	const isWin = process.platform === "win32";

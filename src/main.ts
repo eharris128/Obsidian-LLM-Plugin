@@ -260,7 +260,7 @@ export default class LLMPlugin extends Plugin {
 	/** Memory service — initialized after settings load, null if memory is disabled. */
 	memoryService: MemoryService | null = null;
 	/** Debounce timers keyed by file path — prevents hammering the embedding API on rapid saves. */
-	private ragDebounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+	private ragDebounceTimers: Map<string, number> = new Map();
 	/** Skills registry — always initialized; folder is configurable in settings. */
 	skillRegistry: SkillRegistry;
 	/** Projects registry — always initialized; folder derived from rootVaultFolder. */
@@ -330,12 +330,12 @@ export default class LLMPlugin extends Plugin {
 		this.recentChatsButton = new RecentChatsButton(this, this.statusBarButton);
 		this.addSettingTab(new SettingsView(this.app, this, this.fab));
 		if (this.settings.showFAB) {
-			setTimeout(() => {
+			activeWindow.setTimeout(() => {
 				this.fab.regenerateFAB();
 			}, 500);
 		}
 		if (this.settings.showStatusBarButton) {
-			setTimeout(() => {
+			activeWindow.setTimeout(() => {
 				this.statusBarButton.generate();
 				this.recentChatsButton.generate();
 			}, 500);
@@ -437,7 +437,7 @@ export default class LLMPlugin extends Plugin {
 				const existing = this.ragDebounceTimers.get(path);
 				if (existing) clearTimeout(existing);
 
-				const timer = setTimeout(async () => {
+				const timer = activeWindow.setTimeout(async () => {
 					this.ragDebounceTimers.delete(path);
 					try {
 						await this.vaultIndexer!.indexFile(file as import("obsidian").TFile);

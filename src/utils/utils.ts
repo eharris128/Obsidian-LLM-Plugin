@@ -56,7 +56,7 @@ async function retryWithBackoff<T>(
 			if (status === 429 && attempt < maxRetries) {
 				const delay = baseDelayMs * Math.pow(2, attempt);
 				const jitter = Math.random() * delay * 0.5;
-				await new Promise((r) => setTimeout(r, delay + jitter));
+				await new Promise((r) => activeWindow.setTimeout(r, delay + jitter));
 				continue;
 			}
 			if (status === 429) {

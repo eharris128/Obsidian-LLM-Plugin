@@ -128,7 +128,7 @@ function doInstall(pluginDir: string): Promise<void> {
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 
-		const timeout = setTimeout(() => {
+		const timeout = activeWindow.setTimeout(() => {
 			child.kill();
 			notice.hide();
 			reject(new Error("SDK installation failed: timed out after 2 minutes"));

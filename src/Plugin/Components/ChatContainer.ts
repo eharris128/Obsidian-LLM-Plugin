@@ -1324,7 +1324,7 @@ export class ChatContainer extends Component {
 			this.activeAssistantNameThisTurn = null;
 			errorMessages(error, params);
 			if (this.getMessages().length > 0) {
-				setTimeout(() => {
+				activeWindow.setTimeout(() => {
 					this.removeMessage(header, modelName);
 				}, 1000);
 			}
@@ -3340,7 +3340,7 @@ export class ChatContainer extends Component {
 		// Hide inline copy-code buttons (we have our own copy action).
 		container
 			.querySelectorAll<HTMLElement>(".copy-code-button")
-			.forEach((btn) => btn.setAttribute("style", "display: none"));
+			.forEach((btn) => btn.hide());
 		// Wire up internal links (wikilinks rendered as .internal-link) so
 		// clicking them opens the note in Obsidian.
 		container

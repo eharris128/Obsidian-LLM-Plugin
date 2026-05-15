@@ -430,43 +430,34 @@ export class ChatContainer extends Component {
 			const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
 			const path = require("path");
 			const pluginDir = path.join(vaultPath, this.plugin.manifest.dir);
-			let stream;
-			try {
-				stream = await claudeCodeMessage(
-					this.prompt,
-					this.plugin.settings.claudeCodeOAuthToken,
-					this.plugin.settings.linearWorkspaces,
-					vaultPath,
-					pluginDir,
-					this.claudeCodeSessionId ?? undefined
-				);
-			} catch (err) {
-				throw err;
-			}
+			const stream = await claudeCodeMessage(
+				this.prompt,
+				this.plugin.settings.claudeCodeOAuthToken,
+				this.plugin.settings.linearWorkspaces,
+				vaultPath,
+				pluginDir,
+				this.claudeCodeSessionId ?? undefined
+			);
 
-			try {
-				let firstText = true;
-				for await (const message of stream) {
-					// Capture session ID from first message
-					if (!this.claudeCodeSessionId && (message as { session_id?: string }).session_id) {
-						this.claudeCodeSessionId = (message as { session_id?: string }).session_id ?? null;
-					}
-					if (message.type === "assistant") {
-						for (const block of message.message.content) {
-							if (block.type === "text" && block.text) {
-								if (firstText) {
-									this.streamingDiv.empty();
-									firstText = false;
-								}
-								this.previewText += block.text;
-								this.streamingDiv.textContent = this.previewText;
-								this.historyMessages.scroll(0, 9999);
+			let firstText = true;
+			for await (const message of stream) {
+				// Capture session ID from first message
+				if (!this.claudeCodeSessionId && (message as { session_id?: string }).session_id) {
+					this.claudeCodeSessionId = (message as { session_id?: string }).session_id ?? null;
+				}
+				if (message.type === "assistant") {
+					for (const block of message.message.content) {
+						if (block.type === "text" && block.text) {
+							if (firstText) {
+								this.streamingDiv.empty();
+								firstText = false;
 							}
+							this.previewText += block.text;
+							this.streamingDiv.textContent = this.previewText;
+							this.historyMessages.scroll(0, 9999);
 						}
 					}
 				}
-			} catch (err) {
-				throw err;
 			}
 
 			this.streamingDiv.empty();
@@ -3243,9 +3234,9 @@ export class ChatContainer extends Component {
 		if (streaming) {
 			this.streamingDiv.empty();
 		} else {
-			const dots = this.streamingDiv.createEl("span");
+			const dots = this.streamingDiv.createSpan();
 			for (let i = 0; i < 3; i++) {
-				const dot = dots.createEl("span", { cls: "streaming-dot" });
+				const dot = dots.createSpan({ cls: "streaming-dot" });
 				dot.textContent = ".";
 			}
 		}
@@ -3273,13 +3264,13 @@ export class ChatContainer extends Component {
 		const thinkingContainer = this.streamingDiv.createEl("div", {
 			cls: "llm-thinking-animation"
 		});
-		thinkingContainer.createEl("span", {
+		thinkingContainer.createSpan({
 			cls: "llm-thinking-text",
 			text: "Thinking"
 		});
-		const dots = thinkingContainer.createEl("span", { cls: "llm-thinking-dots" });
+		const dots = thinkingContainer.createSpan({ cls: "llm-thinking-dots" });
 		for (let i = 0; i < 3; i++) {
-			const dot = dots.createEl("span", { cls: "streaming-dot" });
+			const dot = dots.createSpan({ cls: "streaming-dot" });
 			dot.textContent = ".";
 		}
 		this.historyMessages.scroll(0, 9999);
@@ -3471,8 +3462,8 @@ export class ChatContainer extends Component {
 	private async createMessage(
 		content: string,
 		index: number,
-		finalMessage: Boolean,
-		assistant: Boolean = false,
+		finalMessage: boolean,
+		assistant: boolean = false,
 		toolCalls?: ToolCallRecord[],
 		skillId?: string,
 		modelLabel?: string

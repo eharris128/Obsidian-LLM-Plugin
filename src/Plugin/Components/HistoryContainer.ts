@@ -43,7 +43,7 @@ export class HistoryContainer {
 		// Append the SVG element
 		llmGal.appendChild(svgElement);
 
-		const cta = llmGal.createEl("div", {
+		const cta = llmGal.createDiv({
 			attr: {
 				class: "empty-history-cta llm-font-size-medium llm-justify-content-center",
 			},
@@ -134,7 +134,6 @@ export class HistoryContainer {
 			this.plugin.settings.currentIndex = index;
 			const modelName =
 				this.plugin.settings.promptHistory[index].modelName;
-			const model = this.plugin.settings.promptHistory[index].model;
 			this.plugin.settings[settingType].modelName = modelName;
 			this.plugin.settings[settingType].model =
 				models[modelName].model;
@@ -244,7 +243,7 @@ export class HistoryContainer {
 				new ConfirmDeleteModal(this.plugin.app, () => {
 					this.resetHistory(parentElement);
 					let updatedHistory = this.plugin.settings.promptHistory.filter(
-						(item, idx) => idx !== index
+						(_item, idx) => idx !== index
 					);
 					this.plugin.settings.promptHistory = updatedHistory;
 					void this.plugin.saveSettings();

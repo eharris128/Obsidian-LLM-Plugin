@@ -47,7 +47,7 @@ export class SettingsContainer {
 		}
 	}
 
-	generateImageSettings(parentContainer: HTMLElement, model: string) {
+	generateImageSettings(parentContainer: HTMLElement, _model: string) {
 		const settingType = getSettingType(this.viewType);
 		const viewSettings = this.plugin.settings[settingType];
 		const imageSizes = ["1024x1024", "1536x1024", "1024x1536", "auto"];

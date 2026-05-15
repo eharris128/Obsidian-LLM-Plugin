@@ -165,7 +165,7 @@ export class LLMSettingsModal extends Modal {
 				this.close();
 			}
 		};
-		setTimeout(() => {
+		activeWindow.setTimeout(() => {
 			document.addEventListener("mousedown", this.outsideClickHandler!);
 		}, 0);
 
@@ -1897,7 +1897,7 @@ export class LLMSettingsModal extends Modal {
 						serverBtn.setButtonText("Stop server");
 						serverBtn.onClick(async () => {
 							this.plugin.sidecarManager.stopServer();
-							await new Promise((r) => setTimeout(r, 800));
+							await new Promise((r) => activeWindow.setTimeout(r, 800));
 							await refreshStatus();
 						});
 					} else {
@@ -1913,7 +1913,7 @@ export class LLMSettingsModal extends Modal {
 							// Give the server 2 s to spin up then re-check
 							serverBtn!.setButtonText("Starting…");
 							serverBtn!.setDisabled(true);
-							await new Promise((r) => setTimeout(r, 2500));
+							await new Promise((r) => activeWindow.setTimeout(r, 2500));
 							await refreshStatus();
 						});
 					}

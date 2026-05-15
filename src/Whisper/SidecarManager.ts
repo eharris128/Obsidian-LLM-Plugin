@@ -9,7 +9,7 @@
  *  - Check whether the server is currently running via /health
  */
 
-import { requestUrl } from "obsidian";
+import { Platform, requestUrl } from "obsidian";
 import type LLMPlugin from "main";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -165,6 +165,7 @@ export class SidecarManager {
 	 */
 	startServer(onLine?: (line: string) => void): void {
 		if (this.serverProcess) return; // already running
+		if (!Platform.isDesktop) return;
 
 		const { spawn } = require("child_process") as typeof import("child_process");
 		const path       = require("path")          as typeof import("path");

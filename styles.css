@@ -2439,3 +2439,8 @@ button.llm-mic-button.llm-mic-transcribing {
 	max-height: 180px;
 	overflow-y: auto;
 }
+
+.llm-context-section-header {
+	margin-top: 1.5em;
+	margin-bottom: 0.5em;
+}

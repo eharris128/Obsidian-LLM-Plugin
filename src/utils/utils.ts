@@ -1,5 +1,5 @@
 import LLMPlugin, { LLMPluginSettings } from "main";
-import { Editor, requestUrl, RequestUrlParam } from "obsidian";
+import { Editor, Platform, requestUrl, RequestUrlParam } from "obsidian";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import {
@@ -319,6 +319,7 @@ export async function claudeCodeMessage(
 	pluginDir: string,
 	sessionId?: string
 ) {
+	if (!Platform.isDesktop) throw new Error("Claude Code is only available on desktop.");
 	await ensureSDKInstalled(pluginDir);
 	const path = require("path");
 	const { spawn } = require("child_process");

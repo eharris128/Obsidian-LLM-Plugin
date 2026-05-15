@@ -10,7 +10,7 @@
  */
 
 import OpenAI from "openai";
-import { requestUrl } from "obsidian";
+import { Platform, requestUrl } from "obsidian";
 import type LLMPlugin from "main";
 
 // ── Shared result type ──────────────────────────────────────────────────────
@@ -86,6 +86,7 @@ export class WhisperService {
 	 * @param absolutePath  Absolute path to the audio file on disk.
 	 */
 	async transcribeFilePath(absolutePath: string): Promise<TranscriptResult> {
+		if (!Platform.isDesktop) throw new Error("File transcription is only available on desktop.");
 		const path = require("path") as typeof import("path");
 		const fs   = require("fs")   as typeof import("fs");
 

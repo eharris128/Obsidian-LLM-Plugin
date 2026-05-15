@@ -7,6 +7,7 @@ import {
 	MarkdownView,
 	Menu,
 	Notice,
+	Platform,
 	setIcon,
 	TextAreaComponent,
 	TFile,
@@ -425,6 +426,7 @@ export class ChatContainer extends Component {
 			this.setDiv(true);
 			this.showThinkingAnimation();
 
+			if (!Platform.isDesktop) throw new Error("Claude Code is only available on desktop.");
 			const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
 			const path = require("path");
 			const pluginDir = path.join(vaultPath, this.plugin.manifest.dir);

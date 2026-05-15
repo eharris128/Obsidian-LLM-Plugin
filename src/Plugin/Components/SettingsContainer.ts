@@ -254,9 +254,8 @@ export class SettingsContainer {
 		// Context section header
 		const contextHeader = parentContainer.createEl("h3", {
 			text: "Context Settings",
+			cls: "llm-context-section-header",
 		});
-		contextHeader.style.marginTop = "1.5em";
-		contextHeader.style.marginBottom = "0.5em";
 
 		// Include active file
 		new Setting(parentContainer)
@@ -324,7 +323,7 @@ export class SettingsContainer {
 						const leafContent = parentContainer.closest(".workspace-leaf-content");
 						const scope = leafContent ?? parentContainer.getRootNode() as HTMLElement;
 						scope.querySelectorAll<HTMLElement>(".llm-model-panel").forEach((el) => {
-							el.style.display = value ? "" : "none";
+							value ? el.show() : el.hide();
 						});
 					});
 			});

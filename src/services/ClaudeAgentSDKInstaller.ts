@@ -1,4 +1,4 @@
-import { Notice } from "obsidian";
+import { Notice, Platform } from "obsidian";
 
 const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk@0.2.37";
 const INSTALL_TIMEOUT_MS = 120_000;
@@ -54,6 +54,7 @@ function resolveNpmPath(): string {
 }
 
 function isSDKInstalled(pluginDir: string): boolean {
+	if (!Platform.isDesktop) return false;
 	const path = require("path");
 	const fs = require("fs");
 	const cliPath = path.join(
@@ -69,6 +70,7 @@ function isSDKInstalled(pluginDir: string): boolean {
 let installPromise: Promise<void> | null = null;
 
 export async function ensureSDKInstalled(pluginDir: string): Promise<void> {
+	if (!Platform.isDesktop) return;
 	if (isSDKInstalled(pluginDir)) return;
 
 	// Guard against concurrent installs
@@ -83,6 +85,7 @@ export async function ensureSDKInstalled(pluginDir: string): Promise<void> {
 }
 
 function ensurePackageJson(pluginDir: string): void {
+	if (!Platform.isDesktop) return;
 	const path = require("path");
 	const fs = require("fs");
 	const pkgPath = path.join(pluginDir, "package.json");
@@ -93,6 +96,7 @@ function ensurePackageJson(pluginDir: string): void {
 }
 
 function doInstall(pluginDir: string): Promise<void> {
+	if (!Platform.isDesktop) return Promise.resolve();
 	const path = require("path");
 	const { spawn } = require("child_process");
 	const npmPath = resolveNpmPath();

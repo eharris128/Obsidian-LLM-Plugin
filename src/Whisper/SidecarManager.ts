@@ -126,6 +126,7 @@ export class SidecarManager {
 	 * @param onLine  Called with each line of pip output (for live progress display).
 	 */
 	async installDependencies(onLine: (line: string) => void): Promise<void> {
+		if (!Platform.isDesktop) return;
 		const { spawn } = require("child_process") as typeof import("child_process");
 
 		return new Promise((resolve, reject) => {
@@ -220,6 +221,7 @@ export class SidecarManager {
 
 	/** Promisified exec (stdout on resolve, throws on non-zero exit). */
 	private exec(cmd: string): Promise<string> {
+		if (!Platform.isDesktop) return Promise.reject(new Error("exec is not available on mobile."));
 		const { exec } = require("child_process") as typeof import("child_process");
 		return new Promise((resolve, reject) => {
 			exec(cmd, (err, stdout, stderr) => {

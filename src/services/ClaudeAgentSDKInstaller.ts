@@ -140,13 +140,13 @@ function doInstall(pluginDir: string): Promise<void> {
 		}, INSTALL_TIMEOUT_MS);
 
 		child.on("error", (err: Error) => {
-			clearTimeout(timeout);
+			activeWindow.clearTimeout(timeout);
 			notice.hide();
 			reject(new Error("SDK installation failed: " + err.message));
 		});
 
 		child.on("close", (code: number) => {
-			clearTimeout(timeout);
+			activeWindow.clearTimeout(timeout);
 			notice.hide();
 
 			if (code !== 0) {

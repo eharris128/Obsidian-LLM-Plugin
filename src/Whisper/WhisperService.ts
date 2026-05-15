@@ -211,7 +211,7 @@ export class WhisperService {
 				`Whisper server not reachable. Is whisper-server.py running? (${err?.message ?? err})`,
 			);
 		} finally {
-			clearTimeout(timeout);
+			activeWindow.clearTimeout(timeout);
 		}
 
 		if (!response.ok) {

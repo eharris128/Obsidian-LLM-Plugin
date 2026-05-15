@@ -435,7 +435,7 @@ export default class LLMPlugin extends Plugin {
 
 				const path = file.path;
 				const existing = this.ragDebounceTimers.get(path);
-				if (existing) clearTimeout(existing);
+				if (existing) activeWindow.clearTimeout(existing);
 
 				const timer = activeWindow.setTimeout(async () => {
 					this.ragDebounceTimers.delete(path);
@@ -463,7 +463,7 @@ export default class LLMPlugin extends Plugin {
 				// Cancel any pending reindex for this file
 				const timer = this.ragDebounceTimers.get(file.path);
 				if (timer) {
-					clearTimeout(timer);
+					activeWindow.clearTimeout(timer);
 					this.ragDebounceTimers.delete(file.path);
 				}
 

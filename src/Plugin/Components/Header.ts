@@ -193,7 +193,7 @@ export class Header {
 						chatContainer.resetMessages();
 						setHistoryIndex(this.plugin, this.viewType);
 						this.plugin.settings.currentIndex = -1;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 			});
 
@@ -268,7 +268,7 @@ export class Header {
 									this.plugin.settings.fabSettings.historyIndex =
 										DEFAULT_SETTINGS.fabSettings.historyIndex;
 									this.plugin.settings.currentIndex = -1;
-									this.plugin.saveSettings();
+									void this.plugin.saveSettings();
 								}
 							}
 							this.setTitle("");
@@ -441,7 +441,7 @@ export class Header {
 			chatContainer.resetMessages();
 			setHistoryIndex(this.plugin, this.viewType);
 			this.plugin.settings.currentIndex = -1;
-			this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 		});
 
 		this.chatHistoryButton.buttonEl.addClass("clickable-icon", "chat-history");

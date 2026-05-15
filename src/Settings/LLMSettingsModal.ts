@@ -350,7 +350,7 @@ export class LLMSettingsModal extends Modal {
 								activeAssistantId: null,
 							};
 						}
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 						this.plugin.syncAllContainersAgentMode(true);
 						return;
 					} else if (change.startsWith("assistant:")) {
@@ -390,7 +390,7 @@ export class LLMSettingsModal extends Modal {
 						changeDefaultModel(change, this.plugin);
 						this.plugin.syncAllContainersAgentMode(false);
 					}
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 					// Sync all view dropdowns to reflect the new default
 					this.plugin.syncAllModelDropdowns();
 				});
@@ -551,7 +551,7 @@ export class LLMSettingsModal extends Modal {
 				text.onChange((value) => {
 					if (value.trim().length) {
 						(this.plugin.settings[config.key] as string) = value;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					}
 				});
 			})
@@ -579,7 +579,7 @@ export class LLMSettingsModal extends Modal {
 				text.setValue(this.plugin.settings.claudeCodeOAuthToken);
 				text.onChange((value) => {
 					this.plugin.settings.claudeCodeOAuthToken = value;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -593,7 +593,7 @@ export class LLMSettingsModal extends Modal {
 				button.setButtonText("+ Add Linear workspace");
 				button.onClick(() => {
 					this.plugin.settings.linearWorkspaces.push({ name: "", apiKey: "" });
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 					this.renderWorkspaceList(workspaceListEl);
 				});
 			});
@@ -637,7 +637,7 @@ export class LLMSettingsModal extends Modal {
 				text.setValue(this.plugin.settings.ollamaHost);
 				text.onChange((value) => {
 					this.plugin.settings.ollamaHost = value;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -693,7 +693,7 @@ export class LLMSettingsModal extends Modal {
 				text.setValue(this.plugin.settings.lmStudioHost);
 				text.onChange((value) => {
 					this.plugin.settings.lmStudioHost = value;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -2079,7 +2079,7 @@ export class LLMSettingsModal extends Modal {
 					text.setValue(ws.name);
 					text.onChange((value) => {
 						this.plugin.settings.linearWorkspaces[index].name = value;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				})
 				.addText((text) => {
@@ -2088,7 +2088,7 @@ export class LLMSettingsModal extends Modal {
 					text.setValue(ws.apiKey);
 					text.onChange((value) => {
 						this.plugin.settings.linearWorkspaces[index].apiKey = value;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				})
 				.addButton((button) => {
@@ -2096,7 +2096,7 @@ export class LLMSettingsModal extends Modal {
 					button.setTooltip("Remove workspace");
 					button.onClick(() => {
 						this.plugin.settings.linearWorkspaces.splice(index, 1);
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 						this.renderWorkspaceList(containerEl);
 					});
 				});

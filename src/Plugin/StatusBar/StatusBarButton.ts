@@ -158,7 +158,7 @@ export class StatusBarButton {
 				if (this.popoverEl) {
 					this.plugin.settings.fabViewHeight =
 						this.popoverEl.offsetHeight;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				}
 			};
 
@@ -202,7 +202,7 @@ export class StatusBarButton {
 			);
 			setView(this.plugin, "floating-action-button");
 			this.plugin.settings.currentIndex = historyIndex;
-			this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 
 			this.popoverEl.style.display = "flex";
 
@@ -223,7 +223,7 @@ export class StatusBarButton {
 				if (this.popoverEl.offsetHeight > safeMax) {
 					this.popoverEl.style.height = `${safeMax}px`;
 					this.plugin.settings.fabViewHeight = safeMax;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				}
 				this.repositionPopover();
 			});
@@ -260,7 +260,7 @@ export class StatusBarButton {
 			this.plugin.settings[settingType].modelEndpoint = m.endpoint;
 			this.plugin.settings[settingType].endpointURL = m.url;
 		}
-		this.plugin.saveSettings();
+		void this.plugin.saveSettings();
 
 		// Show the popover if it's currently hidden
 		if (this.popoverEl?.style.display === "none") {
@@ -277,7 +277,7 @@ export class StatusBarButton {
 				if (this.popoverEl.offsetHeight > safeMax) {
 					this.popoverEl.style.height = `${safeMax}px`;
 					this.plugin.settings.fabViewHeight = safeMax;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				}
 				this.repositionPopover();
 			});
@@ -323,7 +323,7 @@ export class StatusBarButton {
 				if (this.popoverEl.offsetHeight > safeMax) {
 					this.popoverEl.style.height = `${safeMax}px`;
 					this.plugin.settings.fabViewHeight = safeMax;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				}
 				this.repositionPopover();
 			});
@@ -361,7 +361,7 @@ export class StatusBarButton {
 				// Restore (or clear) the active project based on file location / frontmatter
 				this.chatContainer!.restoreProjectFromChat(filePath, meta.project);
 
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 
 				this.header!.setHeader(this.plugin.settings[settingType].modelName);
 				this.header!.resetHistoryButton();

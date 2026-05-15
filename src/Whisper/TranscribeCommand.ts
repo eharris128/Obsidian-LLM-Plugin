@@ -62,7 +62,7 @@ export async function transcribeAudioFile(plugin: LLMPlugin): Promise<void> {
 
 		// Persist the last-used directory
 		plugin.settings.whisperSettings.lastPickerDirectory = path.dirname(filePath);
-		plugin.saveSettings();
+		await plugin.saveSettings();
 
 		const filename = path.basename(filePath, path.extname(filePath));
 

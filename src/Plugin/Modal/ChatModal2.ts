@@ -22,7 +22,7 @@ export class ChatModal2 extends Modal {
 		setView(this.plugin, "modal");
 		setHistoryIndex(this.plugin, "modal");
 		this.plugin.settings.currentIndex = -1;
-		this.plugin.saveSettings();
+		void this.plugin.saveSettings();
 		this.modalEl
 			.getElementsByClassName("modal-close-button")[0]
 			.setAttr("style", "display: none");

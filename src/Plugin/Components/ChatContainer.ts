@@ -390,7 +390,7 @@ export class ChatContainer extends Component {
 			this.messageStore.setMessages(messages);
 		}
 		this.removeLastMessageAndHistoryMessage();
-		this.handleGenerate();
+		await this.handleGenerate();
 	}
 
 	async handleGenerate(): Promise<boolean> {
@@ -1861,7 +1861,7 @@ export class ChatContainer extends Component {
 		}
 		const length = this.plugin.settings.promptHistory.length;
 		setHistoryIndex(this.plugin, this.viewType, length);
-		this.plugin.saveSettings();
+		void this.plugin.saveSettings();
 		this.prompt = "";
 	}
 
@@ -1907,7 +1907,7 @@ export class ChatContainer extends Component {
 				...this.plugin.settings.projectSettings,
 				activeProjectId: resolvedId,
 			};
-			this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 		}
 
 		this.syncChips();
@@ -1979,7 +1979,7 @@ export class ChatContainer extends Component {
 			...this.plugin.settings.projectSettings,
 			activeProjectId: projectId,
 		};
-		this.plugin.saveSettings();
+		await this.plugin.saveSettings();
 		this.syncChips();
 	}
 
@@ -2260,7 +2260,7 @@ export class ChatContainer extends Component {
 					contextSettings.selectedFiles = contextSettings.selectedFiles.filter(
 						(f) => f !== filePath
 					);
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 					this.syncChips();
 				});
 			}
@@ -2695,7 +2695,7 @@ export class ChatContainer extends Component {
 				viewSettings.modelType = models[name].type;
 				viewSettings.endpointURL = models[name].url;
 				viewSettings.modelEndpoint = models[name].endpoint;
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 			}
 		} else if (initAssistantId) {
 			modelDropdown.selectEl.value = `assistant:${initAssistantId}`;
@@ -2732,7 +2732,7 @@ export class ChatContainer extends Component {
 					viewSettings.modelEndpoint = models[name].endpoint;
 					syncVaultSearchVisibility?.(models[name].type);
 				}
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 				// Start a fresh conversation in agent mode
 				header.setTitle("");
 				header.showTitle();
@@ -2740,7 +2740,7 @@ export class ChatContainer extends Component {
 				this.resetMessages();
 				setHistoryIndex(this.plugin, this.viewType);
 				this.plugin.settings.currentIndex = -1;
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 			} else if (change.startsWith("assistant:")) {
 				// ── Assistant selected ────────────────────────────────────────
 				this.isObsidianAgent = false;
@@ -2764,7 +2764,7 @@ export class ChatContainer extends Component {
 					syncVaultSearchVisibility?.(models[preferredName].type);
 				}
 
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 				// Start a fresh conversation under the new assistant
 				header.setTitle("");
 				header.showTitle();
@@ -2772,7 +2772,7 @@ export class ChatContainer extends Component {
 				this.resetMessages();
 				setHistoryIndex(this.plugin, this.viewType);
 				this.plugin.settings.currentIndex = -1;
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 			} else {
 				// ── Plain model selected — clear active assistant + agent mode ─
 				this.isObsidianAgent = false;
@@ -2790,7 +2790,7 @@ export class ChatContainer extends Component {
 				viewSettings.endpointURL = models[modelName].url;
 				viewSettings.modelEndpoint = models[modelName].endpoint;
 				syncVaultSearchVisibility?.(models[modelName].type);
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 				header.setHeader(modelName);
 			}
 			this.resizeModelDropdown();
@@ -2825,7 +2825,7 @@ export class ChatContainer extends Component {
 							contextSettings.selectedFiles,
 							(files: string[]) => {
 								contextSettings.selectedFiles = files;
-								this.plugin.saveSettings();
+								void this.plugin.saveSettings();
 								this.syncChips();
 							}
 						).open();
@@ -3105,19 +3105,19 @@ export class ChatContainer extends Component {
 
 			if (event.code === "Enter") {
 				event.preventDefault();
-				this.handleGenerateClick(header, sendButton);
+				void this.handleGenerateClick(header, sendButton);
 				clearPromptField();
 			}
 		});
 		sendButton.onClick(() => {
-			this.handleGenerateClick(header, sendButton);
+			void this.handleGenerateClick(header, sendButton);
 			clearPromptField();
 		});
 
 		// Expose a send trigger so voice auto-send can fire without holding references
 		// to header/sendButton (which are local to this closure).
 		this._triggerSend = () => {
-			this.handleGenerateClick(header, sendButton);
+			void this.handleGenerateClick(header, sendButton);
 			clearPromptField();
 		};
 
@@ -3161,7 +3161,7 @@ export class ChatContainer extends Component {
 					...this.plugin.settings.projectSettings,
 					activeProjectId: null,
 				};
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 			}
 		}
 
@@ -3179,7 +3179,7 @@ export class ChatContainer extends Component {
 			// will find the same registry store and stay in sync.
 			if (!historyItem.id) {
 				historyItem.id = crypto.randomUUID();
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 			}
 
 			// Get or create the store for this conversation in the registry.
@@ -3262,7 +3262,7 @@ export class ChatContainer extends Component {
 
 		refreshButton.onClick(async () => {
 			new Notice("Regenerating response...");
-			this.regenerateOutput();
+			await this.regenerateOutput();
 		});
 	}
 
@@ -3546,7 +3546,7 @@ export class ChatContainer extends Component {
 			refreshBtn.buttonEl.addClass("clickable-icon", "llm-refresh-output");
 			refreshBtn.onClick(async () => {
 				new Notice("Regenerating response...");
-				this.regenerateOutput();
+				await this.regenerateOutput();
 			});
 		}
 
@@ -4244,7 +4244,7 @@ export class ChatContainer extends Component {
 				...this.plugin.settings.projectSettings,
 				activeProjectId: null,
 			};
-			this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 		}
 
 		this.syncChips();

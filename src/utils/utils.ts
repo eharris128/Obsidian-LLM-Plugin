@@ -575,7 +575,7 @@ export function setHistoryFilePath(
 		| "widgetSettings"
 		| "fabSettings";
 	plugin.settings[settingType].historyFilePath = filePath;
-	plugin.saveSettings();
+	void plugin.saveSettings();
 }
 
 export function changeDefaultModel(model: string, plugin: LLMPlugin) {
@@ -603,7 +603,7 @@ export function changeDefaultModel(model: string, plugin: LLMPlugin) {
 	plugin.settings.fabSettings.endpointURL = models[modelName].url;
 	plugin.settings.fabSettings.modelEndpoint = models[modelName].endpoint;
 
-	plugin.saveSettings();
+	void plugin.saveSettings();
 }
 
 export function setHistoryIndex(
@@ -622,16 +622,16 @@ export function setHistoryIndex(
 		| "fabSettings";
 	if (!length) {
 		plugin.settings[settingType].historyIndex = -1;
-		plugin.saveSettings();
+		void plugin.saveSettings();
 		return;
 	}
 	plugin.settings[settingType].historyIndex = length - 1;
-	plugin.saveSettings();
+	void plugin.saveSettings();
 }
 
 export function setView(plugin: LLMPlugin, viewType: ViewType) {
 	plugin.settings.currentView = viewType
-	plugin.saveSettings();
+	void plugin.saveSettings();
 }
 
 function moveCursorToEndOfFile(editor: Editor) {

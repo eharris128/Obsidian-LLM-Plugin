@@ -53,7 +53,7 @@ export class WidgetView extends ItemView {
 
 		this.plugin.settings[settingType].historyIndex = index;
 		this.plugin.settings.currentIndex = index;
-		this.plugin.saveSettings();
+		void this.plugin.saveSettings();
 
 		// Show chat, hide history/settings panels
 		if (this.chatContainerDiv) this.chatContainerDiv.show();
@@ -136,7 +136,7 @@ export class WidgetView extends ItemView {
 			);
 			setView(this.plugin, "widget");
 			this.plugin.settings.currentIndex = historyIndex;
-			this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 		});
 		container.empty();
 		this.header = new Header(this.plugin, "widget");

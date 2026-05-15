@@ -11,7 +11,7 @@ export class History {
 			let history = this.plugin.settings.promptHistory;
 			history.push(message_context);
 			this.plugin.settings.promptHistory = history;
-			this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 			return true;
 		} catch {
 			return false;
@@ -21,13 +21,13 @@ export class History {
 	update(index: number, messages: Message[]) {
 		if (this.plugin.settings.chatHistoryEnabled) return;
 		this.plugin.settings.promptHistory[index].messages = messages;
-		this.plugin.saveSettings();
+		void this.plugin.saveSettings();
 	}
 
 	reset() {
 		if (this.plugin.settings.chatHistoryEnabled) return;
 		this.plugin.settings.promptHistory = [];
-		this.plugin.saveSettings();
+		void this.plugin.saveSettings();
 	}
 
 	//take in an index from the selected chat history
@@ -37,6 +37,6 @@ export class History {
 		const historyItem = this.plugin.settings.promptHistory[index];
 		historyItem.messages = messages;
 		this.plugin.settings.promptHistory[index] = historyItem;
-		this.plugin.saveSettings();
+		void this.plugin.saveSettings();
 	}
 }

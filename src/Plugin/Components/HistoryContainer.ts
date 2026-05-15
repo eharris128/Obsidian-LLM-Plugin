@@ -144,7 +144,7 @@ export class HistoryContainer {
 				models[modelName].endpoint;
 			this.plugin.settings[settingType].endpointURL =
 				models[modelName].url;
-			this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 			Header.setHeader(modelName);
 			Header.resetHistoryButton();
 			// Sync the FAB header title with the loaded conversation's first message.
@@ -209,7 +209,7 @@ export class HistoryContainer {
 			item.addEventListener("click", () => {
 				this.plugin.settings[settingType].historyIndex = index;
 				this.historyIndex = index;
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 			});
 
 			item.addEventListener("mouseenter", () => {
@@ -247,7 +247,7 @@ export class HistoryContainer {
 						(item, idx) => idx !== index
 					);
 					this.plugin.settings.promptHistory = updatedHistory;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 					this.generateHistoryContainer(
 						parentElement,
 						this.plugin.settings.promptHistory,
@@ -260,7 +260,7 @@ export class HistoryContainer {
 					Header.setHeader(this.modelName);
 					this.plugin.settings[settingType].historyIndex =
 						DEFAULT_SETTINGS[settingType].historyIndex;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				}).open();
 			});
 
@@ -279,7 +279,7 @@ export class HistoryContainer {
 				if (item.textContent) {
 					this.plugin.settings.promptHistory[index].prompt =
 						item.textContent;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				} else {
 					new Notice("Prompt length must be greater than 0");
 					return;

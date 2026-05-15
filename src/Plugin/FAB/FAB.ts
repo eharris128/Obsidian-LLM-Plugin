@@ -26,7 +26,7 @@ export class FAB {
 			);
 			setView(this.plugin, "floating-action-button");
 			this.plugin.settings.currentIndex = historyIndex;
-			this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 		});
 		fabContainer.setAttribute("class", `floating-action-button`);
 		fabContainer.setAttribute("id", "_floating-action-button");
@@ -126,7 +126,7 @@ export class FAB {
 				resizeHandle.removeEventListener("pointerup", onPointerUp);
 				// Persist the new height
 				this.plugin.settings.fabViewHeight = viewArea.offsetHeight;
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 			};
 
 			resizeHandle.addEventListener("pointermove", onPointerMove);
@@ -174,7 +174,7 @@ export class FAB {
 						if (viewArea.offsetHeight > safeMax) {
 							viewArea.style.height = `${safeMax}px`;
 							this.plugin.settings.fabViewHeight = safeMax;
-							this.plugin.saveSettings();
+							void this.plugin.saveSettings();
 						}
 					});
 				} else {

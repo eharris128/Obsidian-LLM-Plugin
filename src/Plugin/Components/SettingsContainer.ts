@@ -63,7 +63,7 @@ export class SettingsContainer {
 				text.onChange((change) => {
 					viewSettings.imageSettings.numberOfImages =
 						parseInt(change);
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -80,7 +80,7 @@ export class SettingsContainer {
 					viewSettings.imageSettings.response_format = change as
 						| "url"
 						| "b64_json";
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -96,7 +96,7 @@ export class SettingsContainer {
 				});
 				dropdown.onChange((change: ImageSize) => {
 					viewSettings.imageSettings.size = change;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -112,7 +112,7 @@ export class SettingsContainer {
 				dropdown.addOption("high", "High");
 				dropdown.onChange((change: "low" | "medium" | "high") => {
 					viewSettings.imageSettings.quality = change;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 	}
@@ -133,7 +133,7 @@ export class SettingsContainer {
 				text.inputEl.type = "number";
 				text.onChange((change) => {
 					viewSettings.chatSettings.temperature = parseFloat(change);
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -145,7 +145,7 @@ export class SettingsContainer {
 				text.inputEl.type = "number";
 				text.onChange((change) => {
 					viewSettings.chatSettings.maxTokens = parseInt(change);
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -163,7 +163,7 @@ export class SettingsContainer {
 					text.onChange((change) => {
 						viewSettings.chatSettings.openAI!.frequencyPenalty =
 							parseFloat(change);
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 
@@ -175,7 +175,7 @@ export class SettingsContainer {
 				.addToggle((value) => {
 					value.onChange((change) => {
 						viewSettings.chatSettings.openAI!.logProbs = change;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 
@@ -192,7 +192,7 @@ export class SettingsContainer {
 					text.onChange((change) => {
 						viewSettings.chatSettings.openAI!.topLogProbs =
 							parseFloat(change);
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 
@@ -209,7 +209,7 @@ export class SettingsContainer {
 					text.onChange((change) => {
 						viewSettings.chatSettings.openAI!.presencePenalty =
 							parseFloat(change);
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 
@@ -225,7 +225,7 @@ export class SettingsContainer {
 					text.onChange((change) => {
 						viewSettings.chatSettings.openAI!.responseFormat =
 							change;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 
@@ -240,7 +240,7 @@ export class SettingsContainer {
 					text.onChange((change) => {
 						viewSettings.chatSettings.openAI!.topP =
 							parseFloat(change);
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 		}
@@ -303,7 +303,7 @@ export class SettingsContainer {
 					const value = parseInt(change);
 					if (!isNaN(value) && value >= 0 && value <= 100) {
 						contextSettings.maxContextTokensPercent = value;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					}
 				});
 			});

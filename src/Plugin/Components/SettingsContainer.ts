@@ -330,5 +330,5 @@ export class SettingsContainer {
 
 	}
 
-	generateModerationsSettings(parentContainer: HTMLElement) { }
+	generateModerationsSettings(_parentContainer: HTMLElement) { }
 }

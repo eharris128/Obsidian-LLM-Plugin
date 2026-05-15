@@ -308,6 +308,27 @@ export class SettingsContainer {
 				});
 			});
 
+		// Show model label
+		new Setting(parentContainer)
+			.setName("Show model name")
+			.setDesc(
+				"Display the model or assistant name below each response."
+			)
+			.addToggle((toggle) => {
+				toggle
+					.setValue(contextSettings.showModelLabel ?? true)
+					.onChange(async (value) => {
+						contextSettings.showModelLabel = value;
+						await this.plugin.saveSettings();
+						// Immediately show/hide already-rendered model panels in this view
+						const leafContent = parentContainer.closest(".workspace-leaf-content");
+						const scope = leafContent ?? parentContainer.getRootNode() as HTMLElement;
+						scope.querySelectorAll<HTMLElement>(".llm-model-panel").forEach((el) => {
+							el.style.display = value ? "" : "none";
+						});
+					});
+			});
+
 	}
 
 	generateModerationsSettings(parentContainer: HTMLElement) { }

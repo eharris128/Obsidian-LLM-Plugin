@@ -209,6 +209,8 @@ export class ChatContainer extends Component {
 	isObsidianAgent: boolean = false;
 	/** Assistant name invoked via invoke_assistant during the current turn — drives routing indicator. */
 	private agentRoutedAssistantThisTurn: string | null = null;
+	/** Token usage reported by the provider for the last generation — null when unavailable. */
+	private lastTokenUsage: { inputTokens: number; outputTokens: number } | null = null;
 
 	constructor(
 		private plugin: LLMPlugin,
@@ -402,14 +404,14 @@ export class ChatContainer extends Component {
 		} = getViewInfo(this.plugin, this.viewType);
 		let shouldHaveAPIKey = modelType !== GPT4All && modelType !== ollama && modelType !== lmStudio && modelType !== mistral && modelEndpoint !== claudeCodeEndpoint;
 		const messagesForParams = this.getMessages();
-		// TODO - fix this logic to actually do an API key check against the current view model.
 		if (shouldHaveAPIKey) {
-			const API_KEY =
-				this.plugin.settings.openAIAPIKey ||
-				this.plugin.settings.claudeAPIKey ||
-				this.plugin.settings.geminiAPIKey;
+			let API_KEY: string | undefined;
+			if (modelType === openAI) API_KEY = this.plugin.settings.openAIAPIKey;
+			else if (modelType === claude) API_KEY = this.plugin.settings.claudeAPIKey;
+			else if (modelType === gemini) API_KEY = this.plugin.settings.geminiAPIKey;
 			if (!API_KEY) {
-				throw new Error("No API key");
+				const providerLabel = modelType === openAI ? "OpenAI" : modelType === claude ? "Claude" : modelType === gemini ? "Gemini" : "provider";
+				throw new Error(`No ${providerLabel} API key configured. Add one in Settings.`);
 			}
 		}
 		if (modelEndpoint === claudeCodeEndpoint) {
@@ -507,6 +509,7 @@ export class ChatContainer extends Component {
 
 			try {
 				let firstChunk = true;
+				let geminiUsageMeta: any = null;
 				for await (const chunk of stream) {
 					const chunkText = chunk.text || "";
 					if (firstChunk && chunkText) {
@@ -518,6 +521,13 @@ export class ChatContainer extends Component {
 						this.streamingDiv.textContent = this.previewText;
 						this.historyMessages.scroll(0, 9999);
 					}
+					if ((chunk as any).usageMetadata) geminiUsageMeta = (chunk as any).usageMetadata;
+				}
+				if (geminiUsageMeta) {
+					this.lastTokenUsage = {
+						inputTokens: geminiUsageMeta.promptTokenCount ?? 0,
+						outputTokens: geminiUsageMeta.candidatesTokenCount ?? 0,
+					};
 				}
 			} catch (err) {
 				console.error(err);
@@ -564,7 +574,13 @@ export class ChatContainer extends Component {
 			// Without this await, execution falls through immediately while text
 			// events are still firing, so previewText is "" when
 			// MarkdownRenderer.render and messageStore.addMessage are called.
-			await stream.finalMessage();
+			const finalClaudeMsg = await stream.finalMessage();
+			if (finalClaudeMsg?.usage) {
+				this.lastTokenUsage = {
+					inputTokens: finalClaudeMsg.usage.input_tokens,
+					outputTokens: finalClaudeMsg.usage.output_tokens,
+				};
+			}
 
 			this.streamingDiv.empty();
 			await this.renderMarkdown(this.previewText, this.streamingDiv);
@@ -727,10 +743,18 @@ export class ChatContainer extends Component {
 				modelEndpoint
 			);
 			this.setDiv(true);
+			let openAIUsage: { prompt_tokens: number; completion_tokens: number } | null = null;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
 				this.previewText += chunk.choices[0]?.delta?.content || "";
 				this.streamingDiv.textContent = this.previewText;
 				this.historyMessages.scroll(0, 9999);
+				if ((chunk as any).usage) openAIUsage = (chunk as any).usage;
+			}
+			if (openAIUsage) {
+				this.lastTokenUsage = {
+					inputTokens: openAIUsage.prompt_tokens,
+					outputTokens: openAIUsage.completion_tokens,
+				};
 			}
 			this.streamingDiv.empty();
 			await this.renderMarkdown(this.previewText, this.streamingDiv);
@@ -1223,16 +1247,29 @@ export class ChatContainer extends Component {
 				}
 				// Show model/assistant attribution badge below the response
 				{
-					const liveLabel = this.allModelsByTurn.get(preTurnAssistantCount);
-					if (liveLabel) {
-						const contentWrap = this.loadingDivContainer.querySelector<HTMLElement>(".llm-flex-column");
-						if (contentWrap) this.appendModelPanel(contentWrap, liveLabel);
+					const settingType = getSettingType(this.viewType);
+					const showModelLabel = this.plugin.settings[settingType].contextSettings.showModelLabel ?? true;
+					if (showModelLabel) {
+						const liveLabel = this.allModelsByTurn.get(preTurnAssistantCount);
+						if (liveLabel) {
+							const contentWrap = this.loadingDivContainer.querySelector<HTMLElement>(".llm-flex-column");
+							if (contentWrap) this.appendModelPanel(contentWrap, liveLabel);
+						}
 					}
 				}
 				// Show agent routing indicator when invoke_assistant was called this turn
 				if (this.agentRoutedAssistantThisTurn) {
 					this.appendAgentRoutingIndicator(this.loadingDivContainer, this.agentRoutedAssistantThisTurn);
 					this.agentRoutedAssistantThisTurn = null;
+				}
+				// Show token usage when the provider reported it
+				if (this.lastTokenUsage) {
+					this.appendTokenUsage(
+						this.loadingDivContainer,
+						this.lastTokenUsage.inputTokens,
+						this.lastTokenUsage.outputTokens
+					);
+					this.lastTokenUsage = null;
 				}
 				// Clear context and active skill after generation
 				this.currentVaultContext = null;
@@ -1676,6 +1713,7 @@ export class ChatContainer extends Component {
 			disabledTools,
 			maxToolCalls,
 			agentSetup,
+			this.plugin.settings.chatHistoryEnabled ? this.plugin.chatHistory : undefined,
 		);
 
 		const callbacks: AgentCallbacks = {
@@ -2645,6 +2683,20 @@ export class ChatContainer extends Component {
 		const initAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
 		if (this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled) {
 			modelDropdown.selectEl.value = "agent:obsidian";
+			// Apply the agent's default model on init if one is configured and not
+			// already active. This covers FAB/StatusBar popover creation where
+			// isObsidianAgent is set before generateChatContainer runs, so the
+			// onChange("agent:obsidian") branch never fires.
+			const agentDefaultModel = this.plugin.settings.obsidianAgentSettings?.defaultModel;
+			if (agentDefaultModel && modelNames[agentDefaultModel] && viewSettings.model !== agentDefaultModel) {
+				const name = modelNames[agentDefaultModel];
+				viewSettings.model = agentDefaultModel;
+				viewSettings.modelName = name;
+				viewSettings.modelType = models[name].type;
+				viewSettings.endpointURL = models[name].url;
+				viewSettings.modelEndpoint = models[name].endpoint;
+				this.plugin.saveSettings();
+			}
 		} else if (initAssistantId) {
 			modelDropdown.selectEl.value = `assistant:${initAssistantId}`;
 		} else {
@@ -3165,7 +3217,9 @@ export class ChatContainer extends Component {
 		const parent = this.historyMessages.createDiv();
 		parent.addClass("llm-flex");
 		const assistant = parent.createEl("div", { cls: "llm-assistant-logo" });
-		assistant.appendChild(assistantLogo());
+		if (this.plugin.settings.showAssistantLogo) {
+			assistant.appendChild(assistantLogo());
+		}
 
 		this.loadingDivContainer = parent.createDiv();
 		this.streamingDiv = this.loadingDivContainer.createDiv();
@@ -3436,7 +3490,9 @@ export class ChatContainer extends Component {
 			// Logo sits to the left of the content as a sibling inside the container
 			imLikeMessageContainer.addClass("llm-flex");
 			const logoEl = imLikeMessageContainer.createEl("div", { cls: "llm-assistant-logo" });
-			logoEl.appendChild(assistantLogo());
+			if (this.plugin.settings.showAssistantLogo) {
+				logoEl.appendChild(assistantLogo());
+			}
 
 			const contentWrap = imLikeMessageContainer.createDiv();
 			contentWrap.addClass("llm-flex-column");
@@ -3458,7 +3514,9 @@ export class ChatContainer extends Component {
 			await this.renderMarkdown(content, imLikeMessage);
 
 			// Model/assistant attribution badge — shown below message content
-			if (modelLabel) {
+			const _settingType = getSettingType(this.viewType);
+			const _showModelLabel = this.plugin.settings[_settingType].contextSettings.showModelLabel ?? true;
+			if (modelLabel && _showModelLabel) {
 				this.appendModelPanel(contentWrap, modelLabel);
 			}
 		} else {
@@ -3467,8 +3525,10 @@ export class ChatContainer extends Component {
 			await this.renderMarkdown(content, imLikeMessage);
 		}
 
-		// Actions bar — revealed on hover of messageWrapper via CSS
+		// Actions bar — revealed on hover of messageWrapper via CSS.
+		// Always visible (no hover required) for the last assistant message.
 		const actionsBar = messageWrapper.createDiv({ cls: "llm-message-actions" });
+		if (finalMessage && assistant) actionsBar.addClass("llm-actions-visible");
 
 		const copyBtn = new ButtonComponent(actionsBar);
 		copyBtn.setIcon("files");
@@ -3492,7 +3552,7 @@ export class ChatContainer extends Component {
 
 		// Obsidian Agent brand icon — shown at the end of the last assistant
 		// message when running in agent mode, mirroring how Claude shows its logo.
-		if (finalMessage && assistant && this.isObsidianAgent) {
+		if (finalMessage && assistant && this.isObsidianAgent && this.plugin.settings.showAgentBrandIcon) {
 			const brandEl = messageWrapper.createDiv({ cls: "llm-obsidian-agent-brand" });
 			const iconEl = brandEl.createSpan({ cls: "llm-obsidian-agent-brand-icon" });
 			setIcon(iconEl, "stone");
@@ -4010,6 +4070,14 @@ export class ChatContainer extends Component {
 		panel.createSpan({ cls: "llm-agent-routing-panel-label", text: `Routed to ${assistantName}` });
 	}
 
+	private appendTokenUsage(container: HTMLElement, inputTokens: number, outputTokens: number): void {
+		const panel = container.createDiv({ cls: "llm-token-usage" });
+		const iconEl = panel.createSpan({ cls: "llm-token-usage-icon" });
+		setIcon(iconEl, "zap");
+		const fmt = (n: number) => n.toLocaleString();
+		panel.createSpan({ text: `↑ ${fmt(inputTokens)}  ↓ ${fmt(outputTokens)} tokens` });
+	}
+
 	/**
 	 * Build a callModel wrapper for the active provider, used by MemoryService
 	 * to run the extraction prompt.
@@ -4146,6 +4214,7 @@ export class ChatContainer extends Component {
 		this.allToolCallsByTurn = new Map();
 		this.allSkillsByTurn = new Map();
 		this.allModelsByTurn = new Map();
+		this.lastTokenUsage = null;
 		this.displayNoChatView(this.historyMessages);
 
 		// Reset active file chip state, then re-evaluate from the current setting.

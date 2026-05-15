@@ -34,7 +34,7 @@ import { ChatModal2 } from "Plugin/Modal/ChatModal2";
 import { TAB_VIEW_TYPE, WidgetView } from "Plugin/Widget/Widget";
 import SettingsView from "Settings/SettingsView";
 import { getApiKeyValidity } from "utils/utils";
-import { models, modelNames, buildOllamaModels, buildLMStudioModels } from "utils/models";
+import { models, modelNames, buildOllamaModels, buildLMStudioModels, openAIModelIds } from "utils/models";
 import {
 	chat,
 	claudeSonnet46Model,
@@ -84,6 +84,8 @@ export interface LLMPluginSettings {
 	GPT4AllStreaming: boolean;
 	showFAB: boolean;
 	showRibbonIcon: boolean;
+	showAssistantLogo: boolean;
+	showAgentBrandIcon: boolean;
 	enableFileContext: boolean;
 	defaultModel: string;
 	defaultAgentMode: boolean;
@@ -144,6 +146,7 @@ const defaultSettings = {
 		includeSelection: true,
 		selectedFiles: [],
 		maxContextTokensPercent: 70, // 70% for context, 30% for response
+		showModelLabel: true, // Show model/assistant name below each response
 	},
 	agentSettings: {
 		permissionMode: "ask" as import("./Types/types").PermissionMode,
@@ -163,7 +166,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		...defaultSettings,
 	},
 	promptHistory: [],
-	chatHistoryEnabled: false,
+	chatHistoryEnabled: true,
 	chatHistoryMigrated: false,
 	chatHistoryFolder: "LLM Chats",
 	openAIAPIKey: "",
@@ -176,6 +179,8 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	//this setting determines whether or not fab is shown by default
 	showFAB: false,
 	showRibbonIcon: true,
+	showAssistantLogo: true,
+	showAgentBrandIcon: true,
 	enableFileContext: false,
 	defaultModel: "",
 	defaultAgentMode: false,
@@ -1026,28 +1031,18 @@ export default class LLMPlugin extends Plugin {
 
 		settingsObjects.forEach((settings) => {
 			const model = settings.model;
-			switch (model) {
-				case "claude-code":
-					// Claude Code uses OAuth token, not an API key — skip API validation
-					break;
-				case claudeSonnet46Model:
-				case claudeOpus46Model:
-				case claudeHaiku45Model:
-					activeClaudeModel = true;
-					break;
-				case gemini2FlashStableModel:
-				case gemini2FlashLiteModel:
-				case gemini25ProModel:
-				case gemini25FlashModel:
-				case gemini25FlashLiteModel:
-				case gemini3ProPreviewModel:
-				case geminiFlashLatestModel:
-				case geminiFlashLiteLatestModel:
-					activeGeminiModel = true;
-					break;
-				case openAIModel:
-					activeOpenAIModel = model === openAIModel;
-					break;
+			if (model === "claude-code") {
+				// Claude Code uses OAuth token, not an API key — skip API validation
+			} else if (model === claudeSonnet46Model || model === claudeOpus46Model || model === claudeHaiku45Model) {
+				activeClaudeModel = true;
+			} else if ([
+				gemini2FlashStableModel, gemini2FlashLiteModel, gemini25ProModel,
+				gemini25FlashModel, gemini25FlashLiteModel, gemini3ProPreviewModel,
+				geminiFlashLatestModel, geminiFlashLiteLatestModel,
+			].includes(model)) {
+				activeGeminiModel = true;
+			} else if (openAIModelIds.has(model)) {
+				activeOpenAIModel = true;
 			}
 		});
 
@@ -1104,19 +1099,19 @@ export default class LLMPlugin extends Plugin {
 		].includes(model);
 
 		const fabModelRequiresKey =
-			this.settings.fabSettings.model === openAIModel ||
+			openAIModelIds.has(this.settings.fabSettings.model) ||
 			isClaudeModel(this.settings.fabSettings.model) ||
 			this.settings.fabSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.fabSettings.model);
 
 		const widgetModelRequresKey =
-			this.settings.widgetSettings.model === openAIModel ||
+			openAIModelIds.has(this.settings.widgetSettings.model) ||
 			isClaudeModel(this.settings.widgetSettings.model) ||
 			this.settings.widgetSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.widgetSettings.model);
 
 		const modalModelRequresKey =
-			this.settings.modalSettings.model === openAIModel ||
+			openAIModelIds.has(this.settings.modalSettings.model) ||
 			isClaudeModel(this.settings.modalSettings.model) ||
 			this.settings.modalSettings.model === "claude-code" ||
 			isGeminiModel(this.settings.modalSettings.model);

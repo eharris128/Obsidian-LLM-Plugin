@@ -84,6 +84,23 @@ export class ObsidianAgent {
 			parts.push(`## Projects in the Vault\n\n${lines}`);
 		}
 
+		// ── Chat history ──────────────────────────────────────────────────────
+		if (this.plugin.settings.chatHistoryEnabled) {
+			const chatFolder = this.plugin.chatHistory.folder;
+			const projectsFolder = this.plugin.projectsFolder;
+			parts.push(
+				`## Chat History\n\n` +
+				`Saved conversations are stored as markdown files in the vault. ` +
+				`Use the \`get_chat_history\` tool to access them:\n\n` +
+				`- **Default chat folder**: \`${chatFolder}/\`\n` +
+				`- **Project chats**: \`${projectsFolder}/<project-id>/chats/\`\n\n` +
+				`Call \`get_chat_history\` with action \`list\` to browse recent chats ` +
+				`(filterable by project or agent flag), or action \`load\` with a file path ` +
+				`to read the full conversation. You can also use \`grep_vault\` to search ` +
+				`across all chat content by keyword.`
+			);
+		}
+
 		// ── User vault guidance ───────────────────────────────────────────────
 		if (settings.vaultGuidance?.trim()) {
 			parts.push(`## Vault Guidance\n\n${settings.vaultGuidance.trim()}`);

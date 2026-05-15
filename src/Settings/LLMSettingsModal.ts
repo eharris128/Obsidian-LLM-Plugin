@@ -515,6 +515,30 @@ export class LLMSettingsModal extends Modal {
 						}
 					});
 			});
+
+		new Setting(items)
+			.setName("Assistant logo")
+			.setDesc("Show the assistant logo icon next to each AI response.")
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.showAssistantLogo)
+					.onChange(async (value) => {
+						this.plugin.settings.showAssistantLogo = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(items)
+			.setName("Obsidian Agent brand icon")
+			.setDesc("Show the stone brand icon at the bottom of the last message when the Obsidian Agent is active.")
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.showAgentBrandIcon)
+					.onChange(async (value) => {
+						this.plugin.settings.showAgentBrandIcon = value;
+						await this.plugin.saveSettings();
+					});
+			});
 	}
 
 	private renderApiKeyField(items: HTMLElement, config: APIKeyConfig) {

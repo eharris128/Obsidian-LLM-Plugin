@@ -14,6 +14,7 @@ import { ChatParams, PermissionMode } from "Types/types";
 import { ObsidianToolRegistry } from "services/ObsidianToolRegistry";
 import { toAnthropicTools, toOpenAITools } from "services/ToolAdapters";
 import { VaultIndexer } from "RAG/VaultIndexer";
+import { ChatHistory } from "services/ChatHistory";
 
 /** Called by ChatContainer to render the approval card and await the user's choice. */
 export type ShowPermissionUI = (
@@ -55,8 +56,9 @@ export class AgentLoop {
 		maxToolCalls?: number,
 		/** Optional callback to configure the registry before the loop runs (e.g. register dynamic tools). */
 		extraSetup?: (registry: ObsidianToolRegistry) => void,
+		chatHistory?: ChatHistory,
 	) {
-		this.registry = new ObsidianToolRegistry(app, vaultIndexer ?? undefined);
+		this.registry = new ObsidianToolRegistry(app, vaultIndexer ?? undefined, chatHistory);
 		extraSetup?.(this.registry);
 		this.allowedTools = allowedTools ?? [];
 		this.disabledTools = disabledTools ?? [];

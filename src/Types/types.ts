@@ -6,6 +6,7 @@ export type ContextSettings = {
 	includeSelection: boolean;
 	selectedFiles: string[]; // Array of file paths
 	maxContextTokensPercent: number; // Percentage of maxTokens to use for context (0-100)
+	showModelLabel: boolean; // Whether to show the model/assistant name below each response
 };
 
 export type VaultContext = {

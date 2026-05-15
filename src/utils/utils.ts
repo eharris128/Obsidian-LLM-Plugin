@@ -425,6 +425,7 @@ export async function openAIMessage(
 				...(tokens ? { max_tokens: tokens } : {}),
 				temperature,
 				stream: true,
+				stream_options: { include_usage: true },
 			},
 			{ path: endpoint }
 		);
@@ -553,6 +554,7 @@ export function getViewInfo(
 			includeSelection: false,
 			selectedFiles: [],
 			maxContextTokensPercent: 0,
+			showModelLabel: true,
 		},
 		agentSettings: { permissionMode: "ask" },
 	};

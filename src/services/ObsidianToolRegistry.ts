@@ -1,6 +1,7 @@
 import { App, TFile } from "obsidian";
 import { RiskTier } from "Types/types";
 import { VaultIndexer } from "RAG/VaultIndexer";
+import { ChatHistory } from "services/ChatHistory";
 
 export interface NeutralToolDefinition {
 	name: string;
@@ -202,6 +203,40 @@ export const ALL_TOOL_DEFINITIONS: NeutralToolDefinition[] = [
 		},
 		risk: "safe",
 	},
+	{
+		name: "get_chat_history",
+		displayName: "Get chat history",
+		description: "Access saved LLM conversations. Use action 'list' to get recent chats with metadata (title, date, model, project), or action 'load' to read the full message contents of a specific chat by file path.",
+		parameters: {
+			type: "object",
+			properties: {
+				action: {
+					type: "string",
+					enum: ["list", "load"],
+					description: "'list' returns recent chats with metadata. 'load' reads the full conversation from a specific file path.",
+				},
+				path: {
+					type: "string",
+					description: "Required for 'load': the vault-relative file path of the chat to read (e.g. 'LLM Chats/my-chat.md').",
+				},
+				limit: {
+					type: "string",
+					description: "For 'list': maximum number of recent chats to return (1–50, default 20).",
+				},
+				filter_project: {
+					type: "string",
+					description: "For 'list': only return chats belonging to this project name.",
+				},
+				filter_agent: {
+					type: "string",
+					enum: ["true", "false"],
+					description: "For 'list': filter to agent chats ('true') or non-agent chats ('false'). Omit to return all.",
+				},
+			},
+			required: ["action"],
+		},
+		risk: "safe",
+	},
 ];
 
 export class ObsidianToolRegistry {
@@ -209,7 +244,7 @@ export class ObsidianToolRegistry {
 	/** Dynamic tools registered at runtime (e.g. invoke_assistant in agent mode). */
 	private dynamicTools: Map<string, { def: NeutralToolDefinition; executor: (input: any) => Promise<ToolResult> }> = new Map();
 
-	constructor(private app: App, private vaultIndexer?: VaultIndexer) {}
+	constructor(private app: App, private vaultIndexer?: VaultIndexer, private chatHistory?: ChatHistory) {}
 
 	/**
 	 * Register a tool that isn't in ALL_TOOL_DEFINITIONS.
@@ -441,6 +476,85 @@ export class ObsidianToolRegistry {
 
 					const header = `Found ${matches.length} match${matches.length === 1 ? "" : "es"} for "${pattern}":\n\n`;
 					return { success: true, result: header + matches.join("\n\n---\n\n") };
+				}
+
+				case "get_chat_history": {
+					if (!this.chatHistory) {
+						return { success: false, error: "Chat history is not available." };
+					}
+					const { action, path, limit, filter_project, filter_agent } = input as {
+						action: "list" | "load";
+						path?: string;
+						limit?: string;
+						filter_project?: string;
+						filter_agent?: string;
+					};
+
+					if (action === "load") {
+						if (!path) return { success: false, error: "action 'load' requires a 'path' parameter." };
+						const loaded = await this.chatHistory.load(path);
+						const { meta, messages } = loaded;
+						const lines: string[] = [
+							`# ${meta.title}`,
+							`- **File**: ${path}`,
+							`- **Created**: ${meta.created}`,
+							`- **Updated**: ${meta.updated}`,
+							`- **Model**: ${meta.model} (${meta.provider})`,
+							...(meta.project ? [`- **Project**: ${meta.project}`] : []),
+							...(meta.agent ? [`- **Agent chat**: yes`] : []),
+							"",
+							"## Conversation",
+							"",
+						];
+						for (const msg of messages) {
+							if (msg.role === "system") continue;
+							lines.push(`### ${msg.role === "user" ? "User" : "Assistant"}`);
+							lines.push(msg.content);
+							lines.push("");
+						}
+						return { success: true, result: lines.join("\n") };
+					}
+
+					if (action === "list") {
+						const maxCount = Math.min(50, Math.max(1, parseInt(limit ?? "20", 10) || 20));
+						let files = await this.chatHistory.list();
+
+						// Apply optional filters using vault file metadata where possible
+						if (filter_project || filter_agent !== undefined) {
+							const filtered: typeof files = [];
+							for (const f of files) {
+								if (filtered.length >= maxCount * 3) break; // read ahead enough to fill quota after filters
+								try {
+									const content = await this.app.vault.read(f);
+									const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+									if (!fmMatch) continue;
+									const { parseYaml } = await import("obsidian");
+									const meta = parseYaml(fmMatch[1]) as Record<string, any>;
+									if (filter_project && meta.project !== filter_project) continue;
+									if (filter_agent === "true" && !meta.agent) continue;
+									if (filter_agent === "false" && meta.agent) continue;
+									filtered.push(f);
+								} catch { continue; }
+							}
+							files = filtered;
+						}
+
+						const slice = files.slice(0, maxCount);
+						if (slice.length === 0) {
+							return { success: true, result: "No chat history found matching the given filters." };
+						}
+
+						const lines: string[] = [`Found ${slice.length} chat${slice.length === 1 ? "" : "s"}:\n`];
+						for (const f of slice) {
+							// Use stat mtime for date without reading file content
+							const date = new Date(f.stat.mtime).toLocaleDateString();
+							lines.push(`- **${f.basename}** (${date}) — \`${f.path}\``);
+						}
+						lines.push("\nUse action 'load' with the file path to read a full conversation.");
+						return { success: true, result: lines.join("\n") };
+					}
+
+					return { success: false, error: `Unknown action: ${action}. Use 'list' or 'load'.` };
 				}
 
 				default:

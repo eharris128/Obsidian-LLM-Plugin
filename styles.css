@@ -2245,6 +2245,32 @@ details[open] .llm-tool-calls-chevron {
 	max-width: 220px;
 }
 
+/* ── Token usage indicator ──────────────────────────────────────────────────── */
+
+.llm-token-usage {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-top: var(--size-4-1);
+	margin-bottom: var(--size-4-2);
+	padding: 2px var(--size-4-2);
+	border-radius: var(--radius-s);
+	background: transparent;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	font-variant-numeric: tabular-nums;
+	user-select: none;
+}
+
+.llm-token-usage-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+	color: var(--text-faint);
+}
+
 /* ── Obsidian Agent brand icon (end of last agent message) ─────────────────── */
 
 .llm-obsidian-agent-brand {

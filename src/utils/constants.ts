@@ -24,7 +24,7 @@ export const gemini25FlashLiteModel = "gemini-2.5-flash-lite"
 export const gemini3ProPreviewModel = "gemini-3-pro-preview"
 export const geminiFlashLatestModel = "gemini-flash-latest"
 export const geminiFlashLiteLatestModel = "gemini-flash-lite-latest"
-export const openAIModel = "gpt-3.5-turbo"
+export const openAIModel = "gpt-4o"
 
 export const messages = "messages"
 export const assistant = "assistant"

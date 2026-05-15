@@ -54,7 +54,7 @@ Each view composes these shared components from `src/Plugin/Components/`:
 
 - **MessageStore** (`src/Plugin/Components/MessageStore.ts`) - Pub/sub pattern for in-memory message state; synchronizes all views
 - **Settings** (in `main.ts`) - Persisted configuration via Obsidian's `loadData`/`saveData`
-- **HistoryHandler** (`src/History/HistoryHandler.ts`) - Manages chat history (max 10 conversations)
+- **HistoryHandler** (`src/History/HistoryHandler.ts`) - Manages legacy in-settings chat history (unbounded; superseded by file-based `ChatHistory` when `chatHistoryEnabled: true`, which is now the default)
 - **AssistantHandler** (`src/Assistants/AssistantHandler.ts`) - OpenAI assistants state
 
 #### Scan-button context locking (`activeFileForChip`)
@@ -491,7 +491,16 @@ Settings UI lives in `LLMSettingsModal` under Features → Obsidian Agent.
 
 #### Dynamic tool registration
 
-`ObsidianToolRegistry.registerDynamicTool(def, executor)` adds tools at runtime without modifying `ALL_TOOL_DEFINITIONS`. `AgentLoop` accepts an optional `extraSetup?: (registry) => void` 8th constructor argument that's called after the registry is created.
+`ObsidianToolRegistry.registerDynamicTool(def, executor)` adds tools at runtime without modifying `ALL_TOOL_DEFINITIONS`. `AgentLoop` accepts an optional `extraSetup?: (registry) => void` 8th constructor argument that's called after the registry is created, and an optional `chatHistory?: ChatHistory` 9th argument that is forwarded to `ObsidianToolRegistry` for the `get_chat_history` tool.
+
+#### Chat history access (`get_chat_history` tool)
+
+The agent can read saved conversations via the `get_chat_history` static tool (defined in `ALL_TOOL_DEFINITIONS`). `ObsidianToolRegistry` accepts an optional `chatHistory?: ChatHistory` 3rd constructor param; `AgentLoop` accepts it as a 9th param and forwards it. `ChatContainer.runAgentMode` passes `this.plugin.chatHistory` when `chatHistoryEnabled` is true.
+
+- **action `list`**: calls `ChatHistory.list()`, returns filenames + mtimes, supports `limit`, `filter_project`, and `filter_agent` filters.
+- **action `load`**: calls `ChatHistory.load(path)`, returns full metadata + parsed message turns as readable markdown.
+
+`ObsidianAgent.buildSystemPrompt()` injects a `## Chat History` section (when `chatHistoryEnabled`) describing the default chat folder and project chat paths, so the agent knows where to look without guessing.
 
 #### History tagging
 
@@ -503,6 +512,7 @@ Agent conversations are saved to the same `ChatHistory` folder as regular chats 
 - `.llm-agent-routing-panel-icon` — icon element (uses `waypoints` Lucide icon, accent-coloured)
 - `.llm-agent-routing-panel-label` — "Routed to <Assistant Name>" text
 - `.llm-agent-guidance-textarea` — textarea in settings for vault guidance input
+- `.llm-token-usage` — token count indicator shown below each response when the provider reports usage (Claude, OpenAI, Gemini). Format: "↑ N ↓ N tokens" (input / output). Rendered by `appendTokenUsage(container, inputTokens, outputTokens)` in `ChatContainer`; cleared in `newChat()`.
 
 ### Key Files
 

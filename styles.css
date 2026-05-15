@@ -173,12 +173,6 @@
 
 
 /*MODAL VIEW*/
-.llm-modal-chat-history-container {
-}
-
-.llm-modal-assistants-container {
-}
-
 .llm-modal-settings-container {
 	padding-top: var(--size-4-4);
 }
@@ -189,13 +183,6 @@
 .llm-modal-assistants-container,
 .llm-modal-skills-container {
 	min-height: 50vh;
-}
-
-.llm-modal-chat-container,
-.llm-modal-chat-history-container,
-.llm-modal-settings-container,
-.llm-modal-assistants-container,
-.llm-modal-skills-container {
 	max-height: var(--modal-view-max-height);
 }
 

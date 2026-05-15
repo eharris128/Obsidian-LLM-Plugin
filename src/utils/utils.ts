@@ -22,7 +22,7 @@ import { ensureSDKInstalled } from "services/ClaudeAgentSDKInstaller";
 const events = require("events");
 const _origSetMaxListeners = events.setMaxListeners;
 if (_origSetMaxListeners) {
-	events.setMaxListeners = function (n: number, ...eventTargets: any[]) {
+	events.setMaxListeners = function (n: number, ...eventTargets: unknown[]) {
 		try {
 			return _origSetMaxListeners(n, ...eventTargets);
 		} catch {
@@ -50,8 +50,9 @@ async function retryWithBackoff<T>(
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
 		try {
 			return await fn();
-		} catch (error: any) {
-			const status = error?.status ?? error?.httpStatus ?? error?.code;
+		} catch (error: unknown) {
+			const e = error as { status?: number; httpStatus?: number; code?: number; headers?: { get?: (k: string) => string; [k: string]: unknown }; errorDetails?: Array<{ metadata?: { retry_delay?: string } }> };
+			const status = e?.status ?? e?.httpStatus ?? e?.code;
 			if (status === 429 && attempt < maxRetries) {
 				const delay = baseDelayMs * Math.pow(2, attempt);
 				const jitter = Math.random() * delay * 0.5;
@@ -60,14 +61,13 @@ async function retryWithBackoff<T>(
 			}
 			if (status === 429) {
 				const retryAfter =
-					error?.headers?.get?.("retry-after") ??
-					error?.headers?.["retry-after"] ??
-					error?.errorDetails?.[0]?.metadata?.retry_delay;
+					e?.headers?.get?.("retry-after") ??
+					e?.headers?.["retry-after"] ??
+					e?.errorDetails?.[0]?.metadata?.retry_delay;
 				const retryMsg = retryAfter
 					? `Rate limit exceeded — retry after ${retryAfter} seconds.`
 					: "Rate limit exceeded — please wait a moment and try again.";
-				const rateLimitError = new Error(retryMsg);
-				(rateLimitError as any).status = 429;
+				const rateLimitError: Error & { status: number } = Object.assign(new Error(retryMsg), { status: 429 });
 				throw rateLimitError;
 			}
 			throw error;
@@ -95,7 +95,7 @@ export function upperCaseFirst(input: string): string {
 }
 
 export async function messageGPT4AllServer(params: ChatParams, url: string) {
-	const body: Record<string, any> = {
+	const body: Record<string, unknown> = {
 		model: params.model,
 		messages: params.messages,
 		temperature: params.temperature,
@@ -116,7 +116,7 @@ export async function fetchOllamaModels(host: string): Promise<string[]> {
 		method: "GET",
 	} as RequestUrlParam;
 	const response = await requestUrl(request).then((res) => res.json);
-	return (response.models || []).map((m: any) => m.name as string);
+	return (response.models || []).map((m: { name: string }) => m.name);
 }
 
 /** Fetches the list of models currently loaded in LM Studio via its OpenAI-compatible /v1/models endpoint. */
@@ -126,7 +126,7 @@ export async function fetchLMStudioModels(host: string): Promise<string[]> {
 		method: "GET",
 	} as RequestUrlParam;
 	const response = await requestUrl(request).then((res) => res.json);
-	return (response.data || []).map((m: any) => m.id as string);
+	return (response.data || []).map((m: { id: string }) => m.id);
 }
 
 export async function ollamaMessage(params: ChatParams, host: string) {
@@ -332,7 +332,7 @@ export async function claudeCodeMessage(
 	const nodePath = resolveNodePath();
 
 	// Build MCP servers and allowedTools from workspace list
-	const mcpServers: Record<string, any> = {};
+	const mcpServers: Record<string, { type: "http"; url: string; headers: Record<string, string> }> = {};
 	const allowedTools: string[] = [];
 
 	for (const ws of linearWorkspaces) {
@@ -354,7 +354,7 @@ export async function claudeCodeMessage(
 		options: {
 			pathToClaudeCodeExecutable: cliPath,
 			...(sessionId ? { resume: sessionId } : {}),
-			spawnClaudeCodeProcess: (options: any) => {
+			spawnClaudeCodeProcess: (options: { command: string; args: string[]; cwd?: string; env?: Record<string, string | undefined> }) => {
 				const cmd =
 					options.command === "node" ? nodePath : options.command;
 				return spawn(cmd, options.args, {

@@ -103,7 +103,7 @@ export class ChatContainer extends Component {
 	// Stable bound reference so we can cleanly unsubscribe when switching stores.
 	private boundUpdateMessages: (messages: Message[]) => void;
 	contextBuilder: ContextBuilder;
-	currentVaultContext: any = null; // Store context for current generation
+	currentVaultContext: unknown = null; // Store context for current generation
 	pendingContextString: string | null = null; // Context string to inject into API call (not shown in UI)
 	claudeCodeSessionId: string | null = null;
 	useActiveFileContext: boolean = false;
@@ -446,8 +446,8 @@ export class ChatContainer extends Component {
 				let firstText = true;
 				for await (const message of stream) {
 					// Capture session ID from first message
-					if (!this.claudeCodeSessionId && (message as any).session_id) {
-						this.claudeCodeSessionId = (message as any).session_id;
+					if (!this.claudeCodeSessionId && (message as { session_id?: string }).session_id) {
+						this.claudeCodeSessionId = (message as { session_id?: string }).session_id ?? null;
 					}
 					if (message.type === "assistant") {
 						for (const block of message.message.content) {
@@ -509,7 +509,7 @@ export class ChatContainer extends Component {
 
 			try {
 				let firstChunk = true;
-				let geminiUsageMeta: any = null;
+				let geminiUsageMeta: { promptTokenCount?: number; candidatesTokenCount?: number } | null = null;
 				for await (const chunk of stream) {
 					const chunkText = chunk.text || "";
 					if (firstChunk && chunkText) {
@@ -521,7 +521,7 @@ export class ChatContainer extends Component {
 						this.streamingDiv.textContent = this.previewText;
 						this.historyMessages.scroll(0, 9999);
 					}
-					if ((chunk as any).usageMetadata) geminiUsageMeta = (chunk as any).usageMetadata;
+					if ((chunk as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }).usageMetadata) geminiUsageMeta = (chunk as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }).usageMetadata ?? null;
 				}
 				if (geminiUsageMeta) {
 					this.lastTokenUsage = {
@@ -748,7 +748,7 @@ export class ChatContainer extends Component {
 				this.previewText += chunk.choices[0]?.delta?.content || "";
 				this.streamingDiv.textContent = this.previewText;
 				this.historyMessages.scroll(0, 9999);
-				if ((chunk as any).usage) openAIUsage = (chunk as any).usage;
+				if ((chunk as { usage?: { prompt_tokens: number; completion_tokens: number } }).usage) openAIUsage = (chunk as { usage?: { prompt_tokens: number; completion_tokens: number } }).usage ?? null;
 			}
 			if (openAIUsage) {
 				this.lastTokenUsage = {

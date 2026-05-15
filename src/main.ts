@@ -1004,9 +1004,9 @@ export default class LLMPlugin extends Plugin {
 			}
 
 			// Migrate linearApiKey → linearWorkspaces
-			if ((dataJSON as any).linearApiKey && !dataJSON.linearWorkspaces) {
+			if (dataJSON.linearApiKey && !dataJSON.linearWorkspaces) {
 				this.settings.linearWorkspaces = [
-					{ name: "Linear", apiKey: (dataJSON as any).linearApiKey },
+					{ name: "Linear", apiKey: dataJSON.linearApiKey },
 				];
 				delete (this.settings as any).linearApiKey;
 				await this.saveSettings();

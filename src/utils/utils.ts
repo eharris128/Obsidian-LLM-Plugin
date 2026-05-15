@@ -242,7 +242,7 @@ export async function geminiMessage(
 	params: ChatParams,
 	Gemini_API_KEY: string
 ) {
-	const { model, topP, messages, tokens, temperature, systemContext } = params as ChatParams;
+	const { model, topP, messages, tokens, temperature, systemContext } = params;
 	const client = new GoogleGenAI({ apiKey: Gemini_API_KEY });
 
 	const contents = messages.map((message) => {
@@ -386,7 +386,7 @@ export async function claudeMessage(
 		dangerouslyAllowBrowser: true,
 	});
 
-	const { model, messages, tokens, temperature, systemContext } = params as ChatParams;
+	const { model, messages, tokens, temperature, systemContext } = params;
 
 	// Anthropic SDK Docs - https://github.com/anthropics/anthropic-sdk-typescript/blob/HEAD/helpers.md#messagestream-api
 	// Claude API requires max_tokens; default to 4096 when user hasn't set it
@@ -651,11 +651,11 @@ function moveCursorToEndOfFile(editor: Editor) {
 }
 
 export function appendMessage(editor: Editor, message: string) {
-	moveCursorToEndOfFile(editor!);
+	moveCursorToEndOfFile(editor);
 	const newLine = `${message}\n`;
 	editor.replaceRange(newLine, editor.getCursor());
 
-	moveCursorToEndOfFile(editor!);
+	moveCursorToEndOfFile(editor);
 }
 
 export function getSettingType(viewType: ViewType) {

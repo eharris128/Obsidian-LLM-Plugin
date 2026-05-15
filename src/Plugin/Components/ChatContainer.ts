@@ -1546,7 +1546,7 @@ export class ChatContainer extends Component {
 
 			for (const { scope, label, tag } of scopes) {
 				const row = optionsEl.createDiv({ cls: "llm-memory-scope-row" });
-				const cb = row.createEl("input", { attr: { type: "checkbox" } }) as HTMLInputElement;
+				const cb = row.createEl("input", { attr: { type: "checkbox" } });
 				cb.checked = true;
 				const lbl = row.createEl("label");
 				lbl.appendText(label);
@@ -1787,7 +1787,7 @@ export class ChatContainer extends Component {
 		}
 
 		const messageContext = {
-			...(params as ChatParams),
+			...params,
 			messages: this.getMessages(),
 			modelName,
 		} as ChatHistoryItem;
@@ -2231,8 +2231,8 @@ export class ChatContainer extends Component {
 		}
 
 		// Project chip — icon-only at rest, name revealed on hover
-		if (hasProject) {
-			this.buildProjectChip(this.chipContainer, activeProject!.name, () => {
+		if (hasProject && activeProject) {
+			this.buildProjectChip(this.chipContainer, activeProject.name, () => {
 				this.setActiveProject(null);
 			});
 		}
@@ -3829,7 +3829,7 @@ export class ChatContainer extends Component {
 		// before getUserMedia will trigger the system dialog. Without this the call
 		// silently fails or never shows the OS permission prompt.
 		try {
-			const electron = require("electron") as any;
+			const electron = require("electron");
 			const sp = electron?.remote?.systemPreferences ?? electron?.systemPreferences;
 			if (sp?.askForMediaAccess) {
 				const granted = await sp.askForMediaAccess("microphone");

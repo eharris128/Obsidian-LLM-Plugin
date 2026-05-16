@@ -373,6 +373,47 @@ export class Header {
 			if (chatContainer.getMessages().length > 0) {
 				this.buildAddToProjectMenu(menu, chatContainer);
 			}
+
+			menu.addSeparator();
+
+			menu.addItem((item) => {
+				item.setTitle("Delete chat")
+					.setIcon("trash")
+					.onClick(() => {
+						new ConfirmDeleteModal(this.plugin.app, () => {
+							if (this.plugin.settings.chatHistoryEnabled) {
+								const { historyFilePath } = getViewInfo(this.plugin, this.viewType);
+								if (historyFilePath) {
+									this.plugin.chatHistory
+										.delete(historyFilePath)
+										.catch((e) =>
+											console.error("[Header] Failed to delete chat file:", e)
+										);
+									setHistoryFilePath(this.plugin, this.viewType, null);
+								}
+							} else {
+								const { historyIndex } = getViewInfo(this.plugin, this.viewType);
+								if (historyIndex >= 0) {
+									this.plugin.settings.promptHistory =
+										this.plugin.settings.promptHistory.filter(
+											(_, idx) => idx !== historyIndex
+										);
+									setHistoryIndex(this.plugin, this.viewType);
+									this.plugin.settings.currentIndex = -1;
+									void this.plugin.saveSettings();
+								}
+							}
+							this.setTitle("");
+							this.showTitle();
+							chatContainerDiv.show();
+							settingsContainerDiv.hide();
+							chatHistoryContainerDiv.hide();
+							chatContainer.newChat();
+							chatContainer.resetMessages();
+						}).open();
+					});
+			});
+
 			menu.showAtMouseEvent(evt);
 		});
 

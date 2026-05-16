@@ -514,9 +514,74 @@ Agent conversations are saved to the same `ChatHistory` folder as regular chats 
 - `.llm-agent-guidance-textarea` — textarea in settings for vault guidance input
 - `.llm-token-usage` — token count indicator shown below each response when the provider reports usage (Claude, OpenAI, Gemini). Format: "↑ N ↓ N tokens" (input / output). Rendered by `appendTokenUsage(container, inputTokens, outputTokens)` in `ChatContainer`; cleared in `newChat()`.
 
+### Web Search (SearXNG)
+
+The plugin supports web search via a self-hosted [SearXNG](https://searxng.github.io/searxng/) instance. The feature is gated behind `searxngSettings.enabled` and exposes a `web_search` tool to any tool-capable model (Claude, GPT-4, Gemini, etc.).
+
+#### Architecture
+
+- **`src/WebSearch/SearxngService.ts`** — service class wrapping the SearXNG JSON API (`GET /search?q=<query>&format=json`). Key methods:
+  - `search(query, numResults?)` — calls SearXNG with `throw: false` so HTTP errors (429, 403, 5xx) are caught and converted to descriptive `SearxngHttpError` instances rather than opaque exceptions. Adds browser-like `User-Agent` / `Accept` headers to avoid bot-detection rate limits.
+  - `checkHealth()` — probes `/healthz`, falls back to a minimal search request. Returns `true` even on 429 (instance is up, just rate-limited).
+  - `SearxngService.formatResults(results)` — static formatter; renders results as `**N. [Title](URL)**` markdown hyperlinks so the model naturally reproduces clickable citations in its response.
+  - `SearxngHttpError` — typed error class with a `.status` field; 429 includes a human-readable explanation about underlying engine rate limits.
+
+#### Settings
+
+`LLMPluginSettings.searxngSettings: SearxngSettings` — deep-merged on load:
+- `enabled: boolean` — gates the entire feature; toggling calls `plugin.initSearxngService()`.
+- `host: string` — base URL of the SearXNG instance (default `http://localhost:8080`).
+- `maxResults: number` — maximum results returned per query (1–10, default 5).
+
+`LLMPlugin.searxngService: SearxngService | null` — null when disabled or host is blank. Rebuilt by `initSearxngService()` after any settings change.
+
+#### Tool integration
+
+`web_search` is defined in `ALL_TOOL_DEFINITIONS` (with `requiresWebSearch: true` so Settings → Tools shows a warning when SearXNG is not enabled). The executor in `ObsidianToolRegistry.executeTool()` calls `searxngService.search()` inside its own try/catch and returns the descriptive error message to the model on failure — never throws.
+
+`AgentLoop` accepts `searxngService?: SearxngService | null` as its 11th constructor argument and forwards it to `ObsidianToolRegistry` as the 4th constructor argument. `ChatContainer.runAgentMode` passes `this.plugin.searxngService`.
+
+#### Web sources panel
+
+After a `web_search` tool call, `ChatContainer` parses `**N. [Title](URL)**` links from the result string via regex and stores them in `pendingWebSources: { title, url }[]`. After generation, `appendWebSourcesPanel()` renders a collapsible `<details class="llm-web-sources">` panel below the response — matching the existing RAG sources panel pattern. Cleared in `newChat()` and on error.
+
+#### Settings UI
+
+"Web Search" group appears in Settings → Obsidian Agent (visible only when the agent is enabled) with:
+- Enable toggle (calls `initSearxngService()` on change and re-renders the tab)
+- Host text input + **Test connection** button (calls `checkHealth()`, shows a `Notice`)
+- Max results slider (1–10)
+
+Tools → Available Tools shows a `⚠ Requires Web Search (SearXNG)` note next to `web_search` when `searxngSettings.enabled` is false.
+
+#### Common setup issues
+
+The official SearXNG Docker Compose image (`searxng/searxng:latest` + Valkey sidecar) ships with two settings that must be changed in the **host-mounted** `settings.yml` (typically `~/Downloads/searxng-setup/searxng/settings.yml`):
+
+```yaml
+server:
+  limiter: false     # default true — causes 429 for non-browser clients
+
+search:
+  formats:
+    - html
+    - json           # must be added — default omits json, causing 403
+```
+
+After editing, `docker restart searxng`. The `limiter` key is patched by `sed -i '' 's/limiter: true/limiter: false/'`; the `json` format must be added manually under `formats:`.
+
+#### CSS classes
+
+- `.llm-web-sources` — outer `<details>` wrapper (border-top, margin)
+- `.llm-web-sources-summary` — clickable summary row with globe icon and `›` chevron
+- `.llm-web-sources-icon` — `<span>` holding the Lucide `globe` icon
+- `.llm-web-sources-list` — `<ul>` of result links
+- `.llm-web-source-link` — individual `<a>` link (accent colour, opens in new tab)
+
 ### Key Files
 
 - `src/Plugin/ObsidianAgent/ObsidianAgent.ts` - System prompt builder, `registerTools()`, `invoke_assistant` tool logic
+- `src/WebSearch/SearxngService.ts` - SearXNG API wrapper, `SearxngHttpError`, `formatResults()`
 - `src/Assistants/AssistantManager.ts` - Assistant discovery, parsing, hot-reload, and create/delete helpers
 - `src/Projects/ProjectManager.ts` - Project discovery, parsing, hot-reload, and create/delete helpers
 - `src/Memory/MemoryService.ts` - Memory extraction, deduplication, recall, and vault persistence

@@ -40,7 +40,7 @@ export class ChatModal2 extends Modal {
 		}
 		const chatContainer = this.chatContainer;
 		const historyContainer = new HistoryContainer(this.plugin, "modal");
-		const settingsContainer = new SettingsContainer(this.plugin, "modal");
+		const settingsContainer = new SettingsContainer(this.plugin, "modal", chatContainer);
 
 		const lineBreak = contentEl.createDiv();
 		const chatContainerDiv = contentEl.createDiv();

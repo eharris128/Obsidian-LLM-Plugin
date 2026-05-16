@@ -899,6 +899,7 @@ export class LLMSettingsModal extends Modal {
 		});
 
 		const ragEnabled = this.plugin.settings.ragSettings?.enabled ?? false;
+		const webSearchEnabled = this.plugin.settings.searxngSettings?.enabled ?? false;
 		const disabledTools = this.plugin.settings.toolSettings.disabledTools;
 
 		for (const tool of ALL_TOOL_DEFINITIONS) {
@@ -914,10 +915,13 @@ export class LLMSettingsModal extends Modal {
 			nameFragment.appendChild(document.createTextNode(" " + tool.displayName));
 			setting.nameEl.appendChild(nameFragment);
 
-			// Description: tool description + optional dependency note
+			// Description: tool description + optional dependency notes
 			let desc = tool.description;
 			if (tool.requiresRag && !ragEnabled) {
 				desc += " ⚠ Requires Vault Search to be enabled.";
+			}
+			if (tool.requiresWebSearch && !webSearchEnabled) {
+				desc += " ⚠ Requires Web Search (SearXNG) to be enabled in Obsidian Agent settings.";
 			}
 			setting.setDesc(desc);
 
@@ -1188,22 +1192,6 @@ export class LLMSettingsModal extends Modal {
 			});
 
 		const recallItems = this.addSettingGroup(el, "Recall");
-
-		new Setting(recallItems)
-			.setName("Always recall memories")
-			.setDesc(
-				"When enabled, memory recall is active by default in every conversation — " +
-				"no need to click the brain button each time. " +
-				"You can still toggle it off per-conversation in the chat toolbar."
-			)
-			.addToggle((toggle) => {
-				toggle
-					.setValue(mem.recallAlways ?? false)
-					.onChange(async (value) => {
-						this.plugin.settings.memorySettings.recallAlways = value;
-						await this.plugin.saveSettings();
-					});
-			});
 
 		new Setting(recallItems)
 			.setName("Recalled memories per query")
@@ -1655,6 +1643,77 @@ export class LLMSettingsModal extends Modal {
 				cls: "setting-item-description",
 				text: "No assistants found. Create assistant folders in your AI/Assistants/ directory.",
 			});
+		}
+
+		// ── Web Search (SearXNG) ─────────────────────────────────────────────
+		const searxngGroup = this.addSettingGroup(el, "Web Search");
+		const searxng = this.plugin.settings.searxngSettings;
+
+		new Setting(searxngGroup)
+			.setName("Enable web search")
+			.setDesc(
+				"Allow the agent to search the web via a self-hosted SearXNG instance. " +
+				"The web_search tool will be available to any tool-capable model."
+			)
+			.addToggle((toggle) => {
+				toggle.setValue(searxng.enabled).onChange(async (value) => {
+					this.plugin.settings.searxngSettings.enabled = value;
+					await this.plugin.saveSettings();
+					this.plugin.initSearxngService();
+					this.renderTab("obsidian-agent");
+				});
+			});
+
+		if (searxng.enabled) {
+			new Setting(searxngGroup)
+				.setName("SearXNG host")
+				.setDesc("Base URL of your SearXNG instance (e.g. http://localhost:8080). No trailing slash.")
+				.addText((text) => {
+					text
+						.setPlaceholder("http://localhost:8080")
+						.setValue(searxng.host ?? "")
+						.onChange(async (value) => {
+							this.plugin.settings.searxngSettings.host = value.trim();
+							await this.plugin.saveSettings();
+							this.plugin.initSearxngService();
+						});
+					text.inputEl.style.width = "260px";
+				})
+				.addButton((btn) => {
+					btn.setButtonText("Test connection").onClick(async () => {
+						btn.setButtonText("Testing…");
+						btn.setDisabled(true);
+						try {
+							const svc = this.plugin.searxngService;
+							if (!svc) {
+								new Notice("⚠ SearXNG is not initialised — check host and save settings.", 4000);
+								return;
+							}
+							const ok = await svc.checkHealth();
+							new Notice(ok ? "✓ SearXNG is reachable." : "✗ Could not reach SearXNG. Check the host URL.", 4000);
+						} catch (e: any) {
+							new Notice(`✗ Connection failed: ${e?.message ?? String(e)}`, 5000);
+						} finally {
+							btn.setButtonText("Test connection");
+							btn.setDisabled(false);
+						}
+					});
+				});
+
+			new Setting(searxngGroup)
+				.setName("Max results per query")
+				.setDesc("Maximum number of search results returned to the model (1–10).")
+				.addSlider((slider) => {
+					slider
+						.setLimits(1, 10, 1)
+						.setValue(searxng.maxResults ?? 5)
+						.setDynamicTooltip()
+						.onChange(async (value) => {
+							this.plugin.settings.searxngSettings.maxResults = value;
+							await this.plugin.saveSettings();
+							this.plugin.initSearxngService();
+						});
+				});
 		}
 
 		// ── Vault Guidance ───────────────────────────────────────────────────

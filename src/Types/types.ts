@@ -300,6 +300,15 @@ export type RAGSettings = {
 	indexedFileCount: number;
 };
 
+export type SearxngSettings = {
+	/** Whether SearXNG web search is enabled. */
+	enabled: boolean;
+	/** Base URL of the SearXNG instance (e.g. "http://localhost:8080"). */
+	host: string;
+	/** Maximum number of results to return per query (1–10). */
+	maxResults: number;
+};
+
 export type WhisperBackend = "openai" | "sidecar";
 
 export type WhisperSettings = {

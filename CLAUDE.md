@@ -291,7 +291,7 @@ Before each send in `handleGenerateClick`, `MemoryService.recall()` searches the
 - `enabled: boolean` — gates the entire feature (requires RAG to be enabled for recall).
 - `extractionTrigger: "end-of-chat" | "manual"` — when to run extraction; surfaced as a toggle in the Memory settings tab.
 - `recallTopK: number` — how many memory chunks to inject per send.
-- `recallAlways: boolean` — when true, `useMemory` initialises as `true` in every new `ChatContainer` and resets to `true` on `newChat()`, making recall opt-out rather than opt-in.
+- `recallAlways: boolean` — **deprecated / unused**. Memory recall (`useMemory`) is now always `true` when `enabled` is true — there is no per-conversation toggle chip. The field is kept in the type for backwards compatibility with existing settings objects but is no longer read or surfaced in the UI.
 
 #### /remember command
 
@@ -299,7 +299,7 @@ Typing `/remember [content]` in the chat input saves that exact string as a `fac
 
 #### UI integration in ChatContainer
 
-- `useMemory: boolean` — per-view toggle, persists within the session. Toggled via the brain-icon toolbar button.
+- `useMemory: boolean` — always `true` when `memorySettings.enabled` is true; no toolbar button or chip. Can still be toggled off per-conversation via the `+` button menu as a power-user escape hatch.
 - `extractMemories()` — called by the toolbar extract button or automatically at `newChat()` when trigger is `"end-of-chat"`.
 - `appendMemoryIndicator(container)` — renders a `llm-memory-panel` banner on the assistant message when memories were recalled.
 - `buildMemoryCallModel()` — builds a provider-specific `(system, user) => Promise<string>` wrapper for the extraction call.

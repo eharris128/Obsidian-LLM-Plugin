@@ -60,7 +60,8 @@ export class FAB {
 		);
 		const settingsContainer = new SettingsContainer(
 			this.plugin,
-			"floating-action-button"
+			"floating-action-button",
+			chatContainer
 		);
 		// Resize handle lives directly on viewArea (outside contentArea) so it
 		// can straddle the top border with a negative top offset. overflow:hidden

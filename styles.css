@@ -1713,6 +1713,66 @@ details[open] .llm-rag-sources-summary::before {
 	text-decoration: underline;
 }
 
+/* ── Web sources collapsible panel ──────────────────────────────────────── */
+
+.llm-web-sources {
+	margin-top: var(--size-4-2);
+	border-top: 1px solid var(--background-modifier-border);
+	padding-top: var(--size-4-2);
+}
+
+.llm-web-sources-summary {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	cursor: pointer;
+	user-select: none;
+	list-style: none;
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+
+.llm-web-sources-summary::before {
+	content: "›";
+	display: inline-block;
+	transition: transform 100ms ease;
+}
+
+details[open] .llm-web-sources-summary::before {
+	transform: rotate(90deg);
+}
+
+.llm-web-sources-icon {
+	display: flex;
+	align-items: center;
+	color: var(--text-muted);
+}
+
+.llm-web-sources-icon svg {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.llm-web-sources-list {
+	margin: var(--size-4-2) 0 0 var(--size-4-4);
+	padding: 0;
+	list-style: disc;
+}
+
+.llm-web-sources-list li {
+	margin-bottom: var(--size-4-1);
+}
+
+.llm-web-source-link {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-accent);
+	text-decoration: none;
+}
+
+.llm-web-source-link:hover {
+	text-decoration: underline;
+}
+
 /* ── Tool call collapsible panel ─────────────────────────────────────────── */
 
 .llm-tool-calls {

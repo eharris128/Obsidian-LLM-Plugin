@@ -2,6 +2,7 @@ import { App, TFile } from "obsidian";
 import { RiskTier } from "Types/types";
 import { VaultIndexer } from "RAG/VaultIndexer";
 import { ChatHistory } from "services/ChatHistory";
+import { SearxngService, SearxngHttpError } from "WebSearch/SearxngService";
 
 export interface NeutralToolDefinition {
 	name: string;
@@ -16,6 +17,8 @@ export interface NeutralToolDefinition {
 	risk: RiskTier;
 	/** When true, a note is shown in Settings that this tool requires Vault Search (RAG). */
 	requiresRag?: boolean;
+	/** When true, a note is shown in Settings that this tool requires SearXNG to be configured. */
+	requiresWebSearch?: boolean;
 }
 
 export type ToolResult = { success: boolean; result?: string; error?: string };
@@ -204,6 +207,21 @@ export const ALL_TOOL_DEFINITIONS: NeutralToolDefinition[] = [
 		risk: "safe",
 	},
 	{
+		name: "web_search",
+		displayName: "Web search",
+		description: "Search the web via a self-hosted SearXNG instance and return the top results as title, URL, and snippet. Use for current events, documentation, or any question that requires up-to-date information from outside the vault.",
+		parameters: {
+			type: "object",
+			properties: {
+				query: { type: "string", description: "The search query to look up." },
+				num_results: { type: "string", description: "Number of results to return (1–10, default uses the configured maximum)." },
+			},
+			required: ["query"],
+		},
+		risk: "safe",
+		requiresWebSearch: true,
+	},
+	{
 		name: "get_chat_history",
 		displayName: "Get chat history",
 		description: "Access saved LLM conversations. Use action 'list' to get recent chats with metadata (title, date, model, project), or action 'load' to read the full message contents of a specific chat by file path.",
@@ -244,7 +262,12 @@ export class ObsidianToolRegistry {
 	/** Dynamic tools registered at runtime (e.g. invoke_assistant in agent mode). */
 	private dynamicTools: Map<string, { def: NeutralToolDefinition; executor: (input: any) => Promise<ToolResult> }> = new Map();
 
-	constructor(private app: App, private vaultIndexer?: VaultIndexer, private chatHistory?: ChatHistory) {}
+	constructor(
+		private app: App,
+		private vaultIndexer?: VaultIndexer,
+		private chatHistory?: ChatHistory,
+		private searxngService?: SearxngService | null,
+	) {}
 
 	/**
 	 * Register a tool that isn't in ALL_TOOL_DEFINITIONS.
@@ -476,6 +499,26 @@ export class ObsidianToolRegistry {
 
 					const header = `Found ${matches.length} match${matches.length === 1 ? "" : "es"} for "${pattern}":\n\n`;
 					return { success: true, result: header + matches.join("\n\n---\n\n") };
+				}
+
+				case "web_search": {
+					if (!this.searxngService) {
+						return {
+							success: false,
+							error:
+								"Web search is not available. Enable SearXNG in Settings → Obsidian Agent → Web Search and ensure the host is reachable.",
+						};
+					}
+					const { query, num_results } = input as { query: string; num_results?: string };
+					const numResults = num_results ? Math.min(10, Math.max(1, parseInt(num_results, 10) || 5)) : undefined;
+					try {
+						const results = await this.searxngService.search(query, numResults);
+						return { success: true, result: SearxngService.formatResults(results) };
+					} catch (e: any) {
+						// Surface the descriptive error message to the model so it can
+						// explain the situation to the user (e.g. 429 rate limit).
+						return { success: false, error: e?.message ?? String(e) };
+					}
 				}
 
 				case "get_chat_history": {

@@ -3,7 +3,8 @@ import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
 import { SettingsContainer } from "Plugin/Components/SettingsContainer";
 import LLMPlugin from "main";
-import { Notice, setIcon } from "obsidian";
+import { Menu, Notice, setIcon } from "obsidian";
+import { LLMSettingsModal } from "Settings/LLMSettingsModal";
 import { getViewInfo, getSettingType, setView, setHistoryFilePath } from "utils/utils";
 import { models } from "utils/models";
 
@@ -39,6 +40,46 @@ export class StatusBarButton {
 			e.stopPropagation();
 			this.togglePopover();
 		});
+
+		this.statusBarEl.addEventListener("contextmenu", (e: MouseEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
+			this.showContextMenu(e);
+		});
+	}
+
+	private showContextMenu(e: MouseEvent) {
+		const menu = new Menu();
+
+		menu.addItem((item) => {
+			item.setTitle("Open chat in tab")
+				.setIcon("layout-dashboard")
+				.onClick(() => {
+					this.hidePopover();
+					void this.plugin.activateTab();
+				});
+		});
+
+		menu.addItem((item) => {
+			item.setTitle("Open chat in sidebar")
+				.setIcon("panel-right")
+				.onClick(() => {
+					this.hidePopover();
+					void this.plugin.activateSidebar();
+				});
+		});
+
+		menu.addSeparator();
+
+		menu.addItem((item) => {
+			item.setTitle("Plugin settings")
+				.setIcon("settings")
+				.onClick(() => {
+					new LLMSettingsModal(this.plugin.app, this.plugin, this.plugin.fab).open();
+				});
+		});
+
+		menu.showAtMouseEvent(e);
 	}
 
 	private buildPopover() {
@@ -74,7 +115,8 @@ export class StatusBarButton {
 		);
 		const settingsContainer = new SettingsContainer(
 			this.plugin,
-			"floating-action-button"
+			"floating-action-button",
+			this.chatContainer
 		);
 		// Resize handle sits outside contentArea so it can straddle the top
 		// border (mirrors FAB's implementation).

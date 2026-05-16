@@ -9,6 +9,7 @@ import {
 	ProjectSettings,
 	RAGSettings,
 	ResponseFormat,
+	SearxngSettings,
 	SkillsSettings,
 	ToolSettings,
 	ViewSettings,
@@ -16,6 +17,7 @@ import {
 } from "./Types/types";
 import { WhisperService } from "./Whisper/WhisperService";
 import { SidecarManager } from "./Whisper/SidecarManager";
+import { SearxngService } from "./WebSearch/SearxngService";
 import { ObsidianAgent } from "Plugin/ObsidianAgent/ObsidianAgent";
 import { AssistantManager } from "Assistants/AssistantManager";
 import { ProjectManager } from "Projects/ProjectManager";
@@ -105,6 +107,8 @@ export interface LLMPluginSettings {
 	obsidianAgentSettings: ObsidianAgentSettings;
 	/** Whisper speech-to-text settings (voice input + file transcription). */
 	whisperSettings: WhisperSettings;
+	/** SearXNG web search settings. */
+	searxngSettings: SearxngSettings;
 	/**
 	 * Root vault folder for all AI feature data (default "AI").
 	 * Skills live at <rootVaultFolder>/Skills/<skill-name>/SKILL.md.
@@ -237,6 +241,11 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		autoSend: false,
 		lastPickerDirectory: "",
 	},
+	searxngSettings: {
+		enabled: false,
+		host: "http://localhost:8080",
+		maxResults: 5,
+	},
 	rootVaultFolder: "AI",
 };
 
@@ -273,6 +282,8 @@ export default class LLMPlugin extends Plugin {
 	whisperService: WhisperService | null = null;
 	/** Manages the local Python sidecar server lifecycle and dependency detection. */
 	sidecarManager: SidecarManager = new SidecarManager(this);
+	/** SearXNG web search service — null if searxngSettings.enabled is false. */
+	searxngService: SearxngService | null = null;
 
 	async onload() {
 		// Register custom icons that aren't in the Obsidian-bundled version of Lucide.
@@ -298,6 +309,7 @@ export default class LLMPlugin extends Plugin {
 		this.initVaultIndexer();
 		this.initMemoryService();
 		this.initWhisperService();
+		this.initSearxngService();
 		this.registerRagVaultEvents();
 		this.skillRegistry = new SkillRegistry(this.app);
 		this.projectManager = new ProjectManager(this.app);
@@ -730,6 +742,19 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	/**
+	 * Initialise (or tear down) the SearxngService based on current settings.
+	 * Safe to call after any settings change that affects SearXNG configuration.
+	 */
+	initSearxngService(): void {
+		const s = this.settings.searxngSettings;
+		if (!s?.enabled || !s.host?.trim()) {
+			this.searxngService = null;
+			return;
+		}
+		this.searxngService = new SearxngService(s.host.trim(), s.maxResults ?? 5);
+	}
+
+	/**
 	 * Re-initialise the SkillRegistry from current settings.
 	 * Call after the root vault folder setting changes.
 	 */
@@ -989,6 +1014,12 @@ export default class LLMPlugin extends Plugin {
 			this.settings.whisperSettings = {
 				...DEFAULT_SETTINGS.whisperSettings,
 				...(dataJSON.whisperSettings ?? {}),
+			};
+
+			// Deep-merge searxngSettings so new fields get defaults if missing from saved data
+			this.settings.searxngSettings = {
+				...DEFAULT_SETTINGS.searxngSettings,
+				...(dataJSON.searxngSettings ?? {}),
 			};
 
 			// Ensure rootVaultFolder has a value (new field — may be absent in old saves)

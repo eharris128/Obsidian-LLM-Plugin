@@ -15,6 +15,7 @@ import { ObsidianToolRegistry } from "services/ObsidianToolRegistry";
 import { toAnthropicTools, toOpenAITools } from "services/ToolAdapters";
 import { VaultIndexer } from "RAG/VaultIndexer";
 import { ChatHistory } from "services/ChatHistory";
+import { SearxngService } from "WebSearch/SearxngService";
 
 /** Called by ChatContainer to render the approval card and await the user's choice. */
 export type ShowPermissionUI = (
@@ -57,8 +58,9 @@ export class AgentLoop {
 		/** Optional callback to configure the registry before the loop runs (e.g. register dynamic tools). */
 		extraSetup?: (registry: ObsidianToolRegistry) => void,
 		chatHistory?: ChatHistory,
+		searxngService?: SearxngService | null,
 	) {
-		this.registry = new ObsidianToolRegistry(app, vaultIndexer ?? undefined, chatHistory);
+		this.registry = new ObsidianToolRegistry(app, vaultIndexer ?? undefined, chatHistory, searxngService);
 		extraSetup?.(this.registry);
 		this.allowedTools = allowedTools ?? [];
 		this.disabledTools = disabledTools ?? [];

@@ -112,6 +112,8 @@ export class ChatContainer extends Component {
 	useVaultSearch: boolean = false;
 	/** File paths retrieved by vault search for the current generation — cleared after appending sources panel. */
 	private pendingRagSources: string[] = [];
+	/** Web results retrieved by web_search tool calls this turn — cleared after appending web sources panel. */
+	private pendingWebSources: { title: string; url: string }[] = [];
 	/** Tool calls accumulated during the current agent turn — committed to allToolCallsByTurn at turn end. */
 	private pendingToolCalls: ToolCallRecord[] = [];
 	/**
@@ -230,12 +232,8 @@ export class ChatContainer extends Component {
 		this.boundUpdateMessages = this.updateMessages.bind(this);
 		this.messageStore.subscribe(this.boundUpdateMessages);
 		this.contextBuilder = new ContextBuilder(this.plugin.app);
-		// Honour the "always recall" setting so the brain button starts active
-		// when the user has opted in globally.
-		this.useMemory = !!(
-			this.plugin.settings.memorySettings?.enabled &&
-			this.plugin.settings.memorySettings?.recallAlways
-		);
+		// Memory recall is always active when the feature is enabled — no toggle required.
+		this.useMemory = !!this.plugin.settings.memorySettings?.enabled;
 	}
 
 	/**
@@ -1227,6 +1225,11 @@ export class ChatContainer extends Component {
 					this.appendSourcesPanel(this.loadingDivContainer, this.pendingRagSources);
 					this.pendingRagSources = [];
 				}
+				// Append web sources panel if web_search was used
+				if (this.pendingWebSources.length > 0) {
+					this.appendWebSourcesPanel(this.loadingDivContainer, this.pendingWebSources);
+					this.pendingWebSources = [];
+				}
 				// Show memory indicator if memories were recalled this turn
 				if (this.memoriesInjectedThisTurn) {
 					this.appendMemoryIndicator(this.loadingDivContainer);
@@ -1312,6 +1315,7 @@ export class ChatContainer extends Component {
 			this.plugin.settings.GPT4AllStreaming = false;
 			this.prompt = "";
 			this.pendingRagSources = [];
+			this.pendingWebSources = [];
 			this.activeSkillId = null;
 			this.activeAssistantNameThisTurn = null;
 			errorMessages(error, params);
@@ -1706,6 +1710,7 @@ export class ChatContainer extends Component {
 			maxToolCalls,
 			agentSetup,
 			this.plugin.settings.chatHistoryEnabled ? this.plugin.chatHistory : undefined,
+			this.plugin.searxngService,
 		);
 
 		const callbacks: AgentCallbacks = {
@@ -1734,6 +1739,16 @@ export class ChatContainer extends Component {
 					const paths = extractRagSourcePaths(result);
 					for (const p of paths) {
 						if (!this.pendingRagSources.includes(p)) this.pendingRagSources.push(p);
+					}
+				} else if (toolName === "web_search") {
+					// Parse **N. [Title](URL)** links from the formatted result block
+					const linkRegex = /\*\*\d+\.\s+\[([^\]]+)\]\((https?:\/\/[^)]+)\)\*\*/g;
+					let m: RegExpExecArray | null;
+					while ((m = linkRegex.exec(result)) !== null) {
+						const [, title, url] = m;
+						if (!this.pendingWebSources.find((s) => s.url === url)) {
+							this.pendingWebSources.push({ title, url });
+						}
 					}
 				} else if (toolName === "obsidian_read_note" && typeof input.path === "string") {
 					// The model explicitly read a note — that note is a source
@@ -2205,22 +2220,13 @@ export class ChatContainer extends Component {
 		const hasAdditional = this.plugin.settings.enableFileContext && contextSettings.selectedFiles.length > 0;
 		const hasPinned = pinnedNotes.length > 0;
 		const hasProject = !!activeProject;
-		const hasMemory = !!(this.plugin.settings.memorySettings?.enabled && this.useMemory);
 
-		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject && !hasMemory) {
+		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject) {
 			this.chipContainer.style.display = "none";
 			return;
 		}
 
 		this.chipContainer.style.display = "flex";
-
-		// Memory chip — icon-only at rest, label + remove revealed on hover
-		if (hasMemory) {
-			this.buildMemoryChip(this.chipContainer, () => {
-				this.useMemory = false;
-				this.syncChips();
-			});
-		}
 
 		// Project chip — icon-only at rest, name revealed on hover
 		if (hasProject && activeProject) {
@@ -2307,20 +2313,6 @@ export class ChatContainer extends Component {
 		const iconEl = chip.createSpan({ cls: "llm-context-chip-icon" });
 		setIcon(iconEl, "box");
 		chip.createSpan({ text: name, cls: "llm-context-chip-name llm-project-chip-name" });
-		const removeBtn = chip.createSpan({ text: "×", cls: "llm-context-chip-remove" });
-		removeBtn.addEventListener("click", (e) => {
-			e.stopPropagation();
-			onRemove();
-		});
-		return chip;
-	}
-
-	/** Build a memory-recall chip — icon-only at rest, expands on hover to show label + remove. */
-	private buildMemoryChip(container: HTMLElement, onRemove: () => void): HTMLElement {
-		const chip = container.createDiv({ cls: "llm-context-chip llm-memory-chip" });
-		const iconEl = chip.createSpan({ cls: "llm-context-chip-icon" });
-		setIcon(iconEl, "brain");
-		chip.createSpan({ text: "Memory", cls: "llm-context-chip-name llm-memory-chip-name" });
 		const removeBtn = chip.createSpan({ text: "×", cls: "llm-context-chip-remove" });
 		removeBtn.addEventListener("click", (e) => {
 			e.stopPropagation();
@@ -2824,18 +2816,8 @@ export class ChatContainer extends Component {
 					});
 			});
 
-			// Memory recall toggle + save shortcut — only when memory is enabled
+			// Memory save shortcut — only when memory is enabled
 			if (this.plugin.settings.memorySettings?.enabled && this.plugin.memoryService) {
-				menu.addItem((item) => {
-					item.setTitle(this.useMemory ? "Disable memory recall" : "Enable memory recall")
-						.setIcon("brain")
-						.setChecked(this.useMemory)
-						.onClick(() => {
-							this.useMemory = !this.useMemory;
-							this.syncChips();
-						});
-				});
-
 				menu.addItem((item) => {
 					item.setTitle("Save a memory")
 						.setIcon("brain-circuit")
@@ -4028,6 +4010,29 @@ export class ChatContainer extends Component {
 		}
 	}
 
+	/**
+	 * Append a collapsible "Web Sources" panel listing the URLs returned by
+	 * the web_search tool during this response.
+	 */
+	private appendWebSourcesPanel(container: HTMLElement, sources: { title: string; url: string }[]): void {
+		const details = container.createEl("details", { cls: "llm-web-sources" });
+		const summary = details.createEl("summary", { cls: "llm-web-sources-summary" });
+		setIcon(summary.createSpan({ cls: "llm-web-sources-icon" }), "globe");
+		summary.createSpan({ text: `${sources.length} web source${sources.length !== 1 ? "s" : ""}` });
+
+		const list = details.createEl("ul", { cls: "llm-web-sources-list" });
+		for (const { title, url } of sources) {
+			const item = list.createEl("li");
+			const link = item.createEl("a", {
+				cls: "llm-web-source-link",
+				text: title || url,
+				href: url,
+			});
+			link.setAttribute("target", "_blank");
+			link.setAttribute("rel", "noopener noreferrer");
+		}
+	}
+
 	// ── Memory helpers ────────────────────────────────────────────────────────
 
 	/**
@@ -4203,6 +4208,7 @@ export class ChatContainer extends Component {
 		this.historyMessages.empty();
 		this.claudeCodeSessionId = null;
 		this.pendingToolCalls = [];
+		this.pendingWebSources = [];
 		this.allToolCallsByTurn = new Map();
 		this.allSkillsByTurn = new Map();
 		this.allModelsByTurn = new Map();
@@ -4241,11 +4247,8 @@ export class ChatContainer extends Component {
 
 		this.syncChips();
 
-		// Re-apply the always-recall preference for the new conversation.
-		this.useMemory = !!(
-			this.plugin.settings.memorySettings?.enabled &&
-			this.plugin.settings.memorySettings?.recallAlways
-		);
+		// Memory recall is always active when the feature is enabled.
+		this.useMemory = !!this.plugin.settings.memorySettings?.enabled;
 	}
 }
 

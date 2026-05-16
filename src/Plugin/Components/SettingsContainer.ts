@@ -6,12 +6,15 @@ import {
 	getSettingType,
 } from "utils/utils";
 import { chat, claudeCodeEndpoint, GPT4All, images, messages, openAI } from "utils/constants"
+import { ChatContainer } from "./ChatContainer";
 
 export class SettingsContainer {
 	viewType: ViewType;
+	private chatContainer?: ChatContainer;
 
-	constructor(private plugin: LLMPlugin, viewType: ViewType) {
+	constructor(private plugin: LLMPlugin, viewType: ViewType, chatContainer?: ChatContainer) {
 		this.viewType = viewType;
+		this.chatContainer = chatContainer;
 	}
 
 	async generateSettingsContainer(parentContainer: HTMLElement) {
@@ -327,6 +330,27 @@ export class SettingsContainer {
 						});
 					});
 			});
+
+		// Memory recall toggle — only visible when memory feature is enabled
+		if (
+			this.plugin.settings.memorySettings?.enabled &&
+			this.plugin.memoryService &&
+			this.chatContainer
+		) {
+			const cc = this.chatContainer;
+			new Setting(parentContainer)
+				.setName("Use memory recall")
+				.setDesc(
+					"Inject relevant memories as context before each message in this conversation."
+				)
+				.addToggle((toggle) => {
+					toggle
+						.setValue(cc.useMemory)
+						.onChange((value) => {
+							cc.useMemory = value;
+						});
+				});
+		}
 
 	}
 

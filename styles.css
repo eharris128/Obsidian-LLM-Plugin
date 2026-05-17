@@ -2539,3 +2539,172 @@ button.llm-mic-button.llm-mic-transcribing {
 	border-color: transparent;
 	cursor: default;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Chat Details Panel  (.llm-chat-details-*)
+   Right-sidebar panel that shows live state for the active chat:
+   model/assistant, recalled memories, and context files.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.llm-chat-details-root {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+
+.llm-chat-details-content {
+	flex: 1;
+	overflow-y: auto;
+	padding: var(--size-4-2) 0;
+}
+
+/* ── Section ─────────────────────────────────────────────────────────────── */
+
+.llm-chat-details-section {
+	margin-bottom: var(--size-4-3);
+}
+
+.llm-chat-details-section-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--size-4-1) var(--size-4-4);
+	margin-bottom: var(--size-4-1);
+}
+
+.llm-chat-details-section-title {
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.llm-chat-details-section-count {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	background: var(--background-modifier-hover);
+	border-radius: var(--radius-s);
+	padding: 0 var(--size-4-1);
+	min-width: 18px;
+	text-align: center;
+}
+
+.llm-chat-details-section-body {
+	/* rows are placed directly inside the body */
+}
+
+/* ── Row ─────────────────────────────────────────────────────────────────── */
+
+/* Matches Obsidian's tree-item-self pattern */
+.llm-chat-details-row {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-4);
+	min-height: 32px;
+}
+
+.llm-chat-details-row--clickable {
+	cursor: pointer;
+	border-radius: var(--radius-s);
+}
+
+.llm-chat-details-row--clickable:hover {
+	background: var(--background-modifier-hover);
+}
+
+.llm-chat-details-row-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: var(--icon-s);
+	height: var(--icon-s);
+	margin-top: 2px;
+	color: var(--text-muted);
+}
+
+.llm-chat-details-row-icon svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+
+/* Assistant icon gets accent colour */
+.llm-chat-details-row-icon--assistant {
+	color: var(--interactive-accent);
+}
+
+.llm-chat-details-row-body {
+	flex: 1;
+	min-width: 0;
+}
+
+/* Memory bodies use muted normal-size text (memories can be a sentence long) */
+.llm-chat-details-row-body--memory {
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	line-height: var(--line-height-tight);
+	padding-top: 2px;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.llm-chat-details-row-title {
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Assistant name in accent colour */
+.llm-chat-details-row-title--assistant {
+	color: var(--interactive-accent);
+}
+
+.llm-chat-details-row-subtitle {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	margin-top: 1px;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+
+.llm-chat-details-empty {
+	padding: var(--size-4-1) var(--size-4-4);
+	font-size: var(--font-ui-small);
+	color: var(--text-faint);
+	font-style: italic;
+}
+
+/* ── Badge row (project pill under model section) ───────────────────────── */
+
+.llm-chat-details-badge-row {
+	padding: 0 var(--size-4-4) var(--size-4-2);
+	display: flex;
+	gap: var(--size-4-1);
+	flex-wrap: wrap;
+}
+
+.llm-chat-details-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	cursor: default;
+}
+
+.llm-chat-details-badge svg {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+/* Project badge — accent tint (matches .llm-chats-tag-project) */
+.llm-chat-details-badge--project {
+	color: var(--text-accent);
+	background-color: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+	border-color: transparent;
+}

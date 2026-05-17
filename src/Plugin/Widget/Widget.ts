@@ -119,6 +119,13 @@ export class WidgetView extends ItemView {
 			this.header.resetHistoryButton();
 			this.header.setTitle(meta.title ?? filePath);
 			this.header.showTitle();
+
+			// Push the fully-resolved state (model + project + files) to the
+			// Chat Details panel.  restoreProjectFromChat() already called syncChips()
+			// which calls pushChatDetailsState(), but that fires BEFORE the model
+			// settings above are patched into plugin.settings, so we do one final
+			// push here to make sure the model label is current.
+			this.chatContainer.pushChatDetailsState();
 		} catch (e) {
 			console.error("[WidgetView] Failed to load chat file:", e);
 			new Notice("Failed to load conversation.");

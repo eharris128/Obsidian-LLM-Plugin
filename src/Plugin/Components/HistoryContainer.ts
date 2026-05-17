@@ -404,6 +404,10 @@ export class HistoryContainer {
 						header.resetHistoryButton();
 						header.setTitle(meta.title ?? displayTitle);
 						header.showTitle();
+
+						// Final push so the Chat Details panel reflects the fully-resolved
+						// model + project state for this conversation.
+						chat.pushChatDetailsState();
 					})
 					.catch((e) => {
 						console.error("[HistoryContainer] Failed to load chat file:", e);

@@ -36,6 +36,7 @@ import { RecentChatsButton } from "Plugin/StatusBar/RecentChatsButton";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
 import { TAB_VIEW_TYPE, WidgetView } from "Plugin/Widget/Widget";
 import { CHATS_VIEW_TYPE, ChatsView } from "Plugin/ChatsView/ChatsView";
+import { CHAT_DETAILS_VIEW_TYPE, ChatDetailsView } from "Plugin/ChatDetailsView/ChatDetailsView";
 import SettingsView from "Settings/SettingsView";
 import { getApiKeyValidity } from "utils/utils";
 import { models, modelNames, buildOllamaModels, buildLMStudioModels, openAIModelIds } from "utils/models";
@@ -353,6 +354,7 @@ export default class LLMPlugin extends Plugin {
 
 		this.registerView(TAB_VIEW_TYPE, (tab) => new WidgetView(tab, this));
 		this.registerView(CHATS_VIEW_TYPE, (leaf) => new ChatsView(leaf, this));
+		this.registerView(CHAT_DETAILS_VIEW_TYPE, (leaf) => new ChatDetailsView(leaf, this));
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.fab = new FAB(this);
@@ -874,6 +876,14 @@ export default class LLMPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "open-chat-details-panel",
+			name: "Open Chat Details panel",
+			callback: () => {
+				void this.activateChatDetailsPanel();
+			},
+		});
+
 		// ── Whisper commands ──────────────────────────────────────────────────
 		this.addCommand({
 			id: "transcribe-audio-file",
@@ -912,6 +922,35 @@ export default class LLMPlugin extends Plugin {
 				new ChatModal2(this).open();
 			});
 		}
+	}
+
+	/**
+	 * Open (or reveal) the Chat Details panel in the right sidebar.
+	 * If already open, simply bring it into focus.
+	 */
+	async activateChatDetailsPanel() {
+		const { workspace } = this.app;
+		const leaves = workspace.getLeavesOfType(CHAT_DETAILS_VIEW_TYPE);
+
+		if (leaves.length > 0) {
+			workspace.revealLeaf(leaves[0]);
+			(leaves[0].view as ChatDetailsView).refreshFromPlugin();
+			return;
+		}
+
+		const leaf = workspace.getRightLeaf(false);
+		if (!leaf) return;
+		await leaf.setViewState({ type: CHAT_DETAILS_VIEW_TYPE, active: true });
+		workspace.revealLeaf(leaf);
+	}
+
+	/**
+	 * Return the open ChatDetailsView instance, or null if the panel is closed.
+	 * Used by ChatContainer to push live state updates.
+	 */
+	getChatDetailsView(): ChatDetailsView | null {
+		const leaves = this.app.workspace.getLeavesOfType(CHAT_DETAILS_VIEW_TYPE);
+		return leaves.length > 0 ? (leaves[0].view as ChatDetailsView) : null;
 	}
 
 	/**

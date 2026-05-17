@@ -4,6 +4,9 @@ export const TAB_VIEW_TYPE = "tab-view";
 // Obsidian registered view type for the Chats panel (sidebar leaf listing all conversations).
 export const CHATS_VIEW_TYPE = "llm-chats-view";
 
+// Obsidian registered view type for the Chat Details panel (right sidebar, live chat context).
+export const CHAT_DETAILS_VIEW_TYPE = "llm-chat-details-view";
+
 export const claude = "claude"
 export const claudeCode = "claudeCode"
 export const openAI = "openAI"

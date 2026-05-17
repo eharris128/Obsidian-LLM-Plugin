@@ -198,6 +198,8 @@ export class ChatContainer extends Component {
 	useMemory: boolean = false;
 	/** Whether memories were injected for the current generation (drives UI indicator). */
 	private memoriesInjectedThisTurn: boolean = false;
+	/** Individual memory strings recalled during the last generation — shown in Chat Details panel. */
+	lastRecalledMemories: string[] = [];
 	/** Stored reference so we can update the memory button's active state. */
 	/** Display name of the assistant active for the current generation — cleared after the indicator is shown. */
 	private activeAssistantNameThisTurn: string | null = null;
@@ -1127,6 +1129,13 @@ export class ChatContainer extends Component {
 					this.pendingContextString = recalled +
 						(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
 					this.memoriesInjectedThisTurn = true;
+					// Parse individual memory strings for the Chat Details panel.
+					// formatMemoriesAsContext() produces lines starting with "- ".
+					this.lastRecalledMemories = recalled
+						.split("\n")
+						.filter((l) => l.startsWith("- "))
+						.map((l) => l.slice(2).trim());
+					this.pushChatDetailsState();
 				}
 			} catch (e) {
 				console.error("[Memory] Recall failed:", e);
@@ -2200,8 +2209,74 @@ export class ChatContainer extends Component {
 		llmGal.appendChild(svgElement);
 	}
 
+	// ── Chat Details panel integration ───────────────────────────────────────
+
+	/**
+	 * Push the current live state (model/assistant, memories, context files) to
+	 * the ChatDetailsView if it is open. Called from syncChips(), syncModelDropdown(),
+	 * and after memory recall. Safe to call when the panel is closed (no-op).
+	 * Public so Widget.loadChatFile() can push after updating model settings.
+	 */
+	pushChatDetailsState() {
+		const detailsView = this.plugin.getChatDetailsView?.();
+		if (!detailsView) return;
+
+		const settingType = getSettingType(this.viewType);
+		const contextSettings = this.plugin.settings[settingType].contextSettings;
+
+		// ── Model / assistant ──────────────────────────────────────────────
+		const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId ?? null;
+		const assistant = activeAssistantId
+			? (this.plugin.assistantManager?.getAssistant(activeAssistantId) ?? null)
+			: null;
+		const viewInfo = getViewInfo(this.plugin, this.viewType);
+		const modelLabel = assistant?.name ?? viewInfo.modelName ?? "";
+
+		// ── Project ────────────────────────────────────────────────────────
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId ?? null;
+		const project = activeProjectId
+			? (this.plugin.projectManager?.getProject(activeProjectId) ?? null)
+			: null;
+
+		// ── Context files ─────────────────────────────────────────────────
+		const contextFiles: { name: string; path: string }[] = [];
+		if (this.plugin.settings.enableFileContext) {
+			if (this.useActiveFileContext && this.activeFileForChip) {
+				contextFiles.push(this.activeFileForChip);
+			}
+			for (const filePath of contextSettings.selectedFiles) {
+				contextFiles.push({
+					name: filePath.split("/").pop() || filePath,
+					path: filePath,
+				});
+			}
+		}
+		// Pinned project notes are also context
+		if (project?.pinnedNotes) {
+			for (const notePath of project.pinnedNotes) {
+				const name = notePath.split("/").pop() || notePath;
+				if (!contextFiles.some((f) => f.path === notePath)) {
+					contextFiles.push({ name, path: notePath });
+				}
+			}
+		}
+
+		detailsView.updateState({
+			modelLabel,
+			isAssistant: !!assistant,
+			assistantId: assistant?.id ?? null,
+			projectName: project?.name ?? null,
+			recalledMemories: [...this.lastRecalledMemories],
+			contextFiles,
+		});
+	}
+
 	/** Rebuild the chip strip from current state (active file + additional files + pinned project notes). */
 	syncChips() {
+		// Always push details state first — this reads from settings/memory, not the DOM,
+		// so it works regardless of whether chipContainer is built yet (FAB, modal, etc.)
+		this.pushChatDetailsState();
+
 		if (!this.chipContainer) return;
 		const settingType = getSettingType(this.viewType);
 		const contextSettings = this.plugin.settings[settingType].contextSettings;
@@ -3666,6 +3741,8 @@ export class ChatContainer extends Component {
 		}
 		this.resizeModelDropdown();
 		this.syncFileContextButtons();
+		// Push updated model/assistant name to Chat Details panel
+		this.pushChatDetailsState();
 	}
 
 	/**
@@ -4245,7 +4322,10 @@ export class ChatContainer extends Component {
 			void this.plugin.saveSettings();
 		}
 
-		this.syncChips();
+		// Clear per-chat state for Chat Details panel
+		this.lastRecalledMemories = [];
+
+		this.syncChips(); // also calls pushChatDetailsState()
 
 		// Memory recall is always active when the feature is enabled.
 		this.useMemory = !!this.plugin.settings.memorySettings?.enabled;

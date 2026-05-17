@@ -14,6 +14,37 @@ Output is bundled to `main.js` in the root directory.
 
 ### CSS / Styling Convention (repeated below — see full entry near bottom)
 
+## Obsidian Core Styling — Use Native Before Custom
+
+**Always prefer Obsidian's built-in components and CSS classes over custom implementations.** Custom CSS is harder to maintain and will look out of place when the user changes themes. Native components get theming, accessibility, and hover/focus states for free.
+
+### Prefer native Obsidian components
+
+| Need | Use instead of rolling your own |
+|------|----------------------------------|
+| Search box | `SearchComponent` → renders `search-input-container` with icon + clear button |
+| Icon-only button | `ExtraButtonComponent` → renders `clickable-icon` |
+| Standard button | `ButtonComponent` → renders correctly styled `<button>` |
+
+### Prefer native CSS classes
+
+| UI element | Native class(es) |
+|-----------|-----------------|
+| Sidebar toolbar | `nav-header`, `nav-buttons-container`, `nav-action-button` |
+| Scrollable sidebar list | `nav-files-container` |
+| List rows | `tree-item` > `tree-item-self` > `tree-item-icon` + `tree-item-inner` + `tree-item-flair-outer` |
+| Row title text | `tree-item-inner-text` |
+| Right-side flair (counts, dates) | `tree-item-flair-outer` > `tree-item-flair` |
+| Pill / badge | `.tag` |
+| Empty state | `pane-empty` |
+| Clickable icon button | `clickable-icon` |
+
+### When writing custom CSS
+
+- Always use Obsidian CSS variables (`--text-muted`, `--interactive-accent`, `--font-ui-small`, `--icon-s`, etc.) — never hardcoded colours, px sizes, or font sizes.
+- Custom classes belong in `styles.css` with the `llm-` prefix. Never use inline `element.style.*` in TypeScript — use `.addClass()` with a named CSS class.
+- If you find yourself writing hover, focus, or active states for a list row, stop — you should be using `tree-item-self` which already has them.
+
 ## Feature Gates (`featureSettings`)
 
 All advanced feature tabs are hidden from the settings sidebar by default. `LLMPluginSettings.featureSettings` (type `FeatureSettings` in `types.ts`) holds a boolean per feature, all defaulting to `false`. The "Features" section in the General settings tab is the user-facing entry point.
@@ -88,6 +119,20 @@ Native Obsidian DOM/component patterns used (keeps the panel visually consistent
 - `tree-item` / `tree-item-self` / `tree-item-inner` / `tree-item-flair` → row structure (mirrors file-explorer)
 - `.tag` → project and agent pill badges
 - `pane-empty` → empty-state message
+
+### Chat Details Panel (`ChatDetailsView`)
+
+`src/Plugin/ChatDetailsView/ChatDetailsView.ts` — a right-sidebar `ItemView` (view type `CHAT_DETAILS_VIEW_TYPE = "llm-chat-details-view"`) that shows live context for the active chat: the current model/assistant, recalled memories, and attached context files.
+
+Key design points:
+- **State is pushed in** by `ChatContainer.pushChatDetailsState()` — the view holds no domain logic; it just renders whatever it receives.
+- Push points: `syncChips()` (file/project changes), `syncModelDropdown()` (model/assistant switch), after memory recall in `handleGenerateClick`, and `newChat()` (clears state + resets `lastRecalledMemories`).
+- `plugin.getChatDetailsView()` returns the open view instance (or `null` if closed) — used by `pushChatDetailsState()`.
+- `plugin.activateChatDetailsPanel()` opens the panel in the right sidebar; registered as the `open-chat-details-panel` command ("Open Chat Details panel").
+- `ChatDetailsState` interface has: `modelLabel`, `isAssistant`, `assistantId`, `projectName`, `recalledMemories: string[]`, `contextFiles: { name, path }[]`.
+- Recalled memories are parsed from the `# Recalled Memories` block returned by `MemoryService.recall()` (lines starting with `"- "`).
+- CSS classes use the `.llm-chat-details-*` prefix.
+- `detailsBodyEl` (not `contentEl`) is the scrollable render target — `ItemView` already owns `contentEl`.
 
 ### State Management
 

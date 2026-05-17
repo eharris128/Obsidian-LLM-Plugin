@@ -309,6 +309,21 @@ export type SearxngSettings = {
 	maxResults: number;
 };
 
+export type FeatureSettings = {
+	/** Master gate for the Obsidian Agent feature (FAB / status-bar agent mode). */
+	obsidianAgent: boolean;
+	/** Master gate for the Transcription (Whisper) feature. */
+	transcription: boolean;
+	/** Master gate for the Projects feature. */
+	projects: boolean;
+	/** Master gate for the Assistants feature. */
+	assistants: boolean;
+	/** Master gate for the Memory feature. */
+	memory: boolean;
+	/** Master gate for the Vault Search (RAG / embeddings) feature. */
+	vaultSearch: boolean;
+};
+
 export type WhisperBackend = "openai" | "sidecar";
 
 export type WhisperSettings = {

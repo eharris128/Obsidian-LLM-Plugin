@@ -8,6 +8,7 @@ import {
 	Setting,
 	setIcon,
 } from "obsidian";
+import { FeatureSettings } from "Types/types";
 import { changeDefaultModel, fetchOllamaModels, fetchLMStudioModels, getGpt4AllPath } from "utils/utils";
 import { buildOllamaModels, buildLMStudioModels, modelNames, models } from "utils/models";
 import { GPT4All, ollama, lmStudio } from "utils/constants";
@@ -35,6 +36,8 @@ interface NavItem {
 	id: string;
 	label: string;
 	icon: string;
+	/** When set, this nav item is hidden unless the named feature is enabled. */
+	featureGate?: keyof FeatureSettings;
 }
 
 export class LLMSettingsModal extends Modal {
@@ -76,16 +79,16 @@ export class LLMSettingsModal extends Modal {
 			label: "Core Settings",
 			items: [
 				{ id: "general",        label: "General",        icon: "settings" },
-				{ id: "obsidian-agent", label: "Obsidian Agent",  icon: "stone" },
+				{ id: "obsidian-agent", label: "Obsidian Agent",  icon: "stone",          featureGate: "obsidianAgent" },
 				{ id: "interface",      label: "Interface",       icon: "layout-dashboard" },
 				{ id: "chat",           label: "Chat",            icon: "message-square" },
 				{ id: "tools",          label: "Tools",           icon: "wrench" },
 				{ id: "skills",         label: "Skills",          icon: "scroll-text" },
-				{ id: "memory",         label: "Memory",          icon: "brain" },
-				{ id: "embeddings",     label: "Embeddings",      icon: "database" },
-				{ id: "projects",       label: "Projects",        icon: "folder-open" },
-				{ id: "assistants",     label: "Assistants",      icon: "bot" },
-				{ id: "transcription",  label: "Transcription",   icon: "mic" },
+				{ id: "memory",         label: "Memory",          icon: "brain",           featureGate: "memory" },
+				{ id: "embeddings",     label: "Embeddings",      icon: "database",        featureGate: "vaultSearch" },
+				{ id: "projects",       label: "Projects",        icon: "folder-open",     featureGate: "projects" },
+				{ id: "assistants",     label: "Assistants",      icon: "bot",             featureGate: "assistants" },
+				{ id: "transcription",  label: "Transcription",   icon: "mic",             featureGate: "transcription" },
 			],
 		},
 		{
@@ -105,6 +108,7 @@ export class LLMSettingsModal extends Modal {
 	private coreModalEl: HTMLElement | null = null;
 	private resizeHandler: (() => void) | null = null;
 	private outsideClickHandler: ((e: MouseEvent) => void) | null = null;
+	private sidebarEl: HTMLElement | null = null;
 
 	constructor(app: App, plugin: LLMPlugin, fab: FAB) {
 		super(app);
@@ -177,8 +181,8 @@ export class LLMSettingsModal extends Modal {
 		this.contentEl.addClass("vertical-tabs-container");
 
 		// Sidebar — uses Obsidian's own vertical tab header classes.
-		const sidebar = this.contentEl.createDiv("vertical-tab-header");
-		this.buildSidebar(sidebar);
+		this.sidebarEl = this.contentEl.createDiv("vertical-tab-header");
+		this.buildSidebar(this.sidebarEl);
 
 		// Content area — Obsidian's classes handle layout, scrolling, and padding.
 		const contentContainer = this.contentEl.createDiv("vertical-tab-content-container");
@@ -199,7 +203,14 @@ export class LLMSettingsModal extends Modal {
 	}
 
 	private buildSidebar(sidebar: HTMLElement) {
+		const featureSettings = this.plugin.settings.featureSettings ?? {};
 		for (const section of this.navSections) {
+			// Filter items by feature gate before rendering the section.
+			const visibleItems = section.items.filter(
+				(item) => !item.featureGate || featureSettings[item.featureGate]
+			);
+			if (visibleItems.length === 0) continue;
+
 			const groupEl = sidebar.createDiv("vertical-tab-header-group");
 			groupEl.createDiv({
 				cls:  "vertical-tab-header-group-title",
@@ -209,7 +220,7 @@ export class LLMSettingsModal extends Modal {
 			// vertical-tab-header-group-items is the core container for items.
 			const itemsEl = groupEl.createDiv("vertical-tab-header-group-items");
 
-			for (const item of section.items) {
+			for (const item of visibleItems) {
 				const isActive = item.id === this.activeTab;
 				// vertical-tab-nav-item + tappable are the core nav item classes.
 				const itemEl = itemsEl.createDiv({
@@ -234,6 +245,13 @@ export class LLMSettingsModal extends Modal {
 				});
 			}
 		}
+	}
+
+	/** Rebuilds just the sidebar in-place (called after feature toggles change). */
+	private rebuildSidebar() {
+		if (!this.sidebarEl) return;
+		this.sidebarEl.empty();
+		this.buildSidebar(this.sidebarEl);
 	}
 
 	private renderTab(tabId: string) {
@@ -413,23 +431,152 @@ export class LLMSettingsModal extends Modal {
 				});
 			});
 
-		// Enable vault search (RAG)
-		new Setting(items)
-			.setName("Enable vault search")
-			.setDesc(
-				"Index your vault and allow the AI to semantically search your notes. " +
-				"Tool-capable models (Claude, GPT-4, Gemini) use this automatically; " +
-				"other models get a manual toggle in the chat UI."
-			)
-			.addToggle((toggle) => {
-				toggle
-					.setValue(this.plugin.settings.ragSettings.enabled)
-					.onChange(async (value) => {
-						this.plugin.settings.ragSettings.enabled = value;
-						await this.plugin.saveSettings();
-						this.plugin.initVaultIndexer();
-					});
-			});
+		// ── Features ──────────────────────────────────────────────────────────
+		const featureItems = this.addSettingGroup(el, "Features");
+
+		type FeatureDef = {
+			key: keyof import("Types/types").FeatureSettings;
+			name: string;
+			desc: string;
+			onEnable?: () => Promise<void> | void;
+			onDisable?: () => Promise<void> | void;
+		};
+
+		const featureDefs: FeatureDef[] = [
+			{
+				key: "obsidianAgent",
+				name: "Obsidian Agent",
+				desc: "An always-on vault agent that can read and write notes, invoke skills, and route to custom assistants. Accessible from the FAB and status bar.",
+				onEnable: async () => {
+					this.plugin.settings.obsidianAgentSettings.enabled = true;
+					await this.plugin.saveSettings();
+					this.plugin.fab.regenerateFAB();
+				},
+				onDisable: async () => {
+					this.plugin.settings.obsidianAgentSettings.enabled = false;
+					// If currently showing Obsidian Agent, leave that setting intact
+					// but hide the nav — navigate back to general so the tab isn't orphaned.
+					if (this.activeTab === "obsidian-agent") {
+						this.activeTab = "general";
+						this.renderTab("general");
+					}
+					await this.plugin.saveSettings();
+					this.plugin.fab.regenerateFAB();
+				},
+			},
+			{
+				key: "transcription",
+				name: "Transcription",
+				desc: "Voice input via microphone and audio-file transcription using OpenAI Whisper or a local Python sidecar.",
+				onEnable: async () => {
+					this.plugin.settings.whisperSettings.enabled = true;
+					await this.plugin.saveSettings();
+					this.plugin.initWhisperService();
+				},
+				onDisable: async () => {
+					this.plugin.settings.whisperSettings.enabled = false;
+					if (this.activeTab === "transcription") {
+						this.activeTab = "general";
+						this.renderTab("general");
+					}
+					await this.plugin.saveSettings();
+					this.plugin.initWhisperService();
+				},
+			},
+			{
+				key: "projects",
+				name: "Projects",
+				desc: "Named workspaces that scope every conversation with custom system instructions, pinned notes, and project-level memory.",
+				onDisable: async () => {
+					if (this.activeTab === "projects") {
+						this.activeTab = "general";
+						this.renderTab("general");
+					}
+					await this.plugin.saveSettings();
+				},
+			},
+			{
+				key: "assistants",
+				name: "Assistants",
+				desc: "Vault-native AI personas defined as ASSISTANT.md files — each with its own system prompt, preferred model, and allowed tools.",
+				onDisable: async () => {
+					if (this.activeTab === "assistants") {
+						this.activeTab = "general";
+						this.renderTab("general");
+					}
+					await this.plugin.saveSettings();
+				},
+			},
+			{
+				key: "memory",
+				name: "Memory",
+				desc: "Automatically extract and recall facts, preferences, and context across conversations. Requires Vault Search to be enabled.",
+				onEnable: async () => {
+					this.plugin.settings.memorySettings.enabled = true;
+					await this.plugin.saveSettings();
+					this.plugin.initMemoryService();
+				},
+				onDisable: async () => {
+					this.plugin.settings.memorySettings.enabled = false;
+					if (this.activeTab === "memory") {
+						this.activeTab = "general";
+						this.renderTab("general");
+					}
+					await this.plugin.saveSettings();
+					this.plugin.initMemoryService();
+				},
+			},
+			{
+				key: "vaultSearch",
+				name: "Vault Search",
+				desc: "Index your vault with embeddings so tool-capable models can semantically search your notes, and for use by the Memory feature.",
+				onEnable: async () => {
+					this.plugin.settings.ragSettings.enabled = true;
+					await this.plugin.saveSettings();
+					this.plugin.initVaultIndexer();
+				},
+				onDisable: async () => {
+					this.plugin.settings.ragSettings.enabled = false;
+					if (this.activeTab === "embeddings") {
+						this.activeTab = "general";
+						this.renderTab("general");
+					}
+					await this.plugin.saveSettings();
+					this.plugin.initVaultIndexer();
+				},
+			},
+		];
+
+		for (const def of featureDefs) {
+			new Setting(featureItems)
+				.setName(def.name)
+				.setDesc(def.desc)
+				.addToggle((toggle) => {
+					const fs = this.plugin.settings.featureSettings ?? {} as import("Types/types").FeatureSettings;
+					toggle
+						.setValue(!!fs[def.key])
+						.onChange(async (value) => {
+							if (!this.plugin.settings.featureSettings) {
+								this.plugin.settings.featureSettings = {
+									obsidianAgent: false,
+									transcription: false,
+									projects: false,
+									assistants: false,
+									memory: false,
+									vaultSearch: false,
+								};
+							}
+							this.plugin.settings.featureSettings[def.key] = value;
+							if (value) {
+								await def.onEnable?.();
+							} else {
+								await def.onDisable?.();
+							}
+							await this.plugin.saveSettings();
+							this.rebuildSidebar();
+						});
+				});
+		}
 
 		// Root vault folder
 		new Setting(items)

@@ -14,6 +14,22 @@ Output is bundled to `main.js` in the root directory.
 
 ### CSS / Styling Convention (repeated below — see full entry near bottom)
 
+## Feature Gates (`featureSettings`)
+
+All advanced feature tabs are hidden from the settings sidebar by default. `LLMPluginSettings.featureSettings` (type `FeatureSettings` in `types.ts`) holds a boolean per feature, all defaulting to `false`. The "Features" section in the General settings tab is the user-facing entry point.
+
+Gated nav items and their corresponding `featureSettings` key:
+- `obsidian-agent` → `obsidianAgent` (also syncs `obsidianAgentSettings.enabled`)
+- `transcription` → `transcription` (also syncs `whisperSettings.enabled`)
+- `projects` → `projects`
+- `assistants` → `assistants`
+- `memory` → `memory` (also syncs `memorySettings.enabled`)
+- `embeddings` → `vaultSearch` (also syncs `ragSettings.enabled`)
+
+When a feature is toggled on/off, `LLMSettingsModal.rebuildSidebar()` is called so the sidebar updates immediately. If the user disables a feature while on that tab, it auto-navigates back to General.
+
+To add a new gated nav item: add `featureGate: "keyName"` to its entry in `navSections`, add the key to `FeatureSettings`, and add a `FeatureDef` entry in `renderGeneral()`.
+
 ## Obsidian Review Compliance
 
 ### `MarkdownRenderer.render` — use `this`, not `this.plugin`

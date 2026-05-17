@@ -1,6 +1,7 @@
 import { Plugin, WorkspaceLeaf, Platform, addIcon } from "obsidian";
 import {
 	AssistantSettings,
+	FeatureSettings,
 	HistoryItem,
 	ImageQuality,
 	ImageSize,
@@ -116,6 +117,13 @@ export interface LLMPluginSettings {
 	 * live under this root.
 	 */
 	rootVaultFolder: string;
+	/**
+	 * Master feature gates — each controls whether the corresponding feature tab
+	 * appears in the settings sidebar and (for features with an `enabled` flag)
+	 * whether that feature is active. All off by default so new users start with
+	 * a clean, uncluttered experience.
+	 */
+	featureSettings: FeatureSettings;
 }
 
 const defaultSettings = {
@@ -247,6 +255,14 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		maxResults: 5,
 	},
 	rootVaultFolder: "AI",
+	featureSettings: {
+		obsidianAgent: false,
+		transcription: false,
+		projects: false,
+		assistants: false,
+		memory: false,
+		vaultSearch: false,
+	},
 };
 
 export default class LLMPlugin extends Plugin {

@@ -420,6 +420,17 @@ export class Header {
 		const rightButtonsDiv = titleDiv.createDiv();
 		rightButtonsDiv.addClass("llm-right-buttons-div", "llm-flex");
 
+		// Chat Details panel toggle — tab/widget view only (not modal)
+		if (this.viewType === "widget") {
+			const chatDetailsButton = new ButtonComponent(rightButtonsDiv);
+			chatDetailsButton.buttonEl.addClass("clickable-icon");
+			chatDetailsButton.setIcon("message-circle-warning");
+			chatDetailsButton.setTooltip("Chat details");
+			chatDetailsButton.onClick(() => {
+				void this.plugin.activateChatDetailsPanel();
+			});
+		}
+
 		// Right buttons in order: chat history → settings → new chat
 		this.chatHistoryButton = new ButtonComponent(rightButtonsDiv);
 		this.settingsButton = new ButtonComponent(rightButtonsDiv);

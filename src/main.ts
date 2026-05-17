@@ -256,7 +256,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		host: "http://localhost:8080",
 		maxResults: 5,
 	},
-	rootVaultFolder: "AI",
+	rootVaultFolder: "",
 	featureSettings: {
 		obsidianAgent: false,
 		transcription: false,
@@ -333,14 +333,18 @@ export default class LLMPlugin extends Plugin {
 		this.projectManager = new ProjectManager(this.app);
 		this.assistantManager = new AssistantManager(this.app);
 		this.obsidianAgent = new ObsidianAgent(this);
-		// Skills, Projects, and Assistants are in the vault — wait for layout ready before scanning
+		// Skills, Projects, and Assistants are in the vault — wait for layout ready before scanning.
+		// Only initialise if the user has configured a root vault folder; otherwise these are no-ops
+		// and no folders are created (consistent with Obsidian's own core plugin behaviour).
 		this.app.workspace.onLayoutReady(async () => {
-			await this.skillRegistry.seedBuiltinSkills();
-			await this.skillRegistry.setFolder(this.skillsFolder);
+			if (this.settings.rootVaultFolder) {
+				await this.skillRegistry.seedBuiltinSkills();
+				await this.skillRegistry.setFolder(this.skillsFolder);
+				await this.projectManager.setFolder(this.projectsFolder);
+				await this.assistantManager.setFolder(this.assistantsFolder);
+			}
 			this.registerSkillVaultEvents();
-			await this.projectManager.setFolder(this.projectsFolder);
 			this.registerProjectVaultEvents();
-			await this.assistantManager.setFolder(this.assistantsFolder);
 			this.registerAssistantVaultEvents();
 		});
 		this.registerOllamaModels();
@@ -557,28 +561,36 @@ export default class LLMPlugin extends Plugin {
 	 * All code that needs the skills folder path should use this getter.
 	 */
 	get skillsFolder(): string {
-		return (this.settings.rootVaultFolder || "AI") + "/Skills";
+		return this.settings.rootVaultFolder
+			? this.settings.rootVaultFolder + "/Skills"
+			: "";
 	}
 
 	/**
 	 * Derived path to the global Memories folder: "<rootVaultFolder>/Memories".
 	 */
 	get memoriesFolder(): string {
-		return (this.settings.rootVaultFolder || "AI") + "/Memories";
+		return this.settings.rootVaultFolder
+			? this.settings.rootVaultFolder + "/Memories"
+			: "";
 	}
 
 	/**
 	 * Derived path to the Projects folder: "<rootVaultFolder>/Projects".
 	 */
 	get projectsFolder(): string {
-		return (this.settings.rootVaultFolder || "AI") + "/Projects";
+		return this.settings.rootVaultFolder
+			? this.settings.rootVaultFolder + "/Projects"
+			: "";
 	}
 
 	/**
 	 * Derived path to the Assistants folder: "<rootVaultFolder>/Assistants".
 	 */
 	get assistantsFolder(): string {
-		return (this.settings.rootVaultFolder || "AI") + "/Assistants";
+		return this.settings.rootVaultFolder
+			? this.settings.rootVaultFolder + "/Assistants"
+			: "";
 	}
 
 	/**
@@ -586,6 +598,7 @@ export default class LLMPlugin extends Plugin {
 	 * Call after the root vault folder setting changes.
 	 */
 	async reinitProjectManager(): Promise<void> {
+		if (!this.settings.rootVaultFolder) return;
 		await this.projectManager.setFolder(this.projectsFolder);
 	}
 
@@ -594,6 +607,7 @@ export default class LLMPlugin extends Plugin {
 	 * Call after the root vault folder setting changes.
 	 */
 	async reinitAssistantManager(): Promise<void> {
+		if (!this.settings.rootVaultFolder) return;
 		await this.assistantManager.setFolder(this.assistantsFolder);
 	}
 
@@ -779,6 +793,7 @@ export default class LLMPlugin extends Plugin {
 	 * Call after the root vault folder setting changes.
 	 */
 	async reinitSkillRegistry(): Promise<void> {
+		if (!this.settings.rootVaultFolder) return;
 		await this.skillRegistry.seedBuiltinSkills();
 		await this.skillRegistry.setFolder(this.skillsFolder);
 	}
@@ -1108,8 +1123,34 @@ export default class LLMPlugin extends Plugin {
 				...(dataJSON.searxngSettings ?? {}),
 			};
 
-			// Ensure rootVaultFolder has a value (new field — may be absent in old saves)
-			if (!this.settings.rootVaultFolder) {
+			// Deep-merge featureSettings so new gates default to false if absent from saved data
+			this.settings.featureSettings = {
+				...DEFAULT_SETTINGS.featureSettings,
+				...(dataJSON.featureSettings ?? {}),
+			};
+
+			// Deep-merge toolSettings so new fields get defaults if missing from saved data
+			this.settings.toolSettings = {
+				...DEFAULT_SETTINGS.toolSettings,
+				...(dataJSON.toolSettings ?? {}),
+			};
+
+			// Deep-merge obsidianAgentSettings — nested Records need spread so new keys get defaults
+			this.settings.obsidianAgentSettings = {
+				...DEFAULT_SETTINGS.obsidianAgentSettings,
+				...(dataJSON.obsidianAgentSettings ?? {}),
+				availableSkills: {
+					...DEFAULT_SETTINGS.obsidianAgentSettings.availableSkills,
+					...(dataJSON.obsidianAgentSettings?.availableSkills ?? {}),
+				},
+				availableAssistants: {
+					...DEFAULT_SETTINGS.obsidianAgentSettings.availableAssistants,
+					...(dataJSON.obsidianAgentSettings?.availableAssistants ?? {}),
+				},
+			};
+
+			// Ensure rootVaultFolder is a string (new field — may be absent in old saves)
+			if (this.settings.rootVaultFolder === undefined || this.settings.rootVaultFolder === null) {
 				this.settings.rootVaultFolder = DEFAULT_SETTINGS.rootVaultFolder;
 			}
 

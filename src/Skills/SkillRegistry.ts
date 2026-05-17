@@ -82,6 +82,8 @@ export class SkillRegistry {
 	 * Call this once before reloadAll() during plugin startup.
 	 */
 	async seedBuiltinSkills(): Promise<void> {
+		if (!this.skillsFolder) return;
+
 		const adapter = this.app.vault.adapter;
 
 		// Ensure the skills folder itself exists

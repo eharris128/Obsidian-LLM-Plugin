@@ -583,14 +583,14 @@ export class LLMSettingsModal extends Modal {
 			.setName("Root vault folder")
 			.setDesc(
 				"Vault folder used as the root for all AI feature data. " +
-				"Skills live at <root>/Skills, with future features (Assistants, Projects, Memories, Chats) " +
-				"following the same pattern."
+				"For example, entering \"AI\" will store Skills at AI/Skills, Projects at AI/Projects, " +
+				"Memories at AI/Memories, and so on. Leave blank to keep your vault unchanged."
 			)
 			.addText((text) => {
-				text.setPlaceholder("AI");
-				text.setValue(this.plugin.settings.rootVaultFolder ?? "AI");
+				text.setPlaceholder("e.g. AI");
+				text.setValue(this.plugin.settings.rootVaultFolder ?? "");
 				text.onChange(async (value) => {
-					this.plugin.settings.rootVaultFolder = value.trim() || "AI";
+					this.plugin.settings.rootVaultFolder = value.trim();
 					await this.plugin.saveSettings();
 					await this.plugin.reinitSkillRegistry();
 					await this.plugin.reinitProjectManager();
@@ -1233,8 +1233,13 @@ export class LLMSettingsModal extends Modal {
 		// Read-only info: show where skills are expected, linking to root folder setting
 		el.createDiv({
 			cls: "setting-item-description",
-			text: `Skills are loaded from "${skillsFolder}". To change the root, update the Root vault folder in General settings.`,
+			text: skillsFolder
+				? `Skills are loaded from "${skillsFolder}". To change the root, update the Root vault folder in General settings.`
+				: `Set a root vault folder in General → Root vault folder to enable Skills.\n` +
+				  `Skills will be stored at <root>/Skills/, each as a sub-folder with a SKILL.md file.`,
 		});
+
+		if (!skillsFolder) return;
 
 		// Show the skills discovered in the current folder
 		const skills = this.plugin.skillRegistry?.getSkills() ?? [];
@@ -1356,15 +1361,18 @@ export class LLMSettingsModal extends Modal {
 
 		const folderItems = this.addSettingGroup(el, "Storage");
 
-		const root = this.plugin.settings.rootVaultFolder || "AI";
+		const root = this.plugin.settings.rootVaultFolder || "e.g. AI";
 		folderItems.createDiv({
 			cls: "setting-item-description",
-			text:
-				`Memories are stored in your vault under:\n` +
-				`  ${root}/Memories/           (global — always recalled)\n` +
-				`  ${root}/Assistants/<name>/memories/  (recalled when assistant is active)\n` +
-				`  ${root}/Projects/<name>/memories/    (recalled when project is active)\n\n` +
-				`Files are plain Markdown — you can read, edit, and delete them directly in Obsidian.`,
+			text: this.plugin.settings.rootVaultFolder
+				? `Memories are stored in your vault under:\n` +
+				  `  ${root}/Memories/           (global — always recalled)\n` +
+				  `  ${root}/Assistants/<name>/memories/  (recalled when assistant is active)\n` +
+				  `  ${root}/Projects/<name>/memories/    (recalled when project is active)\n\n` +
+				  `Files are plain Markdown — you can read, edit, and delete them directly in Obsidian.`
+				: `Set a root vault folder in General → Root vault folder to enable memory storage.\n` +
+				  `Once configured, memories will live at <root>/Memories/, <root>/Assistants/<name>/memories/, ` +
+				  `and <root>/Projects/<name>/memories/.`,
 		});
 	}
 
@@ -1375,7 +1383,10 @@ export class LLMSettingsModal extends Modal {
 		const projectsFolder = this.plugin.projectsFolder;
 		el.createDiv({
 			cls: "setting-item-description",
-			text: `Projects are loaded from "${projectsFolder}". Each project is a sub-folder containing a PROJECT.md file.`,
+			text: projectsFolder
+				? `Projects are loaded from "${projectsFolder}". Each project is a sub-folder containing a PROJECT.md file.`
+				: `Set a root vault folder in General → Root vault folder to enable Projects.\n` +
+				  `Projects will be stored at <root>/Projects/, each as a sub-folder with a PROJECT.md file.`,
 		});
 
 		// ── Create new project form ───────────────────────────────────────────
@@ -1520,7 +1531,10 @@ export class LLMSettingsModal extends Modal {
 		const assistantsFolder = this.plugin.assistantsFolder;
 		el.createDiv({
 			cls: "setting-item-description",
-			text: `Assistants are loaded from "${assistantsFolder}". Each assistant is a sub-folder containing an ASSISTANT.md file.`,
+			text: assistantsFolder
+				? `Assistants are loaded from "${assistantsFolder}". Each assistant is a sub-folder containing an ASSISTANT.md file.`
+				: `Set a root vault folder in General → Root vault folder to enable Assistants.\n` +
+				  `Assistants will be stored at <root>/Assistants/, each as a sub-folder with an ASSISTANT.md file.`,
 		});
 
 		// ── Create new assistant form ──────────────────────────────────────────

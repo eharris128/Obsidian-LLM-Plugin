@@ -66,6 +66,29 @@ Each view composes these shared components from `src/Plugin/Components/`:
 - `SettingsContainer.ts` - Model/parameter configuration
 - `AssistantsContainer.ts` - OpenAI assistants selection
 
+### Chats Panel (`ChatsView`)
+
+`src/Plugin/ChatsView/ChatsView.ts` — a standalone `ItemView` sidebar leaf (view type `CHATS_VIEW_TYPE = "llm-chats-view"`, defined in `constants.ts`) that lists **all** LLM conversations from every location (default chat folder + all project `chats/` subfolders), sorted newest-first.
+
+Key design points:
+- Calls `plugin.chatHistory.list()` on open and refreshes automatically via vault `create/modify/delete/rename` events.
+- Displays title (frontmatter), relative timestamp, project badge, and agent badge per row.
+- Inline search box filters by title and project name.
+- Clicking a row calls `plugin.openChatFileInWidget(filePath)` — opens (or focuses) the chat widget and loads that conversation.
+- A "new chat" icon button calls `plugin.activateTab()`.
+- Registered in `main.ts`; opened via the `open-chats-panel` command ("Open Chats panel").
+- `plugin.activateChatsPanel()` opens the panel in the right sidebar (or reveals it if already open and calls `refresh()`).
+- CSS classes use the `.llm-chats-*` prefix; all values use Obsidian CSS variables.
+
+Native Obsidian DOM/component patterns used (keeps the panel visually consistent with Obsidian's own sidebar panels):
+- `SearchComponent` → renders `search-input-container` with icon + clear button
+- `ExtraButtonComponent` → renders `clickable-icon` / `nav-action-button` for the toolbar
+- `nav-header` / `nav-buttons-container` → toolbar chrome
+- `nav-files-container` → scrollable list area
+- `tree-item` / `tree-item-self` / `tree-item-inner` / `tree-item-flair` → row structure (mirrors file-explorer)
+- `.tag` → project and agent pill badges
+- `pane-empty` → empty-state message
+
 ### State Management
 
 - **MessageStore** (`src/Plugin/Components/MessageStore.ts`) - Pub/sub pattern for in-memory message state; synchronizes all views

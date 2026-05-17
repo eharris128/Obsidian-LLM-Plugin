@@ -35,6 +35,7 @@ import { StatusBarButton } from "Plugin/StatusBar/StatusBarButton";
 import { RecentChatsButton } from "Plugin/StatusBar/RecentChatsButton";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
 import { TAB_VIEW_TYPE, WidgetView } from "Plugin/Widget/Widget";
+import { CHATS_VIEW_TYPE, ChatsView } from "Plugin/ChatsView/ChatsView";
 import SettingsView from "Settings/SettingsView";
 import { getApiKeyValidity } from "utils/utils";
 import { models, modelNames, buildOllamaModels, buildLMStudioModels, openAIModelIds } from "utils/models";
@@ -351,6 +352,7 @@ export default class LLMPlugin extends Plugin {
 		await this.saveSettings();
 
 		this.registerView(TAB_VIEW_TYPE, (tab) => new WidgetView(tab, this));
+		this.registerView(CHATS_VIEW_TYPE, (leaf) => new ChatsView(leaf, this));
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.fab = new FAB(this);
@@ -864,6 +866,14 @@ export default class LLMPlugin extends Plugin {
 			},
 		});
 
+		this.addCommand({
+			id: "open-chats-panel",
+			name: "Open Chats panel",
+			callback: () => {
+				void this.activateChatsPanel();
+			},
+		});
+
 		// ── Whisper commands ──────────────────────────────────────────────────
 		this.addCommand({
 			id: "transcribe-audio-file",
@@ -902,6 +912,27 @@ export default class LLMPlugin extends Plugin {
 				new ChatModal2(this).open();
 			});
 		}
+	}
+
+	/**
+	 * Open (or reveal) the Chats panel in the right sidebar.
+	 * If it's already open, simply bring it into focus.
+	 */
+	async activateChatsPanel() {
+		const { workspace } = this.app;
+		const leaves = workspace.getLeavesOfType(CHATS_VIEW_TYPE);
+
+		if (leaves.length > 0) {
+			workspace.revealLeaf(leaves[0]);
+			const view = leaves[0].view as ChatsView;
+			await view.refresh();
+			return;
+		}
+
+		const leaf = workspace.getLeftLeaf(false);
+		if (!leaf) return;
+		await leaf.setViewState({ type: CHATS_VIEW_TYPE, active: true });
+		workspace.revealLeaf(leaf);
 	}
 
 	async activateTab() {

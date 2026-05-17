@@ -2491,3 +2491,51 @@ button.llm-mic-button.llm-mic-transcribing {
 	margin-top: 1.5em;
 	margin-bottom: 0.5em;
 }
+
+/* ── Chats Panel ──────────────────────────────────────────────────────────── */
+/*
+ * Most styling comes from Obsidian's native classes:
+ *   nav-header / nav-buttons-container / nav-action-button  — toolbar
+ *   search-input-container                                   — search box (via SearchComponent)
+ *   nav-files-container                                      — scrollable list
+ *   tree-item / tree-item-self / tree-item-inner / tree-item-flair — rows
+ *   tag                                                      — project / agent badges
+ *   pane-empty                                               — empty state
+ *
+ * Only the bits Obsidian doesn't already cover are defined here.
+ */
+
+/* Left icon column — size + colour to match file-explorer icons */
+.llm-chats-row-icon {
+	color: var(--nav-item-color);
+}
+
+.llm-chats-row-icon svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+
+/* Subtitle row that sits below the title inside tree-item-inner */
+.llm-chats-meta {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-top: 2px;
+	flex-wrap: wrap;
+}
+
+/* Project badge — accent colour tint (overrides .tag defaults) */
+.llm-chats-tag-project {
+	color: var(--text-accent);
+	background-color: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+	border-color: transparent;
+	cursor: default;
+}
+
+/* Agent badge — purple tint */
+.llm-chats-tag-agent {
+	color: var(--color-purple);
+	background-color: color-mix(in srgb, var(--color-purple) 12%, transparent);
+	border-color: transparent;
+	cursor: default;
+}

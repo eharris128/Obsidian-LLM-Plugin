@@ -7,6 +7,7 @@ import {
 	Notice,
 	Setting,
 	setIcon,
+	TFile,
 } from "obsidian";
 import { FeatureSettings } from "Types/types";
 import { changeDefaultModel, fetchOllamaModels, fetchLMStudioModels, getGpt4AllPath } from "utils/utils";
@@ -84,6 +85,7 @@ export class LLMSettingsModal extends Modal {
 				{ id: "chat",           label: "Chat",            icon: "message-square" },
 				{ id: "tools",          label: "Tools",           icon: "wrench" },
 				{ id: "skills",         label: "Skills",          icon: "scroll-text" },
+				{ id: "connectors",     label: "Connectors",      icon: "blocks" },
 				{ id: "memory",         label: "Memory",          icon: "brain",           featureGate: "memory" },
 				{ id: "embeddings",     label: "Embeddings",      icon: "database",        featureGate: "vaultSearch" },
 				{ id: "projects",       label: "Projects",        icon: "folder-open",     featureGate: "projects" },
@@ -274,6 +276,7 @@ export class LLMSettingsModal extends Modal {
 			case "tools":         this.renderTools();        break;
 			case "embeddings":    this.renderEmbeddings();   break;
 			case "skills":        this.renderSkills();        break;
+			case "connectors":    this.renderConnectors();    break;
 			case "memory":        this.renderMemory();        break;
 			case "projects":      this.renderProjects();      break;
 			case "assistants":      this.renderAssistants();      break;
@@ -512,7 +515,7 @@ export class LLMSettingsModal extends Modal {
 			{
 				key: "memory",
 				name: "Memory",
-				desc: "Automatically extract and recall facts, preferences, and context across conversations. Requires Vault Search to be enabled.",
+				desc: "Automatically extract and recall facts, preferences, and context across conversations. Requires Embeddings to be enabled.",
 				onEnable: async () => {
 					this.plugin.settings.memorySettings.enabled = true;
 					await this.plugin.saveSettings();
@@ -530,7 +533,7 @@ export class LLMSettingsModal extends Modal {
 			},
 			{
 				key: "vaultSearch",
-				name: "Vault Search",
+				name: "Embeddings",
 				desc: "Index your vault with embeddings so tool-capable models can semantically search your notes, and for use by the Memory feature.",
 				onEnable: async () => {
 					this.plugin.settings.ragSettings.enabled = true;
@@ -599,6 +602,26 @@ export class LLMSettingsModal extends Modal {
 					await this.plugin.reinitAssistantManager();
 				});
 			});
+
+		// ── General Instructions (AGENTS.md) ─────────────────────────────────
+		const agentsGroup = this.addSettingGroup(el, "General Instructions");
+		el.createEl("p", {
+			cls: "setting-item-description",
+			text: "A vault note whose contents are injected into every conversation — all models, assistants, and the Obsidian Agent. Use it to describe how you work, your preferred response style, or vault conventions that should always apply.",
+		});
+		this.renderGuidanceFilePicker(
+			agentsGroup,
+			"Instructions file",
+			"Vault-relative path to your general instructions note (e.g. AI/AGENTS.md).",
+			"AI/AGENTS.md",
+			`# General Instructions\n\nThis note is injected into every conversation in this vault.\n\n## About This Vault\n\n<!-- Describe how your vault is organised, what it's for, naming conventions, etc. -->\n\n## Preferred Behaviors\n\n<!-- Describe your preferred response style, tone, format, or workflow. -->\n\n## Conventions\n\n<!-- Note any file templates, frontmatter patterns, or folder rules the AI should follow. -->\n`,
+			() => this.plugin.settings.agentsFilePath ?? "",
+			async (value) => {
+				this.plugin.settings.agentsFilePath = value;
+				await this.plugin.saveSettings();
+				this.plugin.refreshAllChips?.();
+			},
+		);
 	}
 
 	private renderInterface() {
@@ -690,6 +713,81 @@ export class LLMSettingsModal extends Modal {
 			});
 	}
 
+	/**
+	 * Renders a file-picker row: a path text input + a smart button that says
+	 * "Open" when the file exists or "Create" when it doesn't.
+	 *
+	 * @param container    - The HTMLElement to append the Setting into
+	 * @param name         - Setting row label
+	 * @param desc         - Setting row description
+	 * @param placeholder  - Placeholder path shown when the field is empty
+	 * @param template     - Markdown content written when "Create" is pressed
+	 * @param getValue     - Returns the current stored path
+	 * @param setValue     - Persists a new path value
+	 */
+	private renderGuidanceFilePicker(
+		container: HTMLElement,
+		name: string,
+		desc: string,
+		placeholder: string,
+		template: string,
+		getValue: () => string,
+		setValue: (path: string) => Promise<void>,
+	): void {
+		let currentPath = getValue();
+
+		const setting = new Setting(container).setName(name).setDesc(desc);
+
+		// ── Path text input ───────────────────────────────────────────────────
+		setting.addText((text) => {
+			text.setPlaceholder(placeholder)
+				.setValue(currentPath)
+				.onChange(async (value) => {
+					currentPath = value.trim();
+					await setValue(currentPath);
+					refreshButton();
+				});
+			text.inputEl.addClass("llm-guidance-file-input");
+		});
+
+		// ── Open / Create button ──────────────────────────────────────────────
+		let btn: ButtonComponent;
+		const refreshButton = () => {
+			const path = currentPath || placeholder;
+			const exists = this.plugin.app.vault.getAbstractFileByPath(path) instanceof TFile;
+			btn.setButtonText(exists ? "Open" : "Create");
+		};
+
+		setting.addButton((b) => {
+			btn = b;
+			refreshButton();
+			b.onClick(async () => {
+				const path = currentPath || placeholder;
+				let tfile = this.plugin.app.vault.getAbstractFileByPath(path);
+				if (!(tfile instanceof TFile)) {
+					// Ensure parent folder exists
+					const dir = path.includes("/") ? path.substring(0, path.lastIndexOf("/")) : "";
+					if (dir) {
+						try { await this.plugin.app.vault.adapter.mkdir(dir); } catch { /* already exists */ }
+					}
+					try {
+						tfile = await this.plugin.app.vault.create(path, template);
+						// Persist the path if it was still the placeholder default
+						if (!currentPath) {
+							currentPath = path;
+							await setValue(path);
+						}
+						refreshButton();
+					} catch (e) {
+						new Notice(`Could not create ${path}: ${String(e)}`);
+						return;
+					}
+				}
+				await this.plugin.app.workspace.getLeaf(false).openFile(tfile as TFile);
+			});
+		});
+	}
+
 	private renderApiKeyField(items: HTMLElement, config: APIKeyConfig) {
 		new Setting(items)
 			.setName(config.name)
@@ -732,8 +830,14 @@ export class LLMSettingsModal extends Modal {
 				});
 			});
 
+	}
+
+	private renderConnectors() {
+		const el = this.mainContentEl;
+		this.addTabHeader(el, "Connectors");
+
 		// Linear workspaces
-		const workspaceItems = this.addSettingGroup(el, "Linear Workspaces");
+		const workspaceItems = this.addSettingGroup(el, "Linear");
 		const workspaceListEl = workspaceItems.createDiv({ cls: "linear-workspace-list" });
 		this.renderWorkspaceList(workspaceListEl);
 		const addWorkspaceSetting = new Setting(workspaceItems)
@@ -956,7 +1060,7 @@ export class LLMSettingsModal extends Modal {
 		new Setting(contextItems)
 			.setName("Enable file context")
 			.setDesc(
-				"Allow AI to access vault files. When disabled, the AI will not have access to any files from your vault."
+				"Allow models to access vault files. When disabled, models will not have access to any files from your vault."
 			)
 			.addToggle((toggle) => {
 				toggle
@@ -1009,8 +1113,8 @@ export class LLMSettingsModal extends Modal {
 			migrationGroup.style.display = "";
 
 			new Setting(migrationEl)
-				.setName("History folder")
-				.setDesc("Vault folder where chat files will be saved.")
+				.setName("New chat file location")
+				.setDesc("New chat files will be placed here.")
 				.addText((text) => {
 					text.setPlaceholder("LLM Chats");
 					text.setValue(this.plugin.settings.chatHistoryFolder);
@@ -1130,7 +1234,7 @@ export class LLMSettingsModal extends Modal {
 			// Description: tool description + optional dependency notes
 			let desc = tool.description;
 			if (tool.requiresRag && !ragEnabled) {
-				desc += " ⚠ Requires Vault Search to be enabled.";
+				desc += " ⚠ Requires Embeddings to be enabled.";
 			}
 			if (tool.requiresWebSearch && !webSearchEnabled) {
 				desc += " ⚠ Requires Web Search (SearXNG) to be enabled in Obsidian Agent settings.";
@@ -1161,10 +1265,8 @@ export class LLMSettingsModal extends Modal {
 
 	private renderEmbeddings() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Embeddings");
-
 		// Embedding configuration
-		const embeddingItems = this.addSettingGroup(el, "Embedding");
+		const embeddingItems = this.addSettingGroup(el);
 
 		new Setting(embeddingItems)
 			.setName("Embedding provider")
@@ -1350,15 +1452,13 @@ export class LLMSettingsModal extends Modal {
 
 	private renderMemory() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Memory");
-
 		const toggleItems = this.addSettingGroup(el);
 
 		new Setting(toggleItems)
 			.setName("Enable memory")
 			.setDesc(
 				"Remember facts, preferences, and context across conversations. " +
-				"Requires Vault Search (RAG) to be enabled for recall."
+				"Requires Embeddings to be enabled for recall."
 			)
 			.addToggle((toggle) => {
 				toggle
@@ -1385,7 +1485,7 @@ export class LLMSettingsModal extends Modal {
 		if (!this.plugin.settings.ragSettings?.enabled) {
 			el.createDiv({
 				cls: "setting-item-description",
-				text: "⚠️ Memory recall requires Vault Search to be enabled. Enable it in the Vault Search tab.",
+				text: "⚠️ Memory recall requires Embeddings to be enabled. Enable it in the Embeddings tab.",
 			});
 		}
 
@@ -1942,28 +2042,24 @@ export class LLMSettingsModal extends Modal {
 				});
 		}
 
-		// ── Vault Guidance ───────────────────────────────────────────────────
-		const guidanceGroup = this.addSettingGroup(el, "Vault Guidance");
-		new Setting(guidanceGroup)
-			.setName("Custom instructions")
-			.setDesc(
-				"Free-text instructions appended after the agent's auto-generated base prompt. " +
-				"Use this to describe your vault structure, preferred workflows, or routing rules. " +
-				'Example: "When asked to do research, use the Research Assistant. Always save findings in Projects/Research/."'
-			)
-			.addTextArea((textarea) => {
-				textarea
-					.setPlaceholder(
-						"Describe your vault, preferred workflows, or routing rules…"
-					)
-					.setValue(s.vaultGuidance ?? "")
-					.onChange(async (value) => {
-						this.plugin.settings.obsidianAgentSettings.vaultGuidance = value;
-						await this.plugin.saveSettings();
-					});
-				textarea.inputEl.rows = 6;
-				textarea.inputEl.addClass("llm-agent-guidance-textarea");
-			});
+		// ── Agent Guidance File ──────────────────────────────────────────────
+		const guidanceGroup = this.addSettingGroup(el, "Agent Guidance");
+		el.createEl("p", {
+			cls: "setting-item-description",
+			text: "A vault note that tells the Obsidian Agent how to navigate this vault — its structure, naming conventions, routing rules, and off-limits folders. Unlike the General Instructions file, this is only injected when the Obsidian Agent is active.",
+		});
+		this.renderGuidanceFilePicker(
+			guidanceGroup,
+			"Guidance file",
+			"Vault-relative path to your agent guidance note (e.g. AI/OBSIDIAN-AGENT.md).",
+			"AI/OBSIDIAN-AGENT.md",
+			`# Obsidian Agent Guidance\n\nThis note guides the Obsidian Agent when working in this vault.\n\n## Vault Structure\n\n<!-- Describe your folder layout and what lives where. -->\n\n## Conventions\n\n<!-- Note naming conventions, file templates, frontmatter patterns, etc. -->\n\n## Routing Rules\n\n<!-- Describe when to delegate to specific assistants. -->\n\n## Off-Limits\n\n<!-- List folders or files the agent should never modify. -->\n`,
+			() => this.plugin.settings.obsidianAgentSettings.agentGuidanceFile ?? "",
+			async (value) => {
+				this.plugin.settings.obsidianAgentSettings.agentGuidanceFile = value;
+				await this.plugin.saveSettings();
+			},
+		);
 	}
 
 	// ── Transcription ─────────────────────────────────────────────────────────

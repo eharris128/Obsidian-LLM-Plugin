@@ -12,6 +12,7 @@
  * The main model applies the returned assistant context and continues.
  */
 
+import { TFile } from "obsidian";
 import LLMPlugin from "main";
 import { ObsidianToolRegistry, NeutralToolDefinition } from "services/ObsidianToolRegistry";
 
@@ -23,8 +24,9 @@ export class ObsidianAgent {
 	/**
 	 * Build the complete agent system prompt from current plugin state.
 	 * Called once per send (so it always reflects the latest skills/assistants).
+	 * Reads the agentGuidanceFile from the vault if configured.
 	 */
-	buildSystemPrompt(): string {
+	async buildSystemPrompt(): Promise<string> {
 		const settings = this.plugin.settings.obsidianAgentSettings;
 		const skills = this.plugin.skillRegistry?.getSkills() ?? [];
 		const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
@@ -101,9 +103,21 @@ export class ObsidianAgent {
 			);
 		}
 
-		// ── User vault guidance ───────────────────────────────────────────────
-		if (settings.vaultGuidance?.trim()) {
-			parts.push(`## Vault Guidance\n\n${settings.vaultGuidance.trim()}`);
+		// ── Agent guidance file ───────────────────────────────────────────────
+		// Read the vault-native guidance file if one is configured.
+		const guidancePath = settings.agentGuidanceFile?.trim();
+		if (guidancePath) {
+			try {
+				const abstract = this.plugin.app.vault.getAbstractFileByPath(guidancePath);
+				if (abstract instanceof TFile) {
+					const content = await this.plugin.app.vault.read(abstract);
+					if (content.trim()) {
+						parts.push(`## Vault Guidance\n\n${content.trim()}`);
+					}
+				}
+			} catch (e) {
+				console.warn("[ObsidianAgent] Could not read agent guidance file:", e);
+			}
 		}
 
 		return parts.join("\n\n");

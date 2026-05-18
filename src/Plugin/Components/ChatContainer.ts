@@ -1103,6 +1103,28 @@ export class ChatContainer extends Component {
 		}
 		// ── End project context injection ─────────────────────────────────────────
 
+		// ── General instructions (AGENTS.md) ─────────────────────────────────────
+		// Injected for every conversation regardless of model or assistant.
+		// Prepended here so that memory recall (below) will prepend on top of it,
+		// giving memories priority while AGENTS.md remains a visible base layer.
+		const agentsFilePath = this.plugin.settings.agentsFilePath?.trim();
+		if (agentsFilePath && modelEndpoint !== images) {
+			try {
+				const agentsAbstract = this.plugin.app.vault.getAbstractFileByPath(agentsFilePath);
+				if (agentsAbstract instanceof TFile) {
+					const agentsContent = await this.plugin.app.vault.read(agentsAbstract);
+					if (agentsContent.trim()) {
+						const block = `# General Instructions\n\n${agentsContent.trim()}`;
+						this.pendingContextString = block +
+							(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
+					}
+				}
+			} catch (e) {
+				console.warn("[ChatContainer] Could not read AGENTS.md:", e);
+			}
+		}
+		// ── End general instructions ──────────────────────────────────────────────
+
 		// ── Memory recall ─────────────────────────────────────────────────────────
 		this.memoriesInjectedThisTurn = false;
 		if (
@@ -1153,7 +1175,7 @@ export class ChatContainer extends Component {
 			this.plugin.obsidianAgent &&
 			modelEndpoint !== images
 		) {
-			const agentSystemPrompt = this.plugin.obsidianAgent.buildSystemPrompt();
+			const agentSystemPrompt = await this.plugin.obsidianAgent.buildSystemPrompt();
 			if (agentSystemPrompt) {
 				// Append AFTER memories (which were prepended last → appear first).
 				// This places the agent prompt after memories but before all other context.
@@ -2254,9 +2276,10 @@ export class ChatContainer extends Component {
 		// Pinned project notes are also context
 		if (project?.pinnedNotes) {
 			for (const notePath of project.pinnedNotes) {
-				const name = notePath.split("/").pop() || notePath;
-				if (!contextFiles.some((f) => f.path === notePath)) {
-					contextFiles.push({ name, path: notePath });
+				const { displayName, file } = this.resolvePinnedNote(notePath);
+				const resolvedPath = file?.path ?? notePath;
+				if (!contextFiles.some((f) => f.path === resolvedPath)) {
+					contextFiles.push({ name: displayName, path: resolvedPath });
 				}
 			}
 		}
@@ -2296,12 +2319,26 @@ export class ChatContainer extends Component {
 		const hasPinned = pinnedNotes.length > 0;
 		const hasProject = !!activeProject;
 
-		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject) {
+		// AGENTS.md chip — shown whenever the file is configured and exists in the vault
+		const agentsFilePath = this.plugin.settings.agentsFilePath?.trim();
+		const agentsFile = agentsFilePath
+			? (this.plugin.app.vault.getAbstractFileByPath(agentsFilePath) instanceof TFile
+				? this.plugin.app.vault.getAbstractFileByPath(agentsFilePath) as TFile
+				: null)
+			: null;
+		const hasAgentsFile = !!agentsFile;
+
+		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject && !hasAgentsFile) {
 			this.chipContainer.style.display = "none";
 			return;
 		}
 
 		this.chipContainer.style.display = "flex";
+
+		// AGENTS.md chip — always first, non-removable, clickable to open the file
+		if (hasAgentsFile && agentsFile) {
+			this.buildAgentsFileChip(this.chipContainer, agentsFile);
+		}
 
 		// Project chip — icon-only at rest, name revealed on hover
 		if (hasProject && activeProject) {
@@ -2392,6 +2429,22 @@ export class ChatContainer extends Component {
 		removeBtn.addEventListener("click", (e) => {
 			e.stopPropagation();
 			onRemove();
+		});
+		return chip;
+	}
+
+	/**
+	 * Build the AGENTS.md chip — non-removable, always visible when configured,
+	 * clickable to open the file. Uses the book-open icon to distinguish it from
+	 * pinned notes (pin) and project chips (box).
+	 */
+	private buildAgentsFileChip(container: HTMLElement, file: TFile): HTMLElement {
+		const chip = container.createDiv({ cls: "llm-context-chip llm-context-chip--agents llm-context-chip--clickable" });
+		const iconEl = chip.createSpan({ cls: "llm-context-chip-icon" });
+		setIcon(iconEl, "book-open");
+		chip.createSpan({ text: file.basename, cls: "llm-context-chip-name" });
+		chip.addEventListener("click", () => {
+			this.plugin.app.workspace.getLeaf(false).openFile(file);
 		});
 		return chip;
 	}

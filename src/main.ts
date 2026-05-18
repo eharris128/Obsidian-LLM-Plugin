@@ -126,6 +126,12 @@ export interface LLMPluginSettings {
 	 * a clean, uncluttered experience.
 	 */
 	featureSettings: FeatureSettings;
+	/**
+	 * Vault-relative path to the general instructions file injected into every
+	 * conversation (all models, assistants, and the Obsidian Agent).
+	 * Defaults to "AI/AGENTS.md". Empty string = disabled.
+	 */
+	agentsFilePath: string;
 }
 
 const defaultSettings = {
@@ -237,7 +243,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		enableWebSearch: false,
 		availableSkills: {},
 		availableAssistants: {},
-		vaultGuidance: "",
+		agentGuidanceFile: "",
 	},
 	whisperSettings: {
 		enabled: false,
@@ -257,6 +263,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		maxResults: 5,
 	},
 	rootVaultFolder: "",
+	agentsFilePath: "AI/AGENTS.md",
 	featureSettings: {
 		obsidianAgent: false,
 		transcription: false,
@@ -314,6 +321,13 @@ export default class LLMPlugin extends Plugin {
 			  <path d="M11.264 2.205A4 4 0 0 0 6.42 4.211l-4 8a4 4 0 0 0 1.359 5.117l6 4a4 4 0 0 0 4.438 0l6-4a4 4 0 0 0 1.576-4.592l-2-6a4 4 0 0 0-2.53-2.53z"/>
 			  <path d="M11.99 22 14 12l7.822 3.184"/>
 			  <path d="M14 12 8.47 2.302"/>
+			</g>`
+		);
+		addIcon(
+			"blocks",
+			`<g transform="scale(4.1667)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+			  <rect width="7" height="7" x="14" y="3" rx="1"/>
+			  <path d="M10 21V8a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5a1 1 0 0 0-1-1H3"/>
 			</g>`
 		);
 
@@ -435,6 +449,15 @@ export default class LLMPlugin extends Plugin {
 		this.app.workspace.getLeavesOfType(TAB_VIEW_TYPE).forEach((leaf: WorkspaceLeaf) => {
 			(leaf.view as WidgetView).refreshEmptyState();
 		});
+	}
+
+	/** Re-render the chip strip in every live chat view (e.g. after the AGENTS.md path changes). */
+	refreshAllChips() {
+		this.fab?.syncChips();
+		this.statusBarButton?.syncChips();
+		for (const leaf of this.app.workspace.getLeavesOfType(TAB_VIEW_TYPE)) {
+			(leaf.view as WidgetView).syncChips();
+		}
 	}
 
 	/** Open a chat markdown file in the widget tab, creating the widget if needed. */

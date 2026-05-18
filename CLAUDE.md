@@ -555,12 +555,27 @@ Defined and registered in `ObsidianAgent.registerTools(registry: ObsidianToolReg
 
 #### System prompt composition
 
-`ObsidianAgent.buildSystemPrompt()` auto-generates from live state:
+`ObsidianAgent.buildSystemPrompt()` is **async** — it reads the vault file at `obsidianAgentSettings.agentGuidanceFile` if configured. Auto-generates from live state:
 1. Base identity paragraph
 2. Available Skills list (filtered by `obsidianAgentSettings.availableSkills`)
 3. Available Assistants list with `invoke_assistant` instructions (filtered by `obsidianAgentSettings.availableAssistants`)
 4. Projects in the vault
-5. User vault guidance text (`obsidianAgentSettings.vaultGuidance`)
+5. Chat history folder paths (when `chatHistoryEnabled`)
+6. Agent guidance file content (read from vault at `agentGuidanceFile` path)
+
+#### Vault guidance files (two distinct concepts)
+
+The plugin exposes two vault-native guidance files:
+
+| File | Setting key | Scope | Injected when |
+|------|-------------|-------|---------------|
+| `AI/OBSIDIAN-AGENT.md` (default empty) | `obsidianAgentSettings.agentGuidanceFile` | Obsidian Agent only | Agent turns — appended inside `buildSystemPrompt()` |
+| `AI/AGENTS.md` (default path) | `LLMPluginSettings.agentsFilePath` | Every conversation | All sends — prepended to `pendingContextString` before memory recall |
+
+- **Agent guidance file** — tells the Obsidian Agent how to navigate this specific vault (structure, conventions, off-limits folders, routing rules). Configured in Settings → Obsidian Agent → "Agent Guidance".
+- **General instructions file** (AGENTS.md) — a global system prompt injected into every conversation regardless of model or assistant. Configured in Settings → General → "General Instructions". Shown as a non-removable `book-open` chip in the chat strip when the file exists.
+- Both use the shared `renderGuidanceFilePicker()` helper in `LLMSettingsModal` — a path text input + smart "Open"/"Create" button.
+- `plugin.refreshAllChips()` re-renders chips in all live views (FAB, StatusBar, Widget). Call after the `agentsFilePath` setting changes.
 
 #### Settings
 
@@ -569,9 +584,11 @@ Defined and registered in `ObsidianAgent.registerTools(registry: ObsidianToolReg
 - `enableWebSearch: boolean` — placeholder for future web search support
 - `availableSkills: Record<string, boolean>` — per-skill opt-in/out; missing keys = available
 - `availableAssistants: Record<string, boolean>` — per-assistant opt-in/out; missing keys = available
-- `vaultGuidance: string` — appended to the auto-generated base prompt
+- `agentGuidanceFile: string` — vault-relative path to the agent's guidance note (empty = disabled)
 
-Settings UI lives in `LLMSettingsModal` under Features → Obsidian Agent.
+`LLMPluginSettings.agentsFilePath: string` — vault-relative path to the general instructions file (default `"AI/AGENTS.md"`; empty = disabled).
+
+Settings UI lives in `LLMSettingsModal` under Features → Obsidian Agent (agent guidance) and General → General Instructions (AGENTS.md).
 
 #### Dynamic tool registration
 

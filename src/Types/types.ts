@@ -266,8 +266,12 @@ export type ObsidianAgentSettings = {
 	 * Explicitly false = excluded. Missing = available (default true).
 	 */
 	availableAssistants: Record<string, boolean>;
-	/** Free-text instructions appended after the agent's auto-generated base prompt. */
-	vaultGuidance: string;
+	/**
+	 * Vault-relative path to a markdown file used as the agent's guidance document.
+	 * Content is injected into the agent system prompt on every turn.
+	 * Empty string = no guidance file.
+	 */
+	agentGuidanceFile: string;
 };
 
 export type ToolSettings = {

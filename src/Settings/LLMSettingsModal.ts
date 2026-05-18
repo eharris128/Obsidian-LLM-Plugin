@@ -101,6 +101,7 @@ export class LLMSettingsModal extends Modal {
 				{ id: "mistral",      label: "Mistral",      icon: "wind" },
 				{ id: "ollama",       label: "Ollama",       icon: "cpu" },
 				{ id: "lmstudio",     label: "LM Studio",   icon: "monitor" },
+				{ id: "gpt4all",      label: "GPT4All",      icon: "hard-drive" },
 			],
 		},
 	];
@@ -268,6 +269,7 @@ export class LLMSettingsModal extends Modal {
 			case "mistral":       this.renderMistral();     break;
 			case "ollama":        this.renderOllama();      break;
 			case "lmstudio":      this.renderLMStudio();    break;
+			case "gpt4all":       this.renderGPT4All();     break;
 			case "chat":          this.renderChat();         break;
 			case "tools":         this.renderTools();        break;
 			case "embeddings":    this.renderEmbeddings();   break;
@@ -879,6 +881,69 @@ export class LLMSettingsModal extends Modal {
 						button.setDisabled(false);
 					}
 				});
+			});
+	}
+
+	private renderGPT4All() {
+		const el = this.mainContentEl;
+		this.addTabHeader(el, "GPT4All");
+
+		const infoItems = this.addSettingGroup(el);
+		const gpt4AllPath = getGpt4AllPath(this.plugin);
+
+		new Setting(infoItems)
+			.setName("Local model path")
+			.setDesc(
+				`GPT4All models are loaded from your local installation. ` +
+				`Download models in the GPT4All desktop app, then select them here.`
+			)
+			.addText((text) => {
+				text.setValue(gpt4AllPath);
+				text.inputEl.setAttr("readonly", true);
+				text.inputEl.addClass("llm-settings-readonly-path");
+			});
+
+		// Scan for installed models
+		const detectedModels: string[] = [];
+		for (const [name, def] of Object.entries(models)) {
+			if (def.type !== GPT4All) continue;
+			const fullPath = `${gpt4AllPath}/${def.model}`;
+			if (this.plugin.fileSystem.existsSync(fullPath)) {
+				detectedModels.push(name);
+			}
+		}
+
+		const modelListEl = infoItems.createEl("p", {
+			cls: "setting-item-description llm-settings-ollama-models",
+		});
+		if (detectedModels.length > 0) {
+			modelListEl.setText(`Installed models: ${detectedModels.join(", ")}`);
+		} else {
+			modelListEl.setText(
+				"No GPT4All models found. Open the GPT4All app and download at least one model, then click Refresh."
+			);
+		}
+
+		new Setting(infoItems)
+			.setName("Refresh models")
+			.setDesc("Re-scan for GPT4All models installed on this computer.")
+			.addButton((button) => {
+				button.setButtonText("Refresh");
+				button.onClick(() => {
+					this.renderTab("gpt4all");
+				});
+			});
+
+		new Setting(infoItems)
+			.setName("API port")
+			.setDesc(
+				"GPT4All exposes a local API server on port 4891. " +
+				"Enable it in GPT4All → Settings → Enable local API server before using this provider."
+			)
+			.addText((text) => {
+				text.setValue("http://localhost:4891");
+				text.inputEl.setAttr("readonly", true);
+				text.inputEl.addClass("llm-settings-readonly-path");
 			});
 	}
 

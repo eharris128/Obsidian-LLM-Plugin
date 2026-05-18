@@ -1649,6 +1649,13 @@ button.llm-permission-allow {
 	margin: 0 0 var(--size-4-3);
 }
 
+/* Read-only path display in provider settings (e.g. GPT4All model path, port). */
+.llm-settings-readonly-path {
+	color: var(--text-muted);
+	cursor: default;
+	user-select: all;
+}
+
 /* About tab credits block. */
 .llm-dedicated-settings-about-credits {
 	margin-top: var(--size-4-6);

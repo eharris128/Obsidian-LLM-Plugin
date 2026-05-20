@@ -17,6 +17,7 @@ export class WidgetView extends ItemView {
 	private header: Header | null = null;
 	private chatContainerDiv: HTMLElement | null = null;
 	private chatHistoryContainer: HTMLElement | null = null;
+	private detailsSidebarEl: HTMLElement | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: LLMPlugin) {
 		super(leaf);
@@ -146,6 +147,8 @@ export class WidgetView extends ItemView {
 			void this.plugin.saveSettings();
 		});
 		container.empty();
+		// Make the view-content div a flex column so bodyDiv's flex:1 works correctly
+		(container as HTMLElement).addClass("llm-widget-root");
 		this.header = new Header(this.plugin, "widget");
 		this.chatContainer = new ChatContainer(
 			this.plugin,
@@ -163,24 +166,36 @@ export class WidgetView extends ItemView {
 		const historyContainer = new HistoryContainer(this.plugin, "widget");
 		const settingsContainer = new SettingsContainer(this.plugin, "widget", chatContainer);
 
+		// Title border (hidden in tab-view via CSS, visible in modal/FAB)
 		const lineBreak = container.createDiv();
-		this.chatContainerDiv = container.createDiv();
-		this.chatHistoryContainer = container.createDiv();
+		lineBreak.className = classNames["widget"]["title-border"];
+
+		// Body: flex row containing main content column + inline details sidebar
+		const bodyDiv = container.createDiv({ cls: "llm-widget-body" });
+		const mainDiv = bodyDiv.createDiv({ cls: "llm-widget-main" });
+
+		// Inline Chat Details sidebar — hidden until the button is pressed.
+		// Do NOT add llm-chat-details-content here: its flex:1 is designed for a
+		// column flex parent and would break sizing in our row flex body.
+		this.detailsSidebarEl = bodyDiv.createDiv({
+			cls: "llm-widget-details-sidebar",
+		});
+
+		// Wire up sidebar to header (toggle button) and chatContainer (state rendering)
+		header.detailsSidebarEl = this.detailsSidebarEl;
+		chatContainer.detailsSidebarEl = this.detailsSidebarEl;
+
+		// All content panels live inside mainDiv
+		this.chatContainerDiv = mainDiv.createDiv();
+		this.chatHistoryContainer = mainDiv.createDiv();
 		const chatContainerDiv = this.chatContainerDiv;
 		const chatHistoryContainer = this.chatHistoryContainer;
-		const settingsContainerDiv = container.createDiv();
+		const settingsContainerDiv = mainDiv.createDiv();
 
 		settingsContainerDiv.setAttr("style", "display: none");
-		settingsContainerDiv.addClass(
-			"llm-widget-settings-container",
-			"llm-flex"
-		);
+		settingsContainerDiv.addClass("llm-widget-settings-container", "llm-flex");
 		chatHistoryContainer.setAttr("style", "display: none");
-		chatHistoryContainer.addClass(
-			"llm-widget-chat-history-container",
-			"llm-flex"
-		);
-		lineBreak.className = classNames["widget"]["title-border"];
+		chatHistoryContainer.addClass("llm-widget-chat-history-container", "llm-flex");
 		chatContainerDiv.addClass("llm-widget-chat-container", "llm-flex");
 
 		header.generateHeader(
@@ -193,6 +208,10 @@ export class WidgetView extends ItemView {
 			settingsContainer
 		);
 		chatContainer.generateChatContainer(chatContainerDiv, header);
+		// generateChatContainer is async; schedule an initial sidebar state push
+		// so the inline sidebar has content the first time the user opens it,
+		// even if no other action (chip sync, model change) has fired yet.
+		setTimeout(() => chatContainer.pushChatDetailsState(), 0);
 		historyContainer.generateHistoryContainer(
 			chatHistoryContainer,
 			history,
@@ -250,5 +269,6 @@ export class WidgetView extends ItemView {
 		this.header = null;
 		this.chatContainerDiv = null;
 		this.chatHistoryContainer = null;
+		this.detailsSidebarEl = null;
 	}
 }

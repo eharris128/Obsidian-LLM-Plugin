@@ -611,6 +611,14 @@ div.im-like-message.llm-widget-chat-message > p {
 
 /* WIDGET*/
 
+/* Make the Obsidian view-content div a flex column so llm-widget-body's
+   flex:1 takes effect and fills the remaining height below the header. */
+.llm-widget-root {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
 .llm-widget-chat-container {
 	padding-bottom: var(--size-4-4);
 }
@@ -655,6 +663,53 @@ div.im-like-message.llm-widget-chat-message > p {
 .llm-widget-chat-history-container,
 .llm-widget-settings-container {
 	padding-top: var(--size-4-4);
+}
+
+/* ── Widget inline layout (PDF-reader style body + sidebar) ─────────────────
+   The widget's content area splits into a flex row:
+     llm-widget-body
+       llm-widget-main   (flex:1 — chat/history/settings panels)
+       llm-widget-details-sidebar (fixed width, shown via .is-open)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.llm-widget-body {
+	display: flex;
+	flex-direction: row;
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.llm-widget-main {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+
+/* Inside the flex layout the containers fill the column — override the
+   absolute-height rule that was needed before the flex wrapper existed. */
+.llm-widget-main > .llm-widget-chat-container,
+.llm-widget-main > .llm-widget-chat-history-container,
+.llm-widget-main > .llm-widget-settings-container {
+	flex: 1;
+	height: 100%;
+	max-height: none;
+}
+
+/* Inline Chat Details sidebar */
+.llm-widget-details-sidebar {
+	width: 260px;
+	flex-shrink: 0;
+	border-left: var(--border-width) solid var(--background-modifier-border);
+	overflow-y: auto;
+	padding: var(--size-4-2) 0;
+	display: none;
+}
+
+.llm-widget-details-sidebar.is-open {
+	display: block;
 }
 
 

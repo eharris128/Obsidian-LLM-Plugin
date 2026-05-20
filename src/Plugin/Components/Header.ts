@@ -1,6 +1,5 @@
 import LLMPlugin from "main";
 import { ButtonComponent, Menu } from "obsidian";
-import { CHAT_DETAILS_VIEW_TYPE } from "utils/constants";
 import { ChatContainer } from "./ChatContainer";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { HistoryContainer } from "./HistoryContainer";
@@ -11,6 +10,9 @@ import { DEFAULT_SETTINGS } from "main";
 
 export class Header {
 	viewType: ViewType;
+	/** Reference to the inline Chat Details sidebar element in the widget. Set by Widget.ts. */
+	detailsSidebarEl: HTMLElement | null = null;
+
 	constructor(private plugin: LLMPlugin, viewType: ViewType) {
 		this.viewType = viewType;
 	}
@@ -421,62 +423,20 @@ export class Header {
 		const rightButtonsDiv = titleDiv.createDiv();
 		rightButtonsDiv.addClass("llm-right-buttons-div", "llm-flex");
 
-		// Chat Details panel toggle — tab/widget view only (not modal)
+		// Chat Details panel toggle — tab/widget view only (not modal/FAB).
+		// Toggles the inline sidebar inside the widget itself (PDF-reader style).
 		if (this.viewType === "widget") {
 			const chatDetailsButton = new ButtonComponent(rightButtonsDiv);
 			chatDetailsButton.buttonEl.addClass("clickable-icon");
 			chatDetailsButton.setIcon("message-circle-warning");
 			chatDetailsButton.setTooltip("Chat details");
 
-			const rightSplit = this.plugin.app.workspace.rightSplit;
-
-			// Active = right sidebar is open AND the Chat Details leaf is the front tab.
-			// We check rightSplit.collapsed directly (reliable property) rather than
-			// relying on DOM visibility, which has timing issues with layout-change.
-			const syncActive = () => {
-				// Sidebar is collapsed → button inactive, full stop
-				if (!rightSplit || (rightSplit as any).collapsed === true) {
-					chatDetailsButton.buttonEl.toggleClass("is-active", false);
-					return;
-				}
-				const detailsLeaves = this.plugin.app.workspace
-					.getLeavesOfType(CHAT_DETAILS_VIEW_TYPE);
-				const isVisible = detailsLeaves.some((leaf) => {
-					const parent = (leaf as any).parent;
-					if (!parent?.children) return true;
-					return parent.children[parent.currentTab] === leaf;
-				});
-				chatDetailsButton.buttonEl.toggleClass("is-active", isVisible);
-			};
-
-			syncActive();
-			this.plugin.app.workspace.onLayoutReady(() => {
-				syncActive();
-
-				// layout-change handles tab switches inside the sidebar.
-				this.plugin.registerEvent(
-					this.plugin.app.workspace.on("layout-change", syncActive)
-				);
-
-				// The native sidebar toggle button mutates the right-split container's
-				// classes/style without always firing layout-change. Watch that one
-				// element (no subtree) — safe and cheap, unlike the body observer.
-				const rightSplitEl = rightSplit
-					? ((rightSplit as any).containerEl as HTMLElement | undefined)
-					: undefined;
-				if (rightSplitEl) {
-					const collapseObserver = new MutationObserver(syncActive);
-					collapseObserver.observe(rightSplitEl, {
-						attributes: true,
-						attributeFilter: ["class", "style"],
-					});
-					// rightSplitEl lives for the whole Obsidian session so the observer
-					// is intentionally long-lived; no disconnect needed.
-				}
-			});
-
 			chatDetailsButton.onClick(() => {
-				void this.plugin.toggleChatDetailsPanel();
+				const sidebar = this.detailsSidebarEl;
+				if (!sidebar) return;
+				const opening = !sidebar.hasClass("is-open");
+				sidebar.toggleClass("is-open", opening);
+				chatDetailsButton.buttonEl.toggleClass("is-active", opening);
 			});
 		}
 

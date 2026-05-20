@@ -82,6 +82,7 @@ import llmGalLogo from "assets/llm-gal.svg";
 import { ContextBuilder } from "services/ContextBuilder";
 import { ParsedSkill } from "Skills/SkillRegistry";
 import { MemoryContext } from "Memory/MemoryService";
+import { renderChatDetailsInto } from "Plugin/ChatDetailsView/ChatDetailsRenderer";
 
 const avatarSvgs: Record<string, string> = {
 	"llm-gal": llmGalLogo,
@@ -200,6 +201,8 @@ export class ChatContainer extends Component {
 	private memoriesInjectedThisTurn: boolean = false;
 	/** Individual memory strings recalled during the last generation — shown in Chat Details panel. */
 	lastRecalledMemories: string[] = [];
+	/** Inline sidebar element within the widget for the Chat Details panel. Set by Widget.ts. */
+	detailsSidebarEl: HTMLElement | null = null;
 	/** Stored reference so we can update the memory button's active state. */
 	/** Display name of the assistant active for the current generation — cleared after the indicator is shown. */
 	private activeAssistantNameThisTurn: string | null = null;
@@ -257,6 +260,7 @@ export class ChatContainer extends Component {
 		this.messageStore.unsubscribe(this.boundUpdateMessages);
 		this.slashMenuEl?.remove();
 		this.slashMenuEl = null;
+		this.detailsSidebarEl = null;
 		// Stop any in-flight recording so the microphone is released
 		if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
 			this.mediaRecorder.stop();
@@ -2240,9 +2244,6 @@ export class ChatContainer extends Component {
 	 * Public so Widget.loadChatFile() can push after updating model settings.
 	 */
 	pushChatDetailsState() {
-		const detailsView = this.plugin.getChatDetailsView?.();
-		if (!detailsView) return;
-
 		const settingType = getSettingType(this.viewType);
 		const contextSettings = this.plugin.settings[settingType].contextSettings;
 
@@ -2252,7 +2253,12 @@ export class ChatContainer extends Component {
 			? (this.plugin.assistantManager?.getAssistant(activeAssistantId) ?? null)
 			: null;
 		const viewInfo = getViewInfo(this.plugin, this.viewType);
-		const modelLabel = assistant?.name ?? viewInfo.modelName ?? "";
+		let modelLabel: string;
+		if (this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled) {
+			modelLabel = "Obsidian Agent";
+		} else {
+			modelLabel = assistant?.name ?? viewInfo.modelName ?? "";
+		}
 
 		// ── Project ────────────────────────────────────────────────────────
 		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId ?? null;
@@ -2284,14 +2290,29 @@ export class ChatContainer extends Component {
 			}
 		}
 
-		detailsView.updateState({
+		const state = {
 			modelLabel,
 			isAssistant: !!assistant,
 			assistantId: assistant?.id ?? null,
 			projectName: project?.name ?? null,
 			recalledMemories: [...this.lastRecalledMemories],
 			contextFiles,
-		});
+		};
+
+		// Update the detached right-sidebar panel if one is open
+		const detailsView = this.plugin.getChatDetailsView?.();
+		detailsView?.updateState(state);
+
+		// Render into the inline widget sidebar (always, regardless of visibility —
+		// content stays current so it's ready the moment the user opens the panel)
+		if (this.detailsSidebarEl) {
+			renderChatDetailsInto(
+				this.detailsSidebarEl,
+				state,
+				this.plugin.app,
+				this.plugin.settings.memorySettings?.enabled ?? false
+			);
+		}
 	}
 
 	/** Rebuild the chip strip from current state (active file + additional files + pinned project notes). */

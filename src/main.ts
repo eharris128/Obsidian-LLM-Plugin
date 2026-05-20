@@ -983,6 +983,42 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	/**
+	 * Toggle the right sidebar open/closed, ensuring the Chat Details panel is
+	 * loaded into it when opening.
+	 * - Collapsed → ensure Chat Details leaf exists, then expand the sidebar.
+	 * - Expanded  → collapse the sidebar.
+	 * Returns true when the sidebar was opened, false when collapsed.
+	 */
+	async toggleChatDetailsPanel(): Promise<boolean> {
+		const { workspace } = this.app;
+		const rightSplit = (workspace as any).rightSplit;
+
+		const isCollapsed: boolean = rightSplit?.collapsed ?? false;
+
+		if (isCollapsed) {
+			// Ensure Chat Details leaf exists before expanding
+			const leaves = workspace.getLeavesOfType(CHAT_DETAILS_VIEW_TYPE);
+			if (leaves.length === 0) {
+				const leaf = workspace.getRightLeaf(false);
+				if (leaf) {
+					await leaf.setViewState({ type: CHAT_DETAILS_VIEW_TYPE, active: true });
+				}
+			}
+			rightSplit?.expand();
+			// Bring the Chat Details tab to front in case other panels are also open
+			const detailsLeaves = workspace.getLeavesOfType(CHAT_DETAILS_VIEW_TYPE);
+			if (detailsLeaves.length > 0) {
+				workspace.revealLeaf(detailsLeaves[0]);
+				(detailsLeaves[0].view as ChatDetailsView).refreshFromPlugin();
+			}
+			return true;
+		} else {
+			rightSplit?.collapse();
+			return false;
+		}
+	}
+
+	/**
 	 * Return the open ChatDetailsView instance, or null if the panel is closed.
 	 * Used by ChatContainer to push live state updates.
 	 */

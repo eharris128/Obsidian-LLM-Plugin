@@ -1,7 +1,6 @@
 import { ItemView, WorkspaceLeaf, setIcon } from "obsidian";
-import LLMPlugin from "main";
+import type LLMPlugin from "main";
 import { CHAT_DETAILS_VIEW_TYPE } from "utils/constants";
-import { getViewInfo } from "utils/utils";
 
 export { CHAT_DETAILS_VIEW_TYPE };
 
@@ -99,8 +98,9 @@ export class ChatDetailsView extends ItemView {
 	 * accurate even when no ChatContainer has explicitly pushed a state update.
 	 */
 	refreshFromPlugin() {
-		// Use the widget's settings as the canonical "active chat" source
-		const viewInfo = getViewInfo(this.plugin, "widget");
+		// Read widget settings directly — avoids importing getViewInfo from utils/utils
+		// which would re-introduce the circular dependency through main.ts.
+		const widgetSettings = this.plugin.settings.widgetSettings;
 		const assistantId = this.plugin.settings.assistantSettings?.activeAssistantId ?? null;
 		const assistant = assistantId
 			? (this.plugin.assistantManager?.getAssistant(assistantId) ?? null)
@@ -111,7 +111,7 @@ export class ChatDetailsView extends ItemView {
 			: null;
 
 		this.updateState({
-			modelLabel: assistant?.name ?? viewInfo.modelName ?? "",
+			modelLabel: assistant?.name ?? widgetSettings?.modelName ?? "",
 			isAssistant: !!assistant,
 			assistantId: assistant?.id ?? null,
 			projectName: project?.name ?? null,

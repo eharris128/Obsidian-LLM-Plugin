@@ -412,10 +412,14 @@ export class ChatHistory {
 		for (let i = 1; i < parts.length; i += 2) {
 			if (parts[i] !== "Assistant") continue;
 			const section = (parts[i + 1] ?? "").trimStart();
-			if (section.startsWith("> [!info]-")) {
+			// Search for the [!info] callout anywhere in the section — it may follow
+			// a model attribution ([!note]) or skill ([!tip]) callout written first.
+			const infoIdx = section.search(/^> \[!info\]-/m);
+			if (infoIdx !== -1) {
+				const fromInfo = section.slice(infoIdx);
 				// Extract consecutive lines starting with ">"
 				const calloutLines: string[] = [];
-				for (const line of section.split("\n")) {
+				for (const line of fromInfo.split("\n")) {
 					if (line.startsWith(">")) calloutLines.push(line);
 					else break;
 				}
@@ -439,7 +443,8 @@ export class ChatHistory {
 		for (let i = 1; i < parts.length; i += 2) {
 			if (parts[i] !== "Assistant") continue;
 			const section = (parts[i + 1] ?? "").trimStart();
-			const skillMatch = section.match(/^> \[!tip\]-? Skill: ([^\n]+)/);
+			// Use multiline flag so ^ matches start of any line (model callout may precede skill callout).
+			const skillMatch = section.match(/^> \[!tip\]-? Skill: ([^\n]+)/m);
 			if (skillMatch) {
 				result.set(assistantIdx, skillMatch[1].trim());
 			}

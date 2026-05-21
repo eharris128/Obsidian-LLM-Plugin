@@ -129,7 +129,8 @@ Key design points:
 - Push points: `syncChips()` (file/project changes), `syncModelDropdown()` (model/assistant switch), after memory recall in `handleGenerateClick`, and `newChat()` (clears state + resets `lastRecalledMemories`).
 - `plugin.getChatDetailsView()` returns the open view instance (or `null` if closed) — used by `pushChatDetailsState()`.
 - `plugin.activateChatDetailsPanel()` opens the panel in the right sidebar; registered as the `open-chat-details-panel` command ("Open Chat Details panel").
-- `ChatDetailsState` interface has: `modelLabel`, `isAssistant`, `assistantId`, `projectName`, `recalledMemories: string[]`, `contextFiles: { name, path }[]`.
+- `ChatDetailsState` interface has: `modelLabel`, `isAssistant`, `assistantId`, `projectName`, `activeProject: { id, name, filePath, folderPath } | null`, `recalledMemories: string[]`, `contextFiles: { name, path }[]`, `guidanceFiles: { name, path, icon }[]`.
+- `activeProject` powers a dedicated "Active Project" section in the panel with two clickable rows: PROJECT.md (opens in a leaf) and the project folder (revealed in the file explorer via `internalPlugins.file-explorer.revealInFolder`).
 - Recalled memories are parsed from the `# Recalled Memories` block returned by `MemoryService.recall()` (lines starting with `"- "`).
 - CSS classes use the `.llm-chat-details-*` prefix.
 - `detailsBodyEl` (not `contentEl`) is the scrollable render target — `ItemView` already owns `contentEl`.
@@ -573,9 +574,10 @@ The plugin exposes two vault-native guidance files:
 | `AI/AGENTS.md` (default path) | `LLMPluginSettings.agentsFilePath` | Every conversation | All sends — prepended to `pendingContextString` before memory recall |
 
 - **Agent guidance file** — tells the Obsidian Agent how to navigate this specific vault (structure, conventions, off-limits folders, routing rules). Configured in Settings → Obsidian Agent → "Agent Guidance".
-- **General instructions file** (AGENTS.md) — a global system prompt injected into every conversation regardless of model or assistant. Configured in Settings → General → "General Instructions". Shown as a non-removable `book-open` chip in the chat strip when the file exists.
+- **General instructions file** (AGENTS.md) — a global system prompt injected into every conversation regardless of model or assistant. Configured in Settings → General → "General Instructions".
 - Both use the shared `renderGuidanceFilePicker()` helper in `LLMSettingsModal` — a path text input + smart "Open"/"Create" button.
 - `plugin.refreshAllChips()` re-renders chips in all live views (FAB, StatusBar, Widget). Call after the `agentsFilePath` setting changes.
+- **Guidance files are no longer shown as chips in the input strip.** They appear instead in a "Guidance" section in the Chat Details panel (`ChatDetailsView` / inline widget sidebar). `ChatDetailsState.guidanceFiles` carries `{ name, path, icon }` entries — `"book-open"` for AGENTS.md (always when configured), `"scroll-text"` for OBSIDIAN-AGENT.md (only when Obsidian Agent is active). Rendered by `renderGuidanceSection()` in `ChatDetailsRenderer.ts`.
 
 #### Settings
 

@@ -2290,13 +2290,54 @@ export class ChatContainer extends Component {
 			}
 		}
 
+		// ── Guidance files ────────────────────────────────────────────────
+		const guidanceFiles: { name: string; path: string; icon: string }[] = [];
+
+		// AGENTS.md — global instructions, always injected when configured
+		const agentsFilePath = this.plugin.settings.agentsFilePath?.trim();
+		if (agentsFilePath) {
+			const agentsAbstract = this.plugin.app.vault.getAbstractFileByPath(agentsFilePath);
+			if (agentsAbstract instanceof TFile) {
+				guidanceFiles.push({
+					name: agentsAbstract.basename,
+					path: agentsAbstract.path,
+					icon: "book-open",
+				});
+			}
+		}
+
+		// OBSIDIAN-AGENT.md — agent-specific guidance, injected only when agent is active
+		if (this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled) {
+			const agentGuidancePath = this.plugin.settings.obsidianAgentSettings.agentGuidanceFile?.trim();
+			if (agentGuidancePath) {
+				const agentGuidanceAbstract = this.plugin.app.vault.getAbstractFileByPath(agentGuidancePath);
+				if (agentGuidanceAbstract instanceof TFile) {
+					guidanceFiles.push({
+						name: agentGuidanceAbstract.basename,
+						path: agentGuidanceAbstract.path,
+						icon: "scroll-text",
+					});
+				}
+			}
+		}
+
+		const projectsFolder = this.plugin.projectsFolder ?? "";
 		const state = {
 			modelLabel,
 			isAssistant: !!assistant,
 			assistantId: assistant?.id ?? null,
 			projectName: project?.name ?? null,
+			activeProject: project
+				? {
+						id: project.id,
+						name: project.name,
+						filePath: project.filePath,
+						folderPath: `${projectsFolder}/${project.id}`,
+				  }
+				: null,
 			recalledMemories: [...this.lastRecalledMemories],
 			contextFiles,
+			guidanceFiles,
 		};
 
 		// Update the detached right-sidebar panel if one is open
@@ -2340,26 +2381,12 @@ export class ChatContainer extends Component {
 		const hasPinned = pinnedNotes.length > 0;
 		const hasProject = !!activeProject;
 
-		// AGENTS.md chip — shown whenever the file is configured and exists in the vault
-		const agentsFilePath = this.plugin.settings.agentsFilePath?.trim();
-		const agentsFile = agentsFilePath
-			? (this.plugin.app.vault.getAbstractFileByPath(agentsFilePath) instanceof TFile
-				? this.plugin.app.vault.getAbstractFileByPath(agentsFilePath) as TFile
-				: null)
-			: null;
-		const hasAgentsFile = !!agentsFile;
-
-		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject && !hasAgentsFile) {
+		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject) {
 			this.chipContainer.style.display = "none";
 			return;
 		}
 
 		this.chipContainer.style.display = "flex";
-
-		// AGENTS.md chip — always first, non-removable, clickable to open the file
-		if (hasAgentsFile && agentsFile) {
-			this.buildAgentsFileChip(this.chipContainer, agentsFile);
-		}
 
 		// Project chip — icon-only at rest, name revealed on hover
 		if (hasProject && activeProject) {
@@ -2450,22 +2477,6 @@ export class ChatContainer extends Component {
 		removeBtn.addEventListener("click", (e) => {
 			e.stopPropagation();
 			onRemove();
-		});
-		return chip;
-	}
-
-	/**
-	 * Build the AGENTS.md chip — non-removable, always visible when configured,
-	 * clickable to open the file. Uses the book-open icon to distinguish it from
-	 * pinned notes (pin) and project chips (box).
-	 */
-	private buildAgentsFileChip(container: HTMLElement, file: TFile): HTMLElement {
-		const chip = container.createDiv({ cls: "llm-context-chip llm-context-chip--agents llm-context-chip--clickable" });
-		const iconEl = chip.createSpan({ cls: "llm-context-chip-icon" });
-		setIcon(iconEl, "book-open");
-		chip.createSpan({ text: file.basename, cls: "llm-context-chip-name" });
-		chip.addEventListener("click", () => {
-			this.plugin.app.workspace.getLeaf(false).openFile(file);
 		});
 		return chip;
 	}

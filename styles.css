@@ -678,6 +678,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
+	gap: var(--size-4-3);
 }
 
 .llm-widget-main {
@@ -2409,26 +2410,6 @@ details[open] .llm-tool-calls-chevron {
 	width: 240px;
 }
 
-/* ── AGENTS.md chip (general instructions — non-removable, always-on) ─────── */
-
-.llm-context-chip--agents {
-	border: 1px solid color-mix(in srgb, var(--text-muted) 40%, transparent);
-	background-color: color-mix(in srgb, var(--text-muted) 6%, transparent);
-}
-
-.llm-context-chip--agents .llm-context-chip-icon {
-	color: var(--text-muted);
-}
-
-.llm-context-chip--agents:hover {
-	border-color: var(--text-normal);
-	background-color: color-mix(in srgb, var(--text-muted) 12%, transparent);
-}
-
-.llm-context-chip--agents:hover .llm-context-chip-icon {
-	color: var(--text-normal);
-}
-
 /* ── Pinned note chip (project pinned notes — non-removable) ──────────────── */
 
 .llm-context-chip--pinned {
@@ -2713,6 +2694,11 @@ button.llm-mic-button.llm-mic-transcribing {
 /* Assistant icon gets accent colour */
 .llm-chat-details-row-icon--assistant {
 	color: var(--interactive-accent);
+}
+
+/* Guidance icon uses muted colour — guidance files are ambient context, not primary */
+.llm-chat-details-row-icon--guidance {
+	color: var(--text-muted);
 }
 
 .llm-chat-details-row-body {

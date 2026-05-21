@@ -15,6 +15,8 @@ export function renderChatDetailsInto(
 ): void {
 	el.empty();
 	renderModelSection(el, state);
+	renderProjectSection(el, state, app);
+	renderGuidanceSection(el, state, app);
 	renderMemoriesSection(el, state, memoryEnabled);
 	renderContextFilesSection(el, state, app);
 }
@@ -79,6 +81,62 @@ function renderModelSection(el: HTMLElement, state: ChatDetailsState) {
 	}
 }
 
+// ── Active Project section ────────────────────────────────────────────────────
+
+/**
+ * Shows when a project is active — provides quick-access links to the project
+ * folder (revealed in the file explorer) and to PROJECT.md (opened in a leaf).
+ * Hidden entirely when no project is active.
+ */
+function renderProjectSection(
+	el: HTMLElement,
+	state: ChatDetailsState,
+	app: App
+) {
+	const proj = state.activeProject;
+	if (!proj) return;
+
+	const section = buildSection(el, "Active Project");
+
+	// ── PROJECT.md row ─────────────────────────────────────────────────────
+	const fileRow = section.createDiv({
+		cls: "llm-chat-details-row llm-chat-details-row--clickable",
+	});
+	const fileIconEl = fileRow.createDiv({ cls: "llm-chat-details-row-icon" });
+	setIcon(fileIconEl, "file-text");
+	const fileBody = fileRow.createDiv({ cls: "llm-chat-details-row-body" });
+	fileBody.createDiv({ cls: "llm-chat-details-row-title", text: "PROJECT.md" });
+	fileBody.createDiv({
+		cls: "llm-chat-details-row-subtitle",
+		text: "Instructions",
+	});
+	fileRow.addEventListener("click", () => {
+		const tfile = app.vault.getAbstractFileByPath(proj.filePath);
+		if (tfile) void app.workspace.getLeaf(false).openFile(tfile as any);
+	});
+
+	// ── Project folder row ─────────────────────────────────────────────────
+	const folderRow = section.createDiv({
+		cls: "llm-chat-details-row llm-chat-details-row--clickable",
+	});
+	const folderIconEl = folderRow.createDiv({ cls: "llm-chat-details-row-icon" });
+	setIcon(folderIconEl, "folder-open");
+	const folderBody = folderRow.createDiv({ cls: "llm-chat-details-row-body" });
+	folderBody.createDiv({ cls: "llm-chat-details-row-title", text: proj.name });
+	folderBody.createDiv({
+		cls: "llm-chat-details-row-subtitle",
+		text: proj.folderPath,
+	});
+	folderRow.addEventListener("click", () => {
+		const folder = app.vault.getAbstractFileByPath(proj.folderPath);
+		if (folder) {
+			(app as any).internalPlugins
+				?.getPluginById("file-explorer")
+				?.instance?.revealInFolder(folder);
+		}
+	});
+}
+
 // ── Memories section ──────────────────────────────────────────────────────────
 
 function renderMemoriesSection(
@@ -108,6 +166,46 @@ function renderMemoriesSection(
 		row.createDiv({
 			cls: "llm-chat-details-row-body llm-chat-details-row-body--memory",
 			text: memory,
+		});
+	}
+}
+
+// ── Guidance files section ────────────────────────────────────────────────────
+
+/**
+ * Shows guidance files that are currently injected into context:
+ * - AGENTS.md (global instructions, always when configured) → book-open icon
+ * - OBSIDIAN-AGENT.md (agent guidance, only when agent active) → scroll-text icon
+ *
+ * Section is hidden entirely when no guidance files are configured — no empty
+ * state row, since the absence of guidance is unremarkable.
+ */
+function renderGuidanceSection(
+	el: HTMLElement,
+	state: ChatDetailsState,
+	app: App
+) {
+	const files = state.guidanceFiles ?? [];
+	if (files.length === 0) return;
+
+	const section = buildSection(
+		el,
+		"Guidance",
+		files.length > 1 ? String(files.length) : undefined
+	);
+
+	for (const file of files) {
+		const row = section.createDiv({
+			cls: "llm-chat-details-row llm-chat-details-row--clickable",
+		});
+		const iconEl = row.createDiv({ cls: "llm-chat-details-row-icon llm-chat-details-row-icon--guidance" });
+		setIcon(iconEl, file.icon);
+		const body = row.createDiv({ cls: "llm-chat-details-row-body" });
+		body.createDiv({ cls: "llm-chat-details-row-title", text: file.name });
+
+		row.addEventListener("click", () => {
+			const tfile = app.vault.getAbstractFileByPath(file.path);
+			if (tfile) void app.workspace.getLeaf(false).openFile(tfile as any);
 		});
 	}
 }

@@ -14,12 +14,23 @@ export interface ChatDetailsState {
 	isAssistant: boolean;
 	/** Active assistant id (for icon/accent styling) */
 	assistantId: string | null;
-	/** Active project name */
+	/** Active project name (kept for the model-section badge) */
 	projectName: string | null;
+	/**
+	 * Full active project data for the dedicated project section.
+	 * folderPath is the vault-relative path to the project folder.
+	 */
+	activeProject: { id: string; name: string; filePath: string; folderPath: string } | null;
 	/** Memory strings recalled this turn */
 	recalledMemories: string[];
 	/** Files currently attached as context (display names + paths) */
 	contextFiles: { name: string; path: string }[];
+	/**
+	 * Guidance files currently injected into context.
+	 * - AGENTS.md (global instructions) → icon "book-open"
+	 * - OBSIDIAN-AGENT.md (agent guidance) → icon "scroll-text"
+	 */
+	guidanceFiles: { name: string; path: string; icon: string }[];
 }
 
 const EMPTY_STATE: ChatDetailsState = {
@@ -27,8 +38,10 @@ const EMPTY_STATE: ChatDetailsState = {
 	isAssistant: false,
 	assistantId: null,
 	projectName: null,
+	activeProject: null,
 	recalledMemories: [],
 	contextFiles: [],
+	guidanceFiles: [],
 };
 
 // ── ChatDetailsView ────────────────────────────────────────────────────────────
@@ -102,11 +115,20 @@ export class ChatDetailsView extends ItemView {
 			? (this.plugin.projectManager?.getProject(projectId) ?? null)
 			: null;
 
+		const projectsFolder = this.plugin.projectsFolder ?? "";
 		this.updateState({
 			modelLabel: assistant?.name ?? widgetSettings?.modelName ?? "",
 			isAssistant: !!assistant,
 			assistantId: assistant?.id ?? null,
 			projectName: project?.name ?? null,
+			activeProject: project
+				? {
+						id: project.id,
+						name: project.name,
+						filePath: project.filePath,
+						folderPath: `${projectsFolder}/${project.id}`,
+				  }
+				: null,
 		});
 	}
 

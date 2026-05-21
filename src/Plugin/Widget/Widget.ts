@@ -1,4 +1,5 @@
 import { ChatContainer } from "Plugin/Components/ChatContainer";
+import { ChatsSidebar } from "Plugin/Components/ChatsSidebar";
 import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
 import { SettingsContainer } from "Plugin/Components/SettingsContainer";
@@ -18,6 +19,8 @@ export class WidgetView extends ItemView {
 	private chatContainerDiv: HTMLElement | null = null;
 	private chatHistoryContainer: HTMLElement | null = null;
 	private detailsSidebarEl: HTMLElement | null = null;
+	private chatsSidebarEl: HTMLElement | null = null;
+	private chatsSidebar: ChatsSidebar | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: LLMPlugin) {
 		super(leaf);
@@ -170,20 +173,31 @@ export class WidgetView extends ItemView {
 		const lineBreak = container.createDiv();
 		lineBreak.className = classNames["widget"]["title-border"];
 
-		// Body: flex row containing main content column + inline details sidebar
+		// Body: flex row → [chats sidebar] [main content] [details sidebar]
 		const bodyDiv = container.createDiv({ cls: "llm-widget-body" });
+
+		// Inline Chats sidebar (LEFT) — hidden until the toggle button is pressed.
+		this.chatsSidebarEl = bodyDiv.createDiv({
+			cls: "llm-widget-chats-sidebar",
+		});
+
 		const mainDiv = bodyDiv.createDiv({ cls: "llm-widget-main" });
 
-		// Inline Chat Details sidebar — hidden until the button is pressed.
+		// Inline Chat Details sidebar (RIGHT) — hidden until the button is pressed.
 		// Do NOT add llm-chat-details-content here: its flex:1 is designed for a
 		// column flex parent and would break sizing in our row flex body.
 		this.detailsSidebarEl = bodyDiv.createDiv({
 			cls: "llm-widget-details-sidebar",
 		});
 
-		// Wire up sidebar to header (toggle button) and chatContainer (state rendering)
+		// Wire up sidebars to header (toggle buttons) and chatContainer (state rendering)
+		header.chatsSidebarEl = this.chatsSidebarEl;
 		header.detailsSidebarEl = this.detailsSidebarEl;
 		chatContainer.detailsSidebarEl = this.detailsSidebarEl;
+
+		// Populate the inline chats sidebar
+		this.chatsSidebar = new ChatsSidebar(this.plugin);
+		this.chatsSidebar.render(this.chatsSidebarEl);
 
 		// All content panels live inside mainDiv
 		this.chatContainerDiv = mainDiv.createDiv();
@@ -265,10 +279,13 @@ export class WidgetView extends ItemView {
 
 	async onClose() {
 		this.chatContainer?.destroy();
+		this.chatsSidebar?.destroy();
 		this.chatContainer = null;
+		this.chatsSidebar = null;
 		this.header = null;
 		this.chatContainerDiv = null;
 		this.chatHistoryContainer = null;
 		this.detailsSidebarEl = null;
+		this.chatsSidebarEl = null;
 	}
 }

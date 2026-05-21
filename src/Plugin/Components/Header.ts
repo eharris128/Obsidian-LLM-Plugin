@@ -10,7 +10,9 @@ import { DEFAULT_SETTINGS } from "main";
 
 export class Header {
 	viewType: ViewType;
-	/** Reference to the inline Chat Details sidebar element in the widget. Set by Widget.ts. */
+	/** Reference to the inline Chats sidebar element (left side) in the widget. Set by Widget.ts. */
+	chatsSidebarEl: HTMLElement | null = null;
+	/** Reference to the inline Chat Details sidebar element (right side) in the widget. Set by Widget.ts. */
 	detailsSidebarEl: HTMLElement | null = null;
 
 	constructor(private plugin: LLMPlugin, viewType: ViewType) {
@@ -53,7 +55,7 @@ export class Header {
 		this.chatHistoryButton?.buttonEl.removeClass("is-active");
 	}
 
-	clickHandler(button: ButtonComponent, toggles: ButtonComponent[]) {
+	clickHandler(button: ButtonComponent, toggles: (ButtonComponent | undefined)[]) {
 		if (button.buttonEl.classList.contains("is-active")) {
 			button.buttonEl.removeClass("is-active");
 		} else {
@@ -61,7 +63,7 @@ export class Header {
 				button.buttonEl.addClass("is-active");
 			}
 			toggles.forEach((toggle) => {
-				toggle.buttonEl.removeClass("is-active");
+				toggle?.buttonEl.removeClass("is-active");
 			});
 		}
 	}
@@ -423,7 +425,23 @@ export class Header {
 		const rightButtonsDiv = titleDiv.createDiv();
 		rightButtonsDiv.addClass("llm-right-buttons-div", "llm-flex");
 
-		// Chat Details panel toggle — tab/widget view only (not modal/FAB).
+		// Chats panel toggle (LEFT sidebar) — tab/widget view only.
+		if (this.viewType === "widget") {
+			const chatsButton = new ButtonComponent(rightButtonsDiv);
+			chatsButton.buttonEl.addClass("clickable-icon");
+			chatsButton.setIcon("messages-square");
+			chatsButton.setTooltip("Chats");
+
+			chatsButton.onClick(() => {
+				const sidebar = this.chatsSidebarEl;
+				if (!sidebar) return;
+				const opening = !sidebar.hasClass("is-open");
+				sidebar.toggleClass("is-open", opening);
+				chatsButton.buttonEl.toggleClass("is-active", opening);
+			});
+		}
+
+		// Chat Details panel toggle (RIGHT sidebar) — tab/widget view only.
 		// Toggles the inline sidebar inside the widget itself (PDF-reader style).
 		if (this.viewType === "widget") {
 			const chatDetailsButton = new ButtonComponent(rightButtonsDiv);
@@ -440,39 +458,43 @@ export class Header {
 			});
 		}
 
-		// Right buttons in order: chat history → settings → new chat
-		this.chatHistoryButton = new ButtonComponent(rightButtonsDiv);
+		// Chat history button — omitted in widget view; chats are in the left sidebar instead.
+		if (this.viewType !== "widget") {
+			this.chatHistoryButton = new ButtonComponent(rightButtonsDiv);
+			this.chatHistoryButton.setTooltip("Chats");
+			this.chatHistoryButton.buttonEl.addClass("clickable-icon", "chat-history");
+			this.chatHistoryButton.setIcon("messages-square");
+			this.chatHistoryButton.onClick(() => {
+				historyContainer.resetHistory(chatHistoryContainerDiv);
+				historyContainer.generateHistoryContainer(
+					chatHistoryContainerDiv,
+					this.plugin.settings.promptHistory,
+					chatContainerDiv,
+					chatContainer,
+					this
+				);
+				this.clickHandler(this.chatHistoryButton!, [this.settingsButton!]);
+				if (!chatHistoryContainerDiv.isShown()) {
+					chatHistoryContainerDiv.show();
+					settingsContainerDiv.hide();
+					chatContainerDiv.hide();
+					this.hideTitle();
+				} else {
+					chatContainerDiv.show();
+					chatHistoryContainerDiv.hide();
+					this.showTitle();
+				}
+			});
+		}
+
 		this.settingsButton = new ButtonComponent(rightButtonsDiv);
 		this.newChatButton = new ButtonComponent(rightButtonsDiv);
-
-		this.chatHistoryButton.setTooltip("Chats");
-		this.chatHistoryButton.onClick(() => {
-			historyContainer.resetHistory(chatHistoryContainerDiv);
-			historyContainer.generateHistoryContainer(
-				chatHistoryContainerDiv,
-				this.plugin.settings.promptHistory,
-				chatContainerDiv,
-				chatContainer,
-				this
-			);
-			this.clickHandler(this.chatHistoryButton!, [this.settingsButton!]);
-			if (!chatHistoryContainerDiv.isShown()) {
-				chatHistoryContainerDiv.show();
-				settingsContainerDiv.hide();
-				chatContainerDiv.hide();
-				this.hideTitle();
-			} else {
-				chatContainerDiv.show();
-				chatHistoryContainerDiv.hide();
-				this.showTitle();
-			}
-		});
 
 		this.settingsButton.setTooltip("Chat settings");
 		this.settingsButton.onClick(() => {
 			settingsContainer.resetSettings(settingsContainerDiv);
 			settingsContainer.generateSettingsContainer(settingsContainerDiv);
-			this.clickHandler(this.settingsButton!, [this.chatHistoryButton!]);
+			this.clickHandler(this.settingsButton!, [this.chatHistoryButton]);
 			if (!settingsContainerDiv.isShown()) {
 				settingsContainerDiv.show();
 				chatContainerDiv.hide();
@@ -490,7 +512,7 @@ export class Header {
 			const { modelName } = getViewInfo(this.plugin, this.viewType);
 			this.clickHandler(this.newChatButton!, [
 				this.settingsButton!,
-				this.chatHistoryButton!,
+				this.chatHistoryButton,
 			]);
 			this.setHeader(modelName);
 			this.setTitle("");
@@ -505,10 +527,8 @@ export class Header {
 			void this.plugin.saveSettings();
 		});
 
-		this.chatHistoryButton.buttonEl.addClass("clickable-icon", "chat-history");
 		this.settingsButton.buttonEl.addClass("clickable-icon", "settings-button");
 		this.newChatButton.buttonEl.addClass("clickable-icon", "new-chat-button");
-		this.chatHistoryButton.setIcon("messages-square");
 		this.settingsButton.setIcon("settings-2");
 		this.newChatButton.setIcon("plus");
 	}

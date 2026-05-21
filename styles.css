@@ -665,11 +665,12 @@ div.im-like-message.llm-widget-chat-message > p {
 	padding-top: var(--size-4-4);
 }
 
-/* ── Widget inline layout (PDF-reader style body + sidebar) ─────────────────
+/* ── Widget inline layout (PDF-reader style body + sidebars) ────────────────
    The widget's content area splits into a flex row:
      llm-widget-body
-       llm-widget-main   (flex:1 — chat/history/settings panels)
-       llm-widget-details-sidebar (fixed width, shown via .is-open)
+       llm-widget-chats-sidebar  (fixed width, left, shown via .is-open)
+       llm-widget-main           (flex:1 — chat/history/settings panels)
+       llm-widget-details-sidebar (fixed width, right, shown via .is-open)
    ─────────────────────────────────────────────────────────────────────────── */
 
 .llm-widget-body {
@@ -699,7 +700,28 @@ div.im-like-message.llm-widget-chat-message > p {
 	max-height: none;
 }
 
-/* Inline Chat Details sidebar */
+/* Inline Chats sidebar (left side) */
+.llm-widget-chats-sidebar {
+	width: 260px;
+	flex-shrink: 0;
+	border-right: var(--border-width) solid var(--background-modifier-border);
+	overflow: hidden;
+	display: none;
+	flex-direction: column;
+}
+
+.llm-widget-chats-sidebar.is-open {
+	display: flex;
+}
+
+/* The file list inside the chats sidebar should scroll, not the whole sidebar */
+.llm-widget-chats-sidebar .nav-files-container {
+	flex: 1;
+	overflow-y: auto;
+	min-height: 0;
+}
+
+/* Inline Chat Details sidebar (right side) */
 .llm-widget-details-sidebar {
 	width: 260px;
 	flex-shrink: 0;

@@ -97,18 +97,20 @@ Each view composes these shared components from `src/Plugin/Components/`:
 - `SettingsContainer.ts` - Model/parameter configuration
 - `AssistantsContainer.ts` - OpenAI assistants selection
 
-### Chats Panel (`ChatsView`)
+### Chats Panel (`ChatsView` + `ChatsSidebar`)
 
-`src/Plugin/ChatsView/ChatsView.ts` — a standalone `ItemView` sidebar leaf (view type `CHATS_VIEW_TYPE = "llm-chats-view"`, defined in `constants.ts`) that lists **all** LLM conversations from every location (default chat folder + all project `chats/` subfolders), sorted newest-first.
+Two implementations of the chats list exist — both show the same data and use the same Obsidian DOM patterns:
 
-Key design points:
+1. **`src/Plugin/ChatsView/ChatsView.ts`** — standalone `ItemView` sidebar leaf (view type `CHATS_VIEW_TYPE = "llm-chats-view"`). Registered in `main.ts`; opened via the `open-chats-panel` command ("Open Chats panel"). `plugin.activateChatsPanel()` opens it in the right sidebar.
+
+2. **`src/Plugin/Components/ChatsSidebar.ts`** — `Component` subclass that renders the identical chats list into any container element. Used by `WidgetView` to embed a **toggleable left-side chats panel** directly inside the widget body. Toggled by the `messages-square` button in `Header.ts` (widget view only). `render(el)` populates the container; `destroy()` calls `this.unload()` to clean up vault event listeners. The widget body order is: `llm-widget-chats-sidebar` (left) → `llm-widget-main` → `llm-widget-details-sidebar` (right).
+
+Key design points (shared):
 - Calls `plugin.chatHistory.list()` on open and refreshes automatically via vault `create/modify/delete/rename` events.
 - Displays title (frontmatter), relative timestamp, project badge, and agent badge per row.
 - Inline search box filters by title and project name.
 - Clicking a row calls `plugin.openChatFileInWidget(filePath)` — opens (or focuses) the chat widget and loads that conversation.
 - A "new chat" icon button calls `plugin.activateTab()`.
-- Registered in `main.ts`; opened via the `open-chats-panel` command ("Open Chats panel").
-- `plugin.activateChatsPanel()` opens the panel in the right sidebar (or reveals it if already open and calls `refresh()`).
 - CSS classes use the `.llm-chats-*` prefix; all values use Obsidian CSS variables.
 
 Native Obsidian DOM/component patterns used (keeps the panel visually consistent with Obsidian's own sidebar panels):

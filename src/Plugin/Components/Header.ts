@@ -244,6 +244,23 @@ export class Header {
 				this.buildAddToProjectMenu(menu, chatContainer);
 			}
 
+			// "Open chat file" — opens the underlying markdown file in the active leaf
+			if (this.plugin.settings.chatHistoryEnabled) {
+				const filePath = this.plugin.settings.fabSettings.historyFilePath;
+				if (filePath) {
+					menu.addItem((item) => {
+						item.setTitle("Open chat file")
+							.setIcon("file-text")
+							.onClick(() => {
+								const tfile = this.plugin.app.vault.getAbstractFileByPath(filePath);
+								if (tfile) {
+									void this.plugin.app.workspace.getLeaf(false).openFile(tfile as import("obsidian").TFile);
+								}
+							});
+					});
+				}
+			}
+
 			menu.addSeparator();
 
 			menu.addItem((item) => {
@@ -377,6 +394,23 @@ export class Header {
 			// "Add to project" only appears once the chat has messages
 			if (chatContainer.getMessages().length > 0) {
 				this.buildAddToProjectMenu(menu, chatContainer);
+			}
+
+			// "Open chat file" — opens the underlying markdown file in the active leaf
+			if (this.plugin.settings.chatHistoryEnabled) {
+				const { historyFilePath } = getViewInfo(this.plugin, this.viewType);
+				if (historyFilePath) {
+					menu.addItem((item) => {
+						item.setTitle("Open chat file")
+							.setIcon("file-text")
+							.onClick(() => {
+								const tfile = this.plugin.app.vault.getAbstractFileByPath(historyFilePath);
+								if (tfile) {
+									void this.plugin.app.workspace.getLeaf(false).openFile(tfile as import("obsidian").TFile);
+								}
+							});
+					});
+				}
 			}
 
 			menu.addSeparator();

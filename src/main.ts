@@ -404,25 +404,40 @@ export default class LLMPlugin extends Plugin {
 	 */
 	private registerChatFileViewAction() {
 		let currentActionEl: HTMLElement | null = null;
+		let currentActionLeaf: WorkspaceLeaf | null = null;
+		let currentActionPath: string | null = null;
 
 		const tryAttach = (leaf: WorkspaceLeaf | null) => {
+			// Skip if this is the same leaf+file we already attached to — prevents
+			// duplicate buttons when active-leaf-change fires multiple times for the
+			// same leaf (e.g. when opening a file programmatically).
+			const view = leaf?.view as any;
+			const file = view?.file;
+			const newPath = file?.extension === "md" ? (file.path as string) : null;
+			if (leaf === currentActionLeaf && newPath === currentActionPath) return;
+
 			currentActionEl?.remove();
 			currentActionEl = null;
+			currentActionLeaf = null;
+			currentActionPath = null;
 
 			if (!leaf) return;
 
 			// MarkdownView exposes `.file`; other view types do not
-			const view = leaf.view as any;
-			const file = view?.file;
 			if (!file || file.extension !== "md") return;
 
-			// Only chat history files (folder check is sufficient — the folder is dedicated)
+			// Only chat history files — allow both the default chat folder and
+			// project-scoped chat folders (<rootVaultFolder>/Projects/<id>/chats/).
 			const chatFolder = this.settings.chatHistoryFolder || "LLM Chats";
-			if (!file.path.startsWith(chatFolder + "/")) return;
+			const inDefaultFolder = file.path.startsWith(chatFolder + "/");
+			const inProjectFolder = file.path.startsWith(this.projectsFolder + "/") && file.path.includes("/chats/");
+			if (!inDefaultFolder && !inProjectFolder) return;
 
 			if (typeof view.addAction !== "function") return;
 
 			const filePath: string = file.path;
+			currentActionLeaf = leaf;
+			currentActionPath = filePath;
 			currentActionEl = view.addAction(
 				"bot-message-square",
 				"Open in chat widget",

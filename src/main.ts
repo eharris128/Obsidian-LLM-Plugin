@@ -396,61 +396,81 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	/**
-	 * Register a workspace event that adds a "Open in chat widget" action button
-	 * to the view-actions area whenever a chat history file is the active note.
+	 * Register workspace events that add a persistent "Open in chat widget" action
+	 * button to every open chat history file, regardless of which tab is active.
 	 *
-	 * Uses `active-leaf-change` (fires on every tab switch, not just first open)
-	 * and reads the file directly from the leaf view to avoid metadata-cache timing issues.
+	 * Uses a per-leaf Map so buttons survive tab switches — the button is added
+	 * once when the leaf shows a chat file and removed only when the leaf navigates
+	 * away from it or is closed.
 	 */
 	private registerChatFileViewAction() {
-		let currentActionEl: HTMLElement | null = null;
-		let currentActionLeaf: WorkspaceLeaf | null = null;
-		let currentActionPath: string | null = null;
+		// leaf → { button element, file path it was created for }
+		const leafButtons = new Map<WorkspaceLeaf, { el: HTMLElement; path: string }>();
 
-		const tryAttach = (leaf: WorkspaceLeaf | null) => {
-			// Skip if this is the same leaf+file we already attached to — prevents
-			// duplicate buttons when active-leaf-change fires multiple times for the
-			// same leaf (e.g. when opening a file programmatically).
-			const view = leaf?.view as any;
-			const file = view?.file;
-			const newPath = file?.extension === "md" ? (file.path as string) : null;
-			if (leaf === currentActionLeaf && newPath === currentActionPath) return;
-
-			currentActionEl?.remove();
-			currentActionEl = null;
-			currentActionLeaf = null;
-			currentActionPath = null;
-
-			if (!leaf) return;
-
-			// MarkdownView exposes `.file`; other view types do not
-			if (!file || file.extension !== "md") return;
-
-			// Only chat history files — allow both the default chat folder and
-			// project-scoped chat folders (<rootVaultFolder>/Projects/<id>/chats/).
+		const isChatFilePath = (path: string): boolean => {
 			const chatFolder = this.settings.chatHistoryFolder || "LLM Chats";
-			const inDefaultFolder = file.path.startsWith(chatFolder + "/");
-			const inProjectFolder = file.path.startsWith(this.projectsFolder + "/") && file.path.includes("/chats/");
-			if (!inDefaultFolder && !inProjectFolder) return;
-
-			if (typeof view.addAction !== "function") return;
-
-			const filePath: string = file.path;
-			currentActionLeaf = leaf;
-			currentActionPath = filePath;
-			currentActionEl = view.addAction(
-				"bot-message-square",
-				"Open in chat widget",
-				async () => {
-					await this.openChatFileInWidget(filePath);
-				}
+			return (
+				path.startsWith(chatFolder + "/") ||
+				(path.startsWith(this.projectsFolder + "/") && path.includes("/chats/"))
 			);
 		};
 
+		const attachAll = () => {
+			// 1. Iterate every open leaf; add/update buttons as needed.
+			this.app.workspace.iterateAllLeaves((leaf) => {
+				const view = leaf.view as any;
+				const file = view?.file;
+				const path = file?.extension === "md" ? (file.path as string) : null;
+
+				const existing = leafButtons.get(leaf);
+
+				// Nothing to do — same leaf, same file, button already present.
+				if (existing && existing.path === path) return;
+
+				// File changed or leaf no longer has a chat file — remove stale button.
+				if (existing) {
+					existing.el.remove();
+					leafButtons.delete(leaf);
+				}
+
+				if (!path || !isChatFilePath(path)) return;
+				if (typeof view.addAction !== "function") return;
+
+				// Remove any stale button left in the DOM from a previous plugin load.
+				// view.addAction() appends to a persistent view-header element that
+				// survives hot-reloads; the leafButtons Map is fresh each load and
+				// won't find the old element, so we must scrub it from the DOM first
+				// or we'll end up with duplicate buttons.
+				const stale = (view.containerEl as HTMLElement | undefined)
+					?.querySelector?.(".llm-open-in-widget-action") as HTMLElement | null;
+				stale?.remove();
+
+				const btn: HTMLElement = view.addAction(
+					"bot-message-square",
+					"Open in chat widget",
+					async () => { await this.openChatFileInWidget(path); }
+				);
+				btn.addClass("llm-open-in-widget-action");
+				leafButtons.set(leaf, { el: btn, path });
+			});
+
+			// 2. Remove entries for leaves that are no longer open.
+			for (const [leaf, { el }] of leafButtons) {
+				let found = false;
+				this.app.workspace.iterateAllLeaves((l) => { if (l === leaf) found = true; });
+				if (!found) {
+					el.remove();
+					leafButtons.delete(leaf);
+				}
+			}
+		};
+
 		this.registerEvent(
-			this.app.workspace.on("active-leaf-change", (leaf) => {
-				tryAttach(leaf);
-			})
+			this.app.workspace.on("active-leaf-change", () => attachAll())
+		);
+
+		this.registerEvent(
+			this.app.workspace.on("layout-change", () => attachAll())
 		);
 	}
 

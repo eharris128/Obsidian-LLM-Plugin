@@ -2,6 +2,28 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Known Pitfalls
+
+### `view.addAction()` survives hot-reloads — always scrub before adding
+
+`view.addAction()` appends a button to a **persistent** DOM element inside the MarkdownView header. That DOM survives plugin hot-reloads. Any Map or variable used to track "have we already added this button?" is scoped to the plugin instance and starts empty on every load.
+
+**Consequence:** if you call `addAction()` on hot-reload without checking the DOM first, a second button appears alongside the orphaned one from the previous load.
+
+**Rule:** Before calling `view.addAction()` for any button with a custom class, query the view's container for that class and remove any existing element first:
+
+```ts
+const stale = (view.containerEl as HTMLElement | undefined)
+    ?.querySelector?.(".your-custom-class") as HTMLElement | null;
+stale?.remove();
+const btn = view.addAction("icon", "Tooltip", handler);
+btn.addClass("your-custom-class");
+```
+
+This also means the custom class is load-bearing — never skip `btn.addClass(...)` after `addAction()`.
+
+---
+
 ## Build Commands
 
 ```bash

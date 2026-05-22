@@ -1,5 +1,6 @@
 import { Component, ExtraButtonComponent, SearchComponent, TFile, setIcon } from "obsidian";
 import LLMPlugin from "main";
+import { attachChatRowMenu } from "./ChatRowMenuHelper";
 
 /**
  * ChatsSidebar — inline chats list component for the widget's left-side panel.
@@ -211,14 +212,17 @@ export class ChatsSidebar extends Component {
 				}
 			}
 
-			// Right flair: date
+			// Right flair: date stamp + three-dot context-menu button.
+			// The button is hidden by default and shown on row-hover via CSS.
 			const flairOuter = itemSelf.createDiv({
 				cls: "tree-item-flair-outer",
 			});
 			flairOuter.createSpan({
-				cls: "tree-item-flair",
+				cls: "tree-item-flair llm-chats-row-date",
 				text: this.formatDate(file.stat.mtime),
 			});
+
+			attachChatRowMenu(itemSelf, flairOuter, file, this.plugin, () => void this.refresh());
 
 			itemSelf.addEventListener("click", () => {
 				void this.plugin.openChatFileInWidget(file.path);

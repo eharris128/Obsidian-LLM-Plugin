@@ -3,15 +3,20 @@ import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
 import { SettingsContainer } from "Plugin/Components/SettingsContainer";
 import LLMPlugin from "main";
-import { ButtonComponent } from "obsidian";
+import { ButtonComponent, Notice } from "obsidian";
 import { classNames } from "utils/classNames";
-import { getViewInfo, setView } from "utils/utils";
+import { getSettingType, getViewInfo, setHistoryFilePath, setView } from "utils/utils";
+import { models } from "utils/models";
 
 const ROOT_WORKSPACE_CLASS = ".mod-vertical.mod-root";
 
 export class FAB {
 	plugin: LLMPlugin;
 	private chatContainer: ChatContainer | null = null;
+	private fabHeader: Header | null = null;
+	private fabChatContainerDiv: HTMLElement | null = null;
+	private fabChatHistoryContainer: HTMLElement | null = null;
+	private fabViewArea: HTMLElement | null = null;
 
 	constructor(plugin: LLMPlugin) {
 		this.plugin = plugin;
@@ -41,7 +46,10 @@ export class FAB {
 		viewArea.style.display = "none";
 		viewArea.style.height = `${savedHeight}px`;
 
+		this.fabViewArea = viewArea;
+
 		const header = new Header(this.plugin, "floating-action-button");
+		this.fabHeader = header;
 		this.chatContainer = new ChatContainer(
 			this.plugin,
 			"floating-action-button",
@@ -78,6 +86,8 @@ export class FAB {
 		const lineBreak = contentArea.createDiv();
 		const chatContainerDiv = contentArea.createDiv();
 		const chatHistoryContainer = contentArea.createDiv();
+		this.fabChatContainerDiv = chatContainerDiv;
+		this.fabChatHistoryContainer = chatHistoryContainer;
 		const settingsContainerDiv = contentArea.createDiv();
 		header.generateHeader(
 			contentArea,
@@ -215,9 +225,82 @@ export class FAB {
 		}
 	}
 
+	/**
+	 * Open the FAB with a file-based conversation pre-loaded.
+	 * Shows the FAB panel if it's currently hidden, then loads the conversation.
+	 */
+	openAtHistoryFile(filePath: string) {
+		if (!this.chatContainer || !this.fabChatContainerDiv || !this.fabChatHistoryContainer || !this.fabHeader) return;
+
+		// Use the resolved settings key ("fabSettings") so TS can verify the
+		// property accesses — avoids the TS7053 implicit-any index error.
+		const settingType = getSettingType("floating-action-button") as "fabSettings";
+
+		// Show the FAB view area if it's currently hidden
+		if (this.fabViewArea?.style.display === "none") {
+			this.fabViewArea.style.display = "flex";
+			this.chatContainer.syncModelDropdown();
+			requestAnimationFrame(() => {
+				if (!this.fabViewArea) return;
+				const safeMax = Math.max(360, this.fabViewArea.getBoundingClientRect().bottom - 36);
+				if (this.fabViewArea.offsetHeight > safeMax) {
+					this.fabViewArea.style.height = `${safeMax}px`;
+					this.plugin.settings.fabViewHeight = safeMax;
+					void this.plugin.saveSettings();
+				}
+			});
+		}
+
+		setView(this.plugin, "floating-action-button");
+
+		this.plugin.chatHistory
+			.load(filePath)
+			.then(({ meta, messages, toolCallsByTurn, skillsByTurn, modelsByTurn }) => {
+				this.chatContainer!.resetChat();
+				this.chatContainer!.setToolCallsByTurn(toolCallsByTurn);
+				this.chatContainer!.setSkillsByTurn(skillsByTurn);
+				this.chatContainer!.setModelsByTurn(modelsByTurn);
+				this.chatContainer!.messageStore.setMessages(messages);
+				this.chatContainer!.generateIMLikeMessages(messages);
+
+				this.fabChatHistoryContainer!.hide();
+				this.fabChatContainerDiv!.show();
+				this.fabChatContainerDiv!.querySelector(".messages-div")?.scroll(0, 9999);
+
+				// Restore model settings from the file metadata
+				if (meta.model && models[meta.model]) {
+					const m = models[meta.model];
+					this.plugin.settings[settingType].model = meta.model;
+					this.plugin.settings[settingType].modelName = meta.model;
+					this.plugin.settings[settingType].modelType = m.type;
+					this.plugin.settings[settingType].modelEndpoint = m.endpoint;
+					this.plugin.settings[settingType].endpointURL = m.url;
+				}
+
+				setHistoryFilePath(this.plugin, "floating-action-button", filePath);
+				this.chatContainer!.currentHistoryFilePath = filePath;
+				this.chatContainer!.restoreProjectFromChat(filePath, meta.project);
+
+				void this.plugin.saveSettings();
+
+				this.fabHeader!.setHeader(this.plugin.settings[settingType].modelName);
+				this.fabHeader!.resetHistoryButton();
+				this.fabHeader!.setTitle(meta.title ?? filePath);
+				this.fabHeader!.showTitle();
+			})
+			.catch((e) => {
+				console.error("[FAB] Failed to load chat file:", e);
+				new Notice("Failed to load conversation.");
+			});
+	}
+
 	removeFab() {
 		this.chatContainer?.destroy();
 		this.chatContainer = null;
+		this.fabHeader = null;
+		this.fabChatContainerDiv = null;
+		this.fabChatHistoryContainer = null;
+		this.fabViewArea = null;
 		const FAB = activeDocument.getElementById("_floating-action-button");
 		if (FAB) {
 			FAB.remove();

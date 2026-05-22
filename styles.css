@@ -2623,6 +2623,52 @@ button.llm-mic-button.llm-mic-transcribing {
 	cursor: default;
 }
 
+/* ── Three-dot context-menu button ──────────────────────────────────────────
+   The button carries Obsidian's native `clickable-icon` class which handles
+   all sizing, padding, hover/focus colours, and border-radius automatically.
+   We only add the overlay positioning and fade animation on top.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.llm-chats-row-date {
+	transition: opacity 120ms ease;
+}
+
+/* Give the flair outer a stacking context so the button can overlay the date */
+.tree-item-flair-outer:has(.llm-chats-row-menu-btn) {
+	position: relative;
+}
+
+.llm-chats-row-menu-btn {
+	/* Overlay the date stamp — centred vertically, flush to the right edge */
+	position: absolute;
+	top: 50%;
+	right: 0;
+	transform: translateY(-50%);
+
+	/* Hidden until row hover — clickable-icon handles everything else */
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease;
+}
+
+/* On row hover: reveal the button, hide the date */
+.tree-item-self:hover .llm-chats-row-menu-btn,
+.tree-item-self:focus-within .llm-chats-row-menu-btn {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.tree-item-self:hover .llm-chats-row-date,
+.tree-item-self:focus-within .llm-chats-row-date {
+	opacity: 0;
+}
+
+/* ── Rename modal input ───────────────────────────────────────────────────── */
+.llm-rename-input {
+	width: 100%;
+	margin-bottom: var(--size-4-3);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    Chat Details Panel  (.llm-chat-details-*)
    Right-sidebar panel that shows live state for the active chat:

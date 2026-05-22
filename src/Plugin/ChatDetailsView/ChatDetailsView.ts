@@ -21,8 +21,8 @@ export interface ChatDetailsState {
 	 * folderPath is the vault-relative path to the project folder.
 	 */
 	activeProject: { id: string; name: string; filePath: string; folderPath: string } | null;
-	/** Memory strings recalled this turn */
-	recalledMemories: string[];
+	/** Memories recalled this turn — content text + vault file path for navigation */
+	recalledMemories: { content: string; filePath: string }[];
 	/** Files currently attached as context (display names + paths) */
 	contextFiles: { name: string; path: string }[];
 	/**

@@ -67,6 +67,14 @@ export interface MemoryContext {
 	activeProject?: string;
 }
 
+/** Structured result from recall() — context string for injection + individual records for UI. */
+export interface RecallResult {
+	/** Formatted context block to inject into the prompt. */
+	context: string;
+	/** Individual recalled memories with their vault file paths, for the Chat Details panel. */
+	memories: { content: string; filePath: string }[];
+}
+
 // ── MemoryService ──────────────────────────────────────────────────────────────
 
 export class MemoryService {
@@ -343,7 +351,7 @@ ${mem.content}
 		ctx: MemoryContext,
 		topK: number = DEFAULT_RECALL_TOP_K,
 		_indexer: VaultIndexer | null,
-	): Promise<string | null> {
+	): Promise<RecallResult | null> {
 		const folders = this.scopeFolders(ctx);
 
 		// Load all memory records from every relevant scope folder
@@ -362,19 +370,23 @@ ${mem.content}
 		} catch (e) {
 			// Embedding failed — fall back to returning all memories up to topK
 			console.warn("[Memory] Query embedding failed during recall, using all memories:", e);
-			return formatMemoriesAsContext(allMemories.slice(0, topK).map(m => m.content));
+			const fallback = allMemories.slice(0, topK);
+			return {
+				context: formatMemoriesAsContext(fallback.map(m => m.content)),
+				memories: fallback.map(m => ({ content: m.content, filePath: m.filePath })),
+			};
 		}
 
-		const scored: { content: string; score: number }[] = [];
+		const scored: { content: string; filePath: string; score: number }[] = [];
 		for (const mem of allMemories) {
 			try {
 				const memVec = await this.embedding.embed(mem.content);
 				const score = cosineSimilarity(queryVec, memVec);
-				scored.push({ content: mem.content, score });
+				scored.push({ content: mem.content, filePath: mem.filePath, score });
 			} catch {
 				// If a single memory fails to embed, include it at score 0
 				// so it can still appear if there are few memories
-				scored.push({ content: mem.content, score: 0 });
+				scored.push({ content: mem.content, filePath: mem.filePath, score: 0 });
 			}
 		}
 
@@ -383,7 +395,10 @@ ${mem.content}
 		const top = scored.slice(0, topK);
 
 		console.log(`[Memory] Recalled ${top.length} memories (best score: ${top[0]?.score.toFixed(3)})`);
-		return formatMemoriesAsContext(top.map(s => s.content));
+		return {
+			context: formatMemoriesAsContext(top.map(s => s.content)),
+			memories: top.map(s => ({ content: s.content, filePath: s.filePath })),
+		};
 	}
 
 	// ── Load memory files ────────────────────────────────────────────────────────

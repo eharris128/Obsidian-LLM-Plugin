@@ -701,8 +701,8 @@ export class LLMSettingsModal extends Modal {
 			});
 
 		new Setting(items)
-			.setName("Obsidian Agent brand icon")
-			.setDesc("Show the stone brand icon at the bottom of the last message when the Obsidian Agent is active.")
+			.setName("Obsidian Agent icon")
+			.setDesc("Show the Obsidian Agent icon at the bottom of the last message. When enabled, the assistant logo is hidden for agent responses.")
 			.addToggle((toggle) => {
 				toggle
 					.setValue(this.plugin.settings.showAgentBrandIcon)

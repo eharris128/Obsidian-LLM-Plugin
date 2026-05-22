@@ -24,6 +24,26 @@ This also means the custom class is load-bearing — never skip `btn.addClass(..
 
 ---
 
+### Chat-row three-dot context menu — shared helper pattern
+
+`ChatsView` and `ChatsSidebar` both render chat-list rows. The per-row context menu (rename, delete, move to project, open in …) lives in a single shared module:
+
+- **`src/Plugin/Components/ChatRowMenuHelper.ts`** — exports `attachChatRowMenu(itemSelf, flairOuter, file, plugin, onRefresh)` and `RenameModal`.
+
+Call `attachChatRowMenu` once per row immediately after creating `flairOuter`. It appends an `.llm-chats-row-menu-btn` icon button into the flair area. The button is hidden by default and revealed on row-hover via CSS.
+
+**"Open in" dispatch methods on LLMPlugin:**
+- `openChatFileInWidget(path)` — existing; opens in a tab
+- `openChatFileInSidebar(path)` — opens in the right sidebar
+- `openChatFileInFAB(path)` — delegates to `this.fab.openAtHistoryFile(path)`
+- `openChatFileInPopover(path)` — delegates to `this.statusBarButton.openAtHistoryFile(path)`
+
+`FAB.openAtHistoryFile()` stores the needed DOM refs (`fabHeader`, `fabChatContainerDiv`, `fabChatHistoryContainer`, `fabViewArea`) as private instance vars assigned inside `generateFAB()` and cleared in `removeFab()`.
+
+**Settings indexing in FAB:** FAB always uses `getSettingType("floating-action-button") as "fabSettings"` to get a typed key for `LLMPluginSettings` — never use the raw `"floating-action-button"` string as an index (TS7053).
+
+---
+
 ## Build Commands
 
 ```bash

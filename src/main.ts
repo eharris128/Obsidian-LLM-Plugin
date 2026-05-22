@@ -514,6 +514,22 @@ export default class LLMPlugin extends Plugin {
 		}
 	}
 
+	/** Open (or reveal) the widget in the right sidebar with a specific chat file pre-loaded. */
+	async openChatFileInSidebar(filePath: string): Promise<void> {
+		this.pendingWidgetFilePath = filePath;
+		await this.activateSidebar();
+	}
+
+	/** Open a chat file in the FAB popover. */
+	openChatFileInFAB(filePath: string): void {
+		this.fab.openAtHistoryFile(filePath);
+	}
+
+	/** Open a chat file in the status-bar popover ("Ask AI" button). */
+	openChatFileInPopover(filePath: string): void {
+		this.statusBarButton.openAtHistoryFile(filePath);
+	}
+
 	/**
 	 * Register vault file events to keep the RAG index incrementally up-to-date.
 	 * Modify events are debounced (2 s) so rapid autosaves don't hammer the embedding API.

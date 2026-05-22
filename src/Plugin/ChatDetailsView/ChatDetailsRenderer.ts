@@ -17,7 +17,7 @@ export function renderChatDetailsInto(
 	renderModelSection(el, state);
 	renderProjectSection(el, state, app);
 	renderGuidanceSection(el, state, app);
-	renderMemoriesSection(el, state, memoryEnabled);
+	renderMemoriesSection(el, state, app, memoryEnabled);
 	renderContextFilesSection(el, state, app);
 }
 
@@ -142,6 +142,7 @@ function renderProjectSection(
 function renderMemoriesSection(
 	el: HTMLElement,
 	state: ChatDetailsState,
+	app: App,
 	memoryEnabled: boolean
 ) {
 	const memories = state.recalledMemories;
@@ -160,12 +161,19 @@ function renderMemoriesSection(
 	}
 
 	for (const memory of memories) {
-		const row = section.createDiv({ cls: "llm-chat-details-row" });
+		const row = section.createDiv({
+			cls: "llm-chat-details-row llm-chat-details-row--clickable",
+		});
 		const iconEl = row.createDiv({ cls: "llm-chat-details-row-icon" });
 		setIcon(iconEl, "brain");
 		row.createDiv({
 			cls: "llm-chat-details-row-body llm-chat-details-row-body--memory",
-			text: memory,
+			text: memory.content,
+		});
+
+		row.addEventListener("click", () => {
+			const tfile = app.vault.getAbstractFileByPath(memory.filePath);
+			if (tfile) void app.workspace.getLeaf(false).openFile(tfile as any);
 		});
 	}
 }

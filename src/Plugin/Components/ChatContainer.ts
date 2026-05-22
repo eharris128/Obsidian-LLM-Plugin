@@ -199,8 +199,8 @@ export class ChatContainer extends Component {
 	useMemory: boolean = false;
 	/** Whether memories were injected for the current generation (drives UI indicator). */
 	private memoriesInjectedThisTurn: boolean = false;
-	/** Individual memory strings recalled during the last generation — shown in Chat Details panel. */
-	lastRecalledMemories: string[] = [];
+	/** Individual memories recalled during the last generation — shown as clickable rows in Chat Details panel. */
+	lastRecalledMemories: { content: string; filePath: string }[] = [];
 	/** Inline sidebar element within the widget for the Chat Details panel. Set by Widget.ts. */
 	detailsSidebarEl: HTMLElement | null = null;
 	/** Stored reference so we can update the memory button's active state. */
@@ -1152,15 +1152,11 @@ export class ChatContainer extends Component {
 				);
 				if (recalled) {
 					// Prepend memories before everything else so the model sees them first
-					this.pendingContextString = recalled +
+					this.pendingContextString = recalled.context +
 						(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
 					this.memoriesInjectedThisTurn = true;
-					// Parse individual memory strings for the Chat Details panel.
-					// formatMemoriesAsContext() produces lines starting with "- ".
-					this.lastRecalledMemories = recalled
-						.split("\n")
-						.filter((l) => l.startsWith("- "))
-						.map((l) => l.slice(2).trim());
+					// Store structured records for the Chat Details panel (content + file path).
+					this.lastRecalledMemories = recalled.memories;
 					this.pushChatDetailsState();
 				}
 			} catch (e) {
@@ -3350,8 +3346,8 @@ export class ChatContainer extends Component {
 	setDiv(streaming: boolean) {
 		const parent = this.historyMessages.createDiv();
 		parent.addClass("llm-flex");
-		const assistant = parent.createDiv({ cls: "llm-assistant-logo" });
-		if (this.plugin.settings.showAssistantLogo) {
+		if (this.plugin.settings.showAssistantLogo && !(this.isObsidianAgent && this.plugin.settings.showAgentBrandIcon)) {
+			const assistant = parent.createDiv({ cls: "llm-assistant-logo" });
 			assistant.appendChild(assistantLogo());
 		}
 
@@ -3623,8 +3619,8 @@ export class ChatContainer extends Component {
 		if (assistant) {
 			// Logo sits to the left of the content as a sibling inside the container
 			imLikeMessageContainer.addClass("llm-flex");
-			const logoEl = imLikeMessageContainer.createDiv({ cls: "llm-assistant-logo" });
-			if (this.plugin.settings.showAssistantLogo) {
+			if (this.plugin.settings.showAssistantLogo && !(this.isObsidianAgent && this.plugin.settings.showAgentBrandIcon)) {
+				const logoEl = imLikeMessageContainer.createDiv({ cls: "llm-assistant-logo" });
 				logoEl.appendChild(assistantLogo());
 			}
 

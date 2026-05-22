@@ -8,6 +8,7 @@ import {
 } from "obsidian";
 import LLMPlugin from "main";
 import { CHATS_VIEW_TYPE } from "utils/constants";
+import { attachChatRowMenu } from "Plugin/Components/ChatRowMenuHelper";
 
 export { CHATS_VIEW_TYPE };
 
@@ -201,13 +202,15 @@ export class ChatsView extends ItemView {
 				}
 			}
 
-			// Right flair: date — tree-item-flair-outer / tree-item-flair is the
-			// standard Obsidian pattern (used by bookmarks panel for note counts, etc.)
+			// Right flair: date stamp + three-dot context-menu button.
+			// The button is hidden by default and shown on row-hover via CSS.
 			const flairOuter = itemSelf.createDiv({ cls: "tree-item-flair-outer" });
 			flairOuter.createSpan({
-				cls: "tree-item-flair",
+				cls: "tree-item-flair llm-chats-row-date",
 				text: this.formatDate(file.stat.mtime),
 			});
+
+			attachChatRowMenu(itemSelf, flairOuter, file, this.plugin, () => void this.refresh());
 
 			itemSelf.addEventListener("click", () => {
 				void this.plugin.openChatFileInWidget(file.path);

@@ -590,7 +590,29 @@ export class LLMSettingsModal extends Modal {
 				});
 		}
 
+		// ── Guidance (AGENTS.md) — declared early so the rootVaultFolder onChange
+		// closure can re-render it when the path is auto-updated.
+		let agentsGroup: HTMLElement;
+
+		const renderAgentsPicker = () => {
+			agentsGroup.empty();
+			this.renderGuidanceFilePicker(
+				agentsGroup,
+				"Instructions file",
+				"Vault-relative path to your general instructions note (e.g. AI/AGENTS.md). Its contents are injected into every conversation — all models, assistants, and the Obsidian Agent. Use it to describe how you work, your preferred response style, or vault conventions that should always apply.",
+				"AI/AGENTS.md",
+				`# General Instructions\n\nThis note is injected into every conversation in this vault.\n\n## About This Vault\n\n<!-- Describe how your vault is organised, what it's for, naming conventions, etc. -->\n\n## Preferred Behaviors\n\n<!-- Describe your preferred response style, tone, format, or workflow. -->\n\n## Conventions\n\n<!-- Note any file templates, frontmatter patterns, or folder rules the AI should follow. -->\n`,
+				() => this.plugin.settings.agentsFilePath ?? "",
+				async (value) => {
+					this.plugin.settings.agentsFilePath = value;
+					await this.plugin.saveSettings();
+					this.plugin.refreshAllChips?.();
+				},
+			);
+		};
+
 		// Root vault folder
+		let prevRoot = (this.plugin.settings.rootVaultFolder ?? "").trim();
 		new Setting(items)
 			.setName("Root vault folder")
 			.setDesc(
@@ -602,7 +624,22 @@ export class LLMSettingsModal extends Modal {
 				text.setPlaceholder("e.g. AI");
 				text.setValue(this.plugin.settings.rootVaultFolder ?? "");
 				text.onChange(async (value) => {
-					this.plugin.settings.rootVaultFolder = value.trim();
+					const newRoot = value.trim();
+					this.plugin.settings.rootVaultFolder = newRoot;
+
+					// Auto-update agentsFilePath when it still matches the derived default
+					// (i.e. the user hasn't customised it). Re-render the picker so the
+					// new path is visible immediately.
+					const oldDefault = prevRoot ? `${prevRoot}/AGENTS.md` : "AI/AGENTS.md";
+					if (this.plugin.settings.agentsFilePath === oldDefault) {
+						this.plugin.settings.agentsFilePath = newRoot
+							? `${newRoot}/AGENTS.md`
+							: "AI/AGENTS.md";
+						renderAgentsPicker();
+						this.plugin.refreshAllChips?.();
+					}
+					prevRoot = newRoot;
+
 					await this.plugin.saveSettings();
 					await this.plugin.reinitSkillRegistry();
 					await this.plugin.reinitProjectManager();
@@ -610,21 +647,8 @@ export class LLMSettingsModal extends Modal {
 				});
 			});
 
-		// ── Guidance (AGENTS.md) ─────────────────────────────────────────────
-		const agentsGroup = this.addSettingGroup(el, "Guidance");
-		this.renderGuidanceFilePicker(
-			agentsGroup,
-			"Instructions file",
-			"Vault-relative path to your general instructions note (e.g. AI/AGENTS.md). Its contents are injected into every conversation — all models, assistants, and the Obsidian Agent. Use it to describe how you work, your preferred response style, or vault conventions that should always apply.",
-			"AI/AGENTS.md",
-			`# General Instructions\n\nThis note is injected into every conversation in this vault.\n\n## About This Vault\n\n<!-- Describe how your vault is organised, what it's for, naming conventions, etc. -->\n\n## Preferred Behaviors\n\n<!-- Describe your preferred response style, tone, format, or workflow. -->\n\n## Conventions\n\n<!-- Note any file templates, frontmatter patterns, or folder rules the AI should follow. -->\n`,
-			() => this.plugin.settings.agentsFilePath ?? "",
-			async (value) => {
-				this.plugin.settings.agentsFilePath = value;
-				await this.plugin.saveSettings();
-				this.plugin.refreshAllChips?.();
-			},
-		);
+		agentsGroup = this.addSettingGroup(el, "Guidance");
+		renderAgentsPicker();
 	}
 
 	private renderInterface() {

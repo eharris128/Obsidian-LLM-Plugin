@@ -1467,21 +1467,6 @@ export class LLMSettingsModal extends Modal {
 					});
 			});
 
-		const folderItems = this.addSettingGroup(el, "Storage");
-
-		const root = this.plugin.settings.rootVaultFolder || "e.g. AI";
-		folderItems.createDiv({
-			cls: "setting-item-description",
-			text: this.plugin.settings.rootVaultFolder
-				? `Memories are stored in your vault under:\n` +
-				  `  ${root}/Memories/           (global — always recalled)\n` +
-				  `  ${root}/Assistants/<name>/memories/  (recalled when assistant is active)\n` +
-				  `  ${root}/Projects/<name>/memories/    (recalled when project is active)\n\n` +
-				  `Files are plain Markdown — you can read, edit, and delete them directly in Obsidian.`
-				: `Set a root vault folder in General → Root vault folder to enable memory storage.\n` +
-				  `Once configured, memories will live at <root>/Memories/, <root>/Assistants/<name>/memories/, ` +
-				  `and <root>/Projects/<name>/memories/.`,
-		});
 	}
 
 	private renderProjects() {

@@ -220,6 +220,8 @@ export class ChatContainer extends Component {
 	private agentRoutedAssistantThisTurn: string | null = null;
 	/** Token usage reported by the provider for the last generation — null when unavailable. */
 	private lastTokenUsage: { inputTokens: number; outputTokens: number } | null = null;
+	/** AbortController for the current generation — non-null while a response is in-flight. */
+	private _abortController: AbortController | null = null;
 
 	constructor(
 		private plugin: LLMPlugin,
@@ -267,7 +269,44 @@ export class ChatContainer extends Component {
 			this.mediaRecorder.stop();
 		}
 		this.mediaRecorder = null;
+		// Cancel any in-flight generation
+		this._abortController?.abort();
+		this._abortController = null;
 		this.unload();
+	}
+
+	/**
+	 * Switch the send button to "stop" mode while a generation is in flight.
+	 * Creates a fresh AbortController and updates the button appearance.
+	 */
+	private enterStopMode(sendButton: ButtonComponent): void {
+		this._abortController = new AbortController();
+		sendButton.setIcon("square");
+		sendButton.setTooltip("Stop generation");
+		sendButton.buttonEl.addClass("llm-stop-mode");
+		sendButton.setDisabled(false);
+		// Always show the stop button regardless of input contents
+		sendButton.buttonEl.style.display = "";
+		if (this.micButton) {
+			this.micButton.buttonEl.style.display = "none";
+		}
+	}
+
+	/**
+	 * Restore the send button to its normal "send" state after generation ends.
+	 */
+	private exitStopMode(sendButton: ButtonComponent): void {
+		this._abortController = null;
+		sendButton.setIcon("up-arrow-with-tail");
+		sendButton.setTooltip("Send prompt");
+		sendButton.buttonEl.removeClass("llm-stop-mode");
+		const isEmpty = this.prompt.trim().length === 0;
+		sendButton.setDisabled(isEmpty);
+		sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
+		if (this.micButton && this.micState === "idle") {
+			this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
+			sendButton.buttonEl.style.display = isEmpty ? "none" : "";
+		}
 	}
 
 	private updateMessages(messages: Message[]) {
@@ -445,6 +484,7 @@ export class ChatContainer extends Component {
 
 			let firstText = true;
 			for await (const message of stream) {
+				if (this._abortController?.signal.aborted) break;
 				// Capture session ID from first message
 				if (!this.claudeCodeSessionId && (message as { session_id?: string }).session_id) {
 					this.claudeCodeSessionId = (message as { session_id?: string }).session_id ?? null;
@@ -508,6 +548,7 @@ export class ChatContainer extends Component {
 				let firstChunk = true;
 				let geminiUsageMeta: { promptTokenCount?: number; candidatesTokenCount?: number } | null = null;
 				for await (const chunk of stream) {
+					if (this._abortController?.signal.aborted) break;
 					const chunkText = chunk.text || "";
 					if (firstChunk && chunkText) {
 						this.streamingDiv.empty();
@@ -554,6 +595,11 @@ export class ChatContainer extends Component {
 				this.plugin.settings.claudeAPIKey
 			);
 
+			// Wire up abort: calling stream.abort() causes finalMessage() to
+			// reject, which is caught below and treated as a graceful stop.
+			const abortHandler = () => stream.abort();
+			this._abortController?.signal.addEventListener("abort", abortHandler, { once: true });
+
 			let firstText = true;
 			stream.on("text", (text) => {
 				if (firstText && text) {
@@ -571,7 +617,15 @@ export class ChatContainer extends Component {
 			// Without this await, execution falls through immediately while text
 			// events are still firing, so previewText is "" when
 			// MarkdownRenderer.render and messageStore.addMessage are called.
-			const finalClaudeMsg = await stream.finalMessage();
+			let finalClaudeMsg: Awaited<ReturnType<typeof stream.finalMessage>> | null = null;
+			try {
+				finalClaudeMsg = await stream.finalMessage();
+			} catch (err: any) {
+				// Abort requested — fall through with whatever previewText we have
+				if (!this._abortController?.signal.aborted) throw err;
+			} finally {
+				this._abortController?.signal.removeEventListener("abort", abortHandler);
+			}
 			if (finalClaudeMsg?.usage) {
 				this.lastTokenUsage = {
 					inputTokens: finalClaudeMsg.usage.input_tokens,
@@ -604,6 +658,7 @@ export class ChatContainer extends Component {
 
 			let firstChunk = true;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
+				if (this._abortController?.signal.aborted) break;
 				const content = chunk.choices[0]?.delta?.content || "";
 				if (firstChunk && content) {
 					this.streamingDiv.empty();
@@ -652,6 +707,7 @@ export class ChatContainer extends Component {
 
 			let firstChunk = true;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
+				if (this._abortController?.signal.aborted) break;
 				const content = chunk.choices[0]?.delta?.content || "";
 				if (firstChunk && content) {
 					this.streamingDiv.empty();
@@ -693,6 +749,7 @@ export class ChatContainer extends Component {
 
 			let firstChunk = true;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
+				if (this._abortController?.signal.aborted) break;
 				const content = chunk.choices[0]?.delta?.content || "";
 				if (firstChunk && content) {
 					this.streamingDiv.empty();
@@ -742,6 +799,7 @@ export class ChatContainer extends Component {
 			this.setDiv(true);
 			let openAIUsage: { prompt_tokens: number; completion_tokens: number } | null = null;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
+				if (this._abortController?.signal.aborted) break;
 				this.previewText += chunk.choices[0]?.delta?.content || "";
 				this.streamingDiv.textContent = this.previewText;
 				this.historyMessages.scroll(0, 9999);
@@ -771,7 +829,7 @@ export class ChatContainer extends Component {
 
 	async handleGenerateClick(header: Header, sendButton: ButtonComponent) {
 		header.disableButtons();
-		sendButton.setDisabled(true);
+		this.enterStopMode(sendButton);
 		const {
 			model,
 			modelName,
@@ -924,7 +982,7 @@ export class ChatContainer extends Component {
 		if (rememberMatch) {
 			const content = rememberMatch[1].trim();
 			header.enableButtons();
-			sendButton.setDisabled(false);
+			this.exitStopMode(sendButton);
 
 			if (!this.plugin.memoryService) {
 				new Notice("Memory is not enabled. Enable it in Settings → Memory.");
@@ -1228,7 +1286,7 @@ export class ChatContainer extends Component {
 				this.pendingContextString = null;
 				this.activeSkillId = null;
 				header.enableButtons();
-				sendButton.setDisabled(false);
+				this.exitStopMode(sendButton);
 				this.loadingDivContainer
 					.querySelector(".llm-assistant-buttons")
 					?.removeClass("llm-hide");
@@ -1336,14 +1394,32 @@ export class ChatContainer extends Component {
 				});
 			}
 			header.enableButtons();
-			sendButton.setDisabled(false);
+			this.exitStopMode(sendButton);
 			const buttonsContainer = this.loadingDivContainer.querySelector(
 				".llm-assistant-buttons"
 			);
 			buttonsContainer?.removeClass("llm-hide");
 		} catch (error) {
 			header.enableButtons();
-			sendButton.setDisabled(false);
+			// If the user deliberately stopped, render whatever partial text exists
+			// and treat the generation as complete rather than showing an error.
+			if (error?.name === "AbortError" || this._abortController?.signal.aborted) {
+				this.exitStopMode(sendButton);
+				if (this.previewText) {
+					this.streamingDiv.empty();
+					void this.renderMarkdown(this.previewText, this.streamingDiv);
+					this.messageStore.addMessage({ role: "assistant" as const, content: this.previewText });
+					const buttonsEl = this.loadingDivContainer.querySelector(".llm-assistant-buttons");
+					buttonsEl?.removeClass("llm-hide");
+				}
+				this.pendingRagSources = [];
+				this.pendingWebSources = [];
+				this.pendingContextString = null;
+				this.activeSkillId = null;
+				this.activeAssistantNameThisTurn = null;
+				return;
+			}
+			this.exitStopMode(sendButton);
 			this.plugin.settings.GPT4AllStreaming = false;
 			this.prompt = "";
 			this.pendingRagSources = [];
@@ -1807,11 +1883,12 @@ export class ChatContainer extends Component {
 			await agentLoop.runAnthropic(
 				params,
 				this.plugin.settings.claudeAPIKey,
-				callbacks
+				callbacks,
+				this._abortController?.signal
 			);
 		} else {
 			const client = this.createOpenAIClient(modelType);
-			await agentLoop.runOpenAICompatible(params, client, callbacks);
+			await agentLoop.runOpenAICompatible(params, client, callbacks, this._abortController?.signal);
 		}
 
 		// Render final markdown
@@ -3157,6 +3234,9 @@ export class ChatContainer extends Component {
 		promptField.setPlaceholder("Send a message...");
 
 		const updateSendButton = (value: string) => {
+			// Skip while a generation is in flight — the button is in stop mode
+			// and must not be disabled or hidden by an empty-input check.
+			if (this._abortController) return;
 			const isEmpty = value.trim().length === 0;
 			sendButton.setDisabled(isEmpty);
 			sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
@@ -3242,11 +3322,19 @@ export class ChatContainer extends Component {
 
 			if (event.code === "Enter") {
 				event.preventDefault();
+				if (this._abortController) {
+					this._abortController.abort();
+					return;
+				}
 				void this.handleGenerateClick(header, sendButton);
 				clearPromptField();
 			}
 		});
 		sendButton.onClick(() => {
+			if (this._abortController) {
+				this._abortController.abort();
+				return;
+			}
 			void this.handleGenerateClick(header, sendButton);
 			clearPromptField();
 		});

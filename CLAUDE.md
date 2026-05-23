@@ -2,6 +2,22 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Stop Button / Generation Abort
+
+`ChatContainer` has a `private _abortController: AbortController | null` instance variable. It is non-null while a generation is in-flight.
+
+- **`enterStopMode(sendButton)`** — creates the AbortController, swaps the send button to a red `square` stop icon.
+- **`exitStopMode(sendButton)`** — clears the controller and restores the send button's normal appearance and disabled state.
+- These are called by `handleGenerateClick` at every entry/exit point (including the `/remember` early return and pure-prompt skill path).
+- The send button's `onClick` and the Enter `keydown` handler both check `this._abortController` first — if set, they call `.abort()` instead of starting a new generation.
+- Each provider's streaming `for await` loop checks `this._abortController?.signal.aborted` at the top and `break`s early.
+- The Anthropic non-agent path uses `signal.addEventListener("abort", () => stream.abort())` so the SDK stream is torn down immediately; any error thrown is caught and treated as a graceful stop.
+- `AgentLoop.runAnthropic` and `runOpenAICompatible` accept an optional `signal?: AbortSignal` 4th parameter; `runAgentMode` passes `this._abortController?.signal`.
+- Abort is caught in `handleGenerateClick`'s catch block (`error.name === "AbortError"`) — partial `previewText` is rendered and saved to history rather than showing an error.
+- CSS class `.llm-stop-mode` on `button.llm-send-button` renders the button red (`--color-red`).
+
+---
+
 ## Known Pitfalls
 
 ### `view.addAction()` survives hot-reloads — always scrub before adding

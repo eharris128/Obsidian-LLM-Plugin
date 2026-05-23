@@ -103,19 +103,21 @@ export class ObsidianAgent {
 			);
 		}
 
-		// ── Write-tool constraints ────────────────────────────────────────────
-		// Explicitly prevent the model from writing to the vault unless asked.
-		// This guards against smaller/ReAct-fallback models that over-execute
-		// and autonomously create notes when only asked to read or search.
+		// ── Write-tool guidance ───────────────────────────────────────────────
+		// Encourage reading before writing and proactive offering of write outputs,
+		// but do NOT use prohibitive "NEVER" language — that causes the model to
+		// refuse write tools even when the user explicitly requests a write action.
+		// The Permission Mode setting already gates writes behind user approval.
 		parts.push(
-			"## Important: Do Not Write Without Being Asked\n\n" +
-			"You must NEVER call `obsidian_create_note`, `obsidian_modify_note`, " +
-			"`obsidian_append_note`, `obsidian_patch_note`, `obsidian_insert_after_heading`, " +
-			"or `obsidian_update_frontmatter` unless the user has explicitly asked you to " +
-			"save, create, write, update, or modify a note.\n\n" +
+			"## Vault Write Tools\n\n" +
+			"When the user asks you to create, update, modify, or append to a note, " +
+			"use the appropriate write tool (`obsidian_create_note`, `obsidian_modify_note`, " +
+			"`obsidian_patch_note`, `obsidian_insert_after_heading`, or `obsidian_update_frontmatter`). " +
+			"Always read the note first before modifying it.\n\n" +
 			"If you think a note would be a useful output after completing a task " +
-			"(e.g. after researching something), offer to create one in your response — " +
-			"but do not call any write tool automatically. Always ask first."
+			"(e.g. after researching something), offer to create one in your response rather " +
+			"than writing automatically — but when the user has clearly asked for a write action, " +
+			"proceed with the appropriate tool."
 		);
 
 		// ── Agent guidance file ───────────────────────────────────────────────

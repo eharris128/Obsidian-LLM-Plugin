@@ -313,6 +313,18 @@ button.llm-send-button:disabled {
 	pointer-events: none;
 }
 
+/* Stop mode — shown while the model is generating */
+button.llm-send-button.llm-stop-mode {
+	background-color: var(--color-red);
+	color: white;
+}
+
+button.llm-send-button.llm-stop-mode:hover {
+	background-color: var(--color-red);
+	opacity: 0.8;
+	color: white;
+}
+
 .llm-modal-send-button,
 .fab-send-button,
 .llm-widget-send-button {

@@ -109,7 +109,8 @@ export class AgentLoop {
 	async runAnthropic(
 		params: ChatParams,
 		apiKey: string,
-		callbacks: AgentCallbacks
+		callbacks: AgentCallbacks,
+		signal?: AbortSignal
 	): Promise<string> {
 		const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 		const tools = toAnthropicTools(this.getFilteredTools());
@@ -126,6 +127,7 @@ export class AgentLoop {
 		let toolCallCount = 0;
 
 		while (true) {
+			if (signal?.aborted) break;
 			if (!firstCall) callbacks.onThinking();
 			firstCall = false;
 
@@ -148,6 +150,7 @@ export class AgentLoop {
 			let seenFirstChunk = false;
 
 			for await (const event of stream) {
+				if (signal?.aborted) break;
 				if (event.type === "content_block_start") {
 					const cb = event.content_block;
 					if (cb.type === "text") {
@@ -246,7 +249,8 @@ export class AgentLoop {
 	async runOpenAICompatible(
 		params: ChatParams,
 		client: OpenAI,
-		callbacks: AgentCallbacks
+		callbacks: AgentCallbacks,
+		signal?: AbortSignal
 	): Promise<string> {
 		const tools = toOpenAITools(this.getFilteredTools());
 
@@ -263,6 +267,7 @@ export class AgentLoop {
 		let toolCallCount = 0;
 
 		while (true) {
+			if (signal?.aborted) break;
 			if (!firstCall) callbacks.onThinking();
 			firstCall = false;
 
@@ -287,6 +292,7 @@ export class AgentLoop {
 			let finishReason: string | null = null;
 
 			for await (const chunk of stream) {
+				if (signal?.aborted) break;
 				const choice = chunk.choices[0];
 				if (!choice) continue;
 

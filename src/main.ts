@@ -520,6 +520,15 @@ export default class LLMPlugin extends Plugin {
 		}
 	}
 
+	/** Show or hide the mic button in every live chat view (called after toggling Transcription). */
+	refreshAllMicButtons() {
+		this.fab?.syncMicButton();
+		this.statusBarButton?.syncMicButton();
+		for (const leaf of this.app.workspace.getLeavesOfType(TAB_VIEW_TYPE)) {
+			(leaf.view as WidgetView).syncMicButton();
+		}
+	}
+
 	/** Open a chat markdown file in the widget tab, creating the widget if needed. */
 	async openChatFileInWidget(filePath: string): Promise<void> {
 		const { workspace } = this.app;

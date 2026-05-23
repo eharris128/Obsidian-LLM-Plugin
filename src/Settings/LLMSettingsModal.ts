@@ -477,6 +477,7 @@ export class LLMSettingsModal extends Modal {
 					this.plugin.settings.whisperSettings.enabled = true;
 					await this.plugin.saveSettings();
 					this.plugin.initWhisperService();
+					this.plugin.refreshAllMicButtons();
 				},
 				onDisable: async () => {
 					this.plugin.settings.whisperSettings.enabled = false;
@@ -486,6 +487,7 @@ export class LLMSettingsModal extends Modal {
 					}
 					await this.plugin.saveSettings();
 					this.plugin.initWhisperService();
+					this.plugin.refreshAllMicButtons();
 				},
 			},
 			{
@@ -2083,6 +2085,7 @@ export class LLMSettingsModal extends Modal {
 					this.plugin.settings.whisperSettings.enabled = value;
 					await this.plugin.saveSettings();
 					this.plugin.initWhisperService();
+					this.plugin.refreshAllMicButtons();
 					this.renderTab("transcription");
 				});
 			});

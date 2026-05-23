@@ -283,6 +283,10 @@ export class WidgetView extends ItemView {
 		this.chatContainer?.syncChips();
 	}
 
+	syncMicButton() {
+		this.chatContainer?.syncMicButton();
+	}
+
 	/** Sets agent mode on the chat container and refreshes the dropdown. */
 	setAgentMode(enabled: boolean) {
 		if (this.chatContainer) {

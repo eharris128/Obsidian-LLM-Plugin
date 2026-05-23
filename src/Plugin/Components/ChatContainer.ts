@@ -4038,6 +4038,30 @@ export class ChatContainer extends Component {
 	}
 
 	/**
+	 * Show or hide the mic button based on the current whisperSettings.enabled value.
+	 * Called by the plugin after toggling the Transcription feature on or off, so that
+	 * open chat containers reflect the new state without needing a reload.
+	 *
+	 * - Disabled: hide mic button, ensure send button is always visible.
+	 * - Enabled:  restore the normal empty-input mic / non-empty send swap.
+	 */
+	syncMicButton(): void {
+		if (!this.micButton) return;
+		const enabled = this.plugin.settings.whisperSettings?.enabled ?? false;
+		const sendEl = this.micButton.buttonEl.nextElementSibling as HTMLElement | null;
+		if (!enabled) {
+			// Hide the mic; make the send button unconditionally visible
+			this.micButton.buttonEl.style.display = "none";
+			if (sendEl) sendEl.style.display = "";
+		} else {
+			// Restore normal visibility logic based on prompt content
+			const isEmpty = (this.prompt ?? "").trim().length === 0;
+			this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
+			if (sendEl) sendEl.style.display = isEmpty ? "none" : "";
+		}
+	}
+
+	/**
 	 * Request microphone access and start recording.
 	 * `promptField` is passed so the transcript can be inserted on completion.
 	 */

@@ -112,6 +112,10 @@ export class WidgetView extends ItemView {
 				this.plugin.settings[settingType].endpointURL = m.url;
 			}
 
+			// Restore agent mode from the saved chat so the dropdown reflects
+			// the model/assistant used in this conversation (not the current default).
+			this.chatContainer.isObsidianAgent = !!meta.agent;
+
 			// Track the file path so subsequent sends update the right file
 			setHistoryFilePath(this.plugin, "widget", filePath);
 			this.chatContainer.currentHistoryFilePath = filePath;
@@ -123,6 +127,9 @@ export class WidgetView extends ItemView {
 			this.header.resetHistoryButton();
 			this.header.setTitle(meta.title ?? filePath);
 			this.header.showTitle();
+
+			// Sync the model dropdown to reflect the restored settings/agent mode.
+			this.chatContainer.syncModelDropdown();
 
 			// Push the fully-resolved state (model + project + files) to the
 			// Chat Details panel.  restoreProjectFromChat() already called syncChips()

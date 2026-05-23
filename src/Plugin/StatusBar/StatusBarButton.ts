@@ -396,6 +396,10 @@ export class StatusBarButton {
 					this.plugin.settings[settingType].endpointURL = m.url;
 				}
 
+				// Restore agent mode from the saved chat so the dropdown reflects
+				// the model/assistant used in this conversation (not the current default).
+				this.chatContainer!.isObsidianAgent = !!meta.agent;
+
 				// Track the open file so subsequent messages update it
 				setHistoryFilePath(this.plugin, "floating-action-button", filePath);
 				this.chatContainer!.currentHistoryFilePath = filePath;
@@ -409,6 +413,9 @@ export class StatusBarButton {
 				this.header!.resetHistoryButton();
 				this.header!.setTitle(meta.title ?? filePath);
 				this.header!.showTitle();
+
+				// Sync the model dropdown to reflect the restored settings/agent mode.
+				this.chatContainer!.syncModelDropdown();
 			})
 			.catch((e) => {
 				console.error("[StatusBarButton] Failed to load chat file:", e);

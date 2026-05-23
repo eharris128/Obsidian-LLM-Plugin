@@ -389,6 +389,10 @@ export class HistoryContainer {
 							this.plugin.settings[settingType].endpointURL = m.url;
 						}
 
+						// Restore agent mode from the saved chat so the dropdown reflects
+						// the model/assistant used in this conversation (not the current default).
+						chat.isObsidianAgent = !!meta.agent;
+
 						// Store the file path so historyPush can update the file.
 						// Also sync the ChatContainer's in-memory reference.
 						setHistoryFilePath(this.plugin, this.viewType, file.path);
@@ -404,6 +408,9 @@ export class HistoryContainer {
 						header.resetHistoryButton();
 						header.setTitle(meta.title ?? displayTitle);
 						header.showTitle();
+
+						// Sync the model dropdown to reflect the restored settings/agent mode.
+						chat.syncModelDropdown();
 
 						// Final push so the Chat Details panel reflects the fully-resolved
 						// model + project state for this conversation.

@@ -277,6 +277,10 @@ export class FAB {
 					this.plugin.settings[settingType].endpointURL = m.url;
 				}
 
+				// Restore agent mode from the saved chat so the dropdown reflects
+				// the model/assistant used in this conversation (not the current default).
+				this.chatContainer!.isObsidianAgent = !!meta.agent;
+
 				setHistoryFilePath(this.plugin, "floating-action-button", filePath);
 				this.chatContainer!.currentHistoryFilePath = filePath;
 				this.chatContainer!.restoreProjectFromChat(filePath, meta.project);
@@ -287,6 +291,9 @@ export class FAB {
 				this.fabHeader!.resetHistoryButton();
 				this.fabHeader!.setTitle(meta.title ?? filePath);
 				this.fabHeader!.showTitle();
+
+				// Sync the model dropdown to reflect the restored settings/agent mode.
+				this.chatContainer!.syncModelDropdown();
 			})
 			.catch((e) => {
 				console.error("[FAB] Failed to load chat file:", e);

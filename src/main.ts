@@ -1030,6 +1030,10 @@ export default class LLMPlugin extends Plugin {
 			id: "open-obsidian-agent",
 			name: "Open Obsidian Agent",
 			callback: () => {
+				if (!this.settings.featureSettings?.obsidianAgent) {
+					new Notice("Enable the Obsidian Agent feature in Settings → Large Language Models → General first.");
+					return;
+				}
 				new ChatModal2(this, true).open();
 			},
 		});

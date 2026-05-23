@@ -715,9 +715,23 @@ const JSON_CANVAS: BuiltinSkillDef = {
 	content: `---
 name: json-canvas
 description: Create and edit JSON Canvas files (.canvas) with nodes, edges, groups, and connections. Use when working with .canvas files, creating visual canvases, mind maps, flowcharts, or when the user mentions Canvas files in Obsidian.
+allowed-tools:
+  - obsidian_create_note
+  - obsidian_read_note
+  - obsidian_modify_note
+  - obsidian_search
 ---
 
 # JSON Canvas Skill
+
+## Tool Usage
+
+To create or edit a canvas file, use these vault tools directly — do NOT call any tool-discovery functions (e.g. \`list_skills\`, \`list_tools\`):
+
+- **Create** a new canvas: call \`obsidian_create_note\` with \`path\` ending in \`.canvas\` and \`content\` as valid JSON.
+- **Read** an existing canvas: call \`obsidian_read_note\` with the \`.canvas\` file path.
+- **Edit** an existing canvas: call \`obsidian_read_note\` to read it, then call \`obsidian_modify_note\` (or \`obsidian_patch_note\` for targeted edits) to write the updated JSON.
+- **Ask permission** before creating or modifying files: briefly describe what you are about to do and proceed only after the user confirms.
 
 ## File Structure
 

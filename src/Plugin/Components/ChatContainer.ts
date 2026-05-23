@@ -3034,7 +3034,11 @@ export class ChatContainer extends Component {
 		addFilesButton.onClick((evt: MouseEvent) => {
 			const settingType = getSettingType(this.viewType);
 			const contextSettings = this.plugin.settings[settingType].contextSettings;
-			const skills = this.plugin.skillRegistry?.getSkills() ?? [];
+			// Only show skills that the user has explicitly enabled in Settings → Skills
+			const enabledSkillsMap = this.plugin.settings.skillsSettings?.enabledSkills ?? {};
+			const skills = (this.plugin.skillRegistry?.getSkills() ?? []).filter(
+				(s) => !!enabledSkillsMap[s.id]
+			);
 
 			const menu = new Menu();
 

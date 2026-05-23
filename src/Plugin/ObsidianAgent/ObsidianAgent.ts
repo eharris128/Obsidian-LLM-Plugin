@@ -12,7 +12,7 @@
  * The main model applies the returned assistant context and continues.
  */
 
-import { TFile } from "obsidian";
+import { Notice, TFile } from "obsidian";
 import LLMPlugin from "main";
 import { ObsidianToolRegistry, NeutralToolDefinition } from "services/ObsidianToolRegistry";
 
@@ -47,6 +47,15 @@ export class ObsidianAgent {
 			"Use available tools to ground every response in real data.\n\n" +
 			"When referencing vault notes in your response, always use Obsidian wikilink format: [[Note Name]] or [[folder/Note Name]]. " +
 			"Never write bare filenames like 'Note Name.md' — these produce broken partial links when the name contains spaces."
+		);
+
+		// ── Skills guidance ───────────────────────────────────────────────────
+		parts.push(
+			"## Skills\n\n" +
+			"Use `list_skills` to discover available skills. " +
+			"If you spot a disabled skill that would meaningfully help with the user's request, " +
+			"tell the user why it's useful and call `enable_skill` to activate it — " +
+			"its instructions will apply from the next message onward."
 		);
 
 		// ── Available Assistants (one-liner) ──────────────────────────────────
@@ -138,6 +147,8 @@ export class ObsidianAgent {
 		// ── list_skills ───────────────────────────────────────────────────────
 		// Always registered so the model can discover skills on demand, even
 		// when no assistants are configured.
+		// Shows both enabled and disabled skills so the agent can suggest
+		// enabling a disabled skill when it would help with the current task.
 		registry.registerDynamicTool(
 			{
 				name: "list_skills",
@@ -145,20 +156,112 @@ export class ObsidianAgent {
 				description:
 					"Return the list of vault skills the user can invoke via /skill-name. " +
 					"Call this when the user asks what skills are available, or when you think " +
-					"a skill might be useful for their request and want to suggest one.",
+					"a skill might be useful for their request and want to suggest one. " +
+					"Disabled skills are listed separately — use enable_skill to activate one.",
 				parameters: { type: "object", properties: {}, required: [] },
 				risk: "safe",
 			},
 			async () => {
-				if (availableSkills.length === 0) {
+				const allSkills = this.plugin.skillRegistry?.getSkills() ?? [];
+				const enabledSkillsMap = this.plugin.settings.skillsSettings?.enabledSkills ?? {};
+				const agentAllowed = (s: { id: string }) =>
+					settings.availableSkills[s.id] !== false;
+
+				const enabled = allSkills.filter(
+					(s) => !!enabledSkillsMap[s.id] && agentAllowed(s)
+				);
+				const disabled = allSkills.filter(
+					(s) => !enabledSkillsMap[s.id] && agentAllowed(s)
+				);
+
+				if (enabled.length === 0 && disabled.length === 0) {
 					return { success: true, result: "No skills are currently available in this vault." };
 				}
-				const lines = availableSkills.map((s) => {
+
+				const skillLine = (s: { name: string; id: string; argumentHint?: string; description?: string }) => {
 					const hint = s.argumentHint ? ` ${s.argumentHint}` : "";
 					const desc = s.description ? `: ${s.description}` : "";
 					return `- **${s.name}** (\`/${s.id}${hint}\`)${desc}`;
-				});
-				return { success: true, result: `## Available Skills\n\n${lines.join("\n")}` };
+				};
+
+				const parts: string[] = [];
+				if (enabled.length > 0) {
+					parts.push(`## Enabled Skills\n\n${enabled.map(skillLine).join("\n")}`);
+				}
+				if (disabled.length > 0) {
+					parts.push(
+						`## Disabled Skills\n\nThese skills exist in the vault but are currently off. ` +
+						`Use \`enable_skill\` to activate one if it would help with the current task.\n\n` +
+						disabled.map(skillLine).join("\n")
+					);
+				}
+				return { success: true, result: parts.join("\n\n") };
+			}
+		);
+
+		// ── enable_skill ──────────────────────────────────────────────────────
+		// Lets the agent turn on a disabled skill when it recognises one would
+		// be useful. Saves settings and shows a Notice so the user is aware.
+		registry.registerDynamicTool(
+			{
+				name: "enable_skill",
+				displayName: "Enable Skill",
+				description:
+					"Enable a disabled vault skill so it is available for future messages in this conversation. " +
+					"Use this when list_skills reveals a disabled skill that would meaningfully help with the user's request. " +
+					"Always explain to the user why you're enabling it before or after calling this tool.",
+				parameters: {
+					type: "object",
+					properties: {
+						skill_id: {
+							type: "string",
+							description: "The id of the skill to enable (from list_skills).",
+						},
+						reason: {
+							type: "string",
+							description: "One-sentence explanation of why this skill would help the current task.",
+						},
+					},
+					required: ["skill_id", "reason"],
+				},
+				risk: "safe",
+			},
+			async (input: { skill_id: string; reason: string }) => {
+				const allSkills = this.plugin.skillRegistry?.getSkills() ?? [];
+				const skill = allSkills.find((s) => s.id === input.skill_id);
+				if (!skill) {
+					return {
+						success: false,
+						error: `Skill "${input.skill_id}" not found. Call list_skills to see available skill ids.`,
+					};
+				}
+
+				const enabledSkillsMap = this.plugin.settings.skillsSettings?.enabledSkills ?? {};
+				if (enabledSkillsMap[input.skill_id]) {
+					return {
+						success: true,
+						result: `The "${skill.name}" skill is already enabled.`,
+					};
+				}
+
+				if (!this.plugin.settings.skillsSettings) {
+					return { success: false, error: "Skills settings not initialised." };
+				}
+
+				this.plugin.settings.skillsSettings.enabledSkills[input.skill_id] = true;
+				await this.plugin.saveSettings();
+
+				new Notice(
+					`Obsidian Agent enabled the "${skill.name}" skill. You can disable it in Settings → Skills.`
+				);
+
+				return {
+					success: true,
+					result:
+						`The "${skill.name}" skill has been enabled. ` +
+						`Its instructions will be active from your next message onward. ` +
+						`Reason: ${input.reason}`,
+				};
 			}
 		);
 

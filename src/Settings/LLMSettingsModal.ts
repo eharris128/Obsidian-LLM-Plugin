@@ -289,7 +289,6 @@ export class LLMSettingsModal extends Modal {
 
 	private renderGeneral() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "General");
 		const items = this.addSettingGroup(el);
 
 		// Default model or assistant
@@ -605,16 +604,12 @@ export class LLMSettingsModal extends Modal {
 				});
 			});
 
-		// ── General Instructions (AGENTS.md) ─────────────────────────────────
-		const agentsGroup = this.addSettingGroup(el, "General Instructions");
-		el.createEl("p", {
-			cls: "setting-item-description",
-			text: "A vault note whose contents are injected into every conversation — all models, assistants, and the Obsidian Agent. Use it to describe how you work, your preferred response style, or vault conventions that should always apply.",
-		});
+		// ── Guidance (AGENTS.md) ─────────────────────────────────────────────
+		const agentsGroup = this.addSettingGroup(el, "Guidance");
 		this.renderGuidanceFilePicker(
 			agentsGroup,
 			"Instructions file",
-			"Vault-relative path to your general instructions note (e.g. AI/AGENTS.md).",
+			"Vault-relative path to your general instructions note (e.g. AI/AGENTS.md). Its contents are injected into every conversation — all models, assistants, and the Obsidian Agent. Use it to describe how you work, your preferred response style, or vault conventions that should always apply.",
 			"AI/AGENTS.md",
 			`# General Instructions\n\nThis note is injected into every conversation in this vault.\n\n## About This Vault\n\n<!-- Describe how your vault is organised, what it's for, naming conventions, etc. -->\n\n## Preferred Behaviors\n\n<!-- Describe your preferred response style, tone, format, or workflow. -->\n\n## Conventions\n\n<!-- Note any file templates, frontmatter patterns, or folder rules the AI should follow. -->\n`,
 			() => this.plugin.settings.agentsFilePath ?? "",
@@ -628,7 +623,6 @@ export class LLMSettingsModal extends Modal {
 
 	private renderInterface() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Interface");
 		const items = this.addSettingGroup(el);
 
 		new Setting(items)
@@ -747,45 +741,23 @@ export class LLMSettingsModal extends Modal {
 				.onChange(async (value) => {
 					currentPath = value.trim();
 					await setValue(currentPath);
-					refreshButton();
 				});
 			text.inputEl.addClass("llm-guidance-file-input");
 		});
 
-		// ── Open / Create button ──────────────────────────────────────────────
-		let btn: ButtonComponent;
-		const refreshButton = () => {
-			const path = currentPath || placeholder;
-			const exists = this.plugin.app.vault.getAbstractFileByPath(path) instanceof TFile;
-			btn.setButtonText(exists ? "Open" : "Create");
-		};
-
+		// ── Edit button ───────────────────────────────────────────────────────
 		setting.addButton((b) => {
-			btn = b;
-			refreshButton();
+			b.setButtonText("Edit");
 			b.onClick(async () => {
 				const path = currentPath || placeholder;
-				let tfile = this.plugin.app.vault.getAbstractFileByPath(path);
-				if (!(tfile instanceof TFile)) {
-					// Ensure parent folder exists
-					const dir = path.includes("/") ? path.substring(0, path.lastIndexOf("/")) : "";
-					if (dir) {
-						try { await this.plugin.app.vault.adapter.mkdir(dir); } catch { /* already exists */ }
-					}
-					try {
-						tfile = await this.plugin.app.vault.create(path, template);
-						// Persist the path if it was still the placeholder default
-						if (!currentPath) {
-							currentPath = path;
-							await setValue(path);
-						}
-						refreshButton();
-					} catch (e) {
-						new Notice(`Could not create ${path}: ${String(e)}`);
-						return;
-					}
+				// Persist path if it was still the placeholder default
+				if (!currentPath) {
+					currentPath = path;
+					await setValue(path);
 				}
-				await this.plugin.app.workspace.getLeaf(false).openFile(tfile as TFile);
+				// Render the editor as an overlay inside the parent modal's own box
+				// (modalEl) — avoids triggering the parent modal's close handlers.
+				new GuidanceEditorOverlay(this.plugin, this.modalEl, path, template).open();
 			});
 		});
 	}
@@ -812,7 +784,6 @@ export class LLMSettingsModal extends Modal {
 
 	private renderAnthropic() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Anthropic");
 
 		// API key
 		const apiItems = this.addSettingGroup(el);
@@ -836,7 +807,6 @@ export class LLMSettingsModal extends Modal {
 
 	private renderConnectors() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Connectors");
 
 		// Linear workspaces
 		const workspaceItems = this.addSettingGroup(el, "Linear");
@@ -860,28 +830,24 @@ export class LLMSettingsModal extends Modal {
 
 	private renderOpenAI() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "OpenAI");
 		const items = this.addSettingGroup(el);
 		this.renderApiKeyField(items, this.apiKeyConfigs.openai);
 	}
 
 	private renderGemini() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Gemini");
 		const items = this.addSettingGroup(el);
 		this.renderApiKeyField(items, this.apiKeyConfigs.gemini);
 	}
 
 	private renderMistral() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Mistral");
 		const items = this.addSettingGroup(el);
 		this.renderApiKeyField(items, this.apiKeyConfigs.mistral);
 	}
 
 	private renderOllama() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Ollama");
 		const items = this.addSettingGroup(el);
 
 		new Setting(items)
@@ -937,7 +903,6 @@ export class LLMSettingsModal extends Modal {
 
 	private renderLMStudio() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "LM Studio");
 		const items = this.addSettingGroup(el);
 
 		new Setting(items)
@@ -992,7 +957,6 @@ export class LLMSettingsModal extends Modal {
 
 	private renderGPT4All() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "GPT4All");
 
 		const infoItems = this.addSettingGroup(el);
 		const gpt4AllPath = getGpt4AllPath(this.plugin);
@@ -1055,7 +1019,6 @@ export class LLMSettingsModal extends Modal {
 
 	private renderChat() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Chat");
 
 		// File context
 		const contextItems = this.addSettingGroup(el);
@@ -1158,7 +1121,6 @@ export class LLMSettingsModal extends Modal {
 
 	private renderTools() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Tools");
 
 		// Ensure toolSettings exists (deep-merge guard for existing installs)
 		if (!this.plugin.settings.toolSettings) {
@@ -1395,35 +1357,14 @@ export class LLMSettingsModal extends Modal {
 
 	private renderSkills() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Skills");
 
 		const skillsFolder = this.plugin.skillsFolder;
-
-		// Read-only info: show where skills are expected, linking to root folder setting
-		el.createDiv({
-			cls: "setting-item-description",
-			text: skillsFolder
-				? `Skills are loaded from "${skillsFolder}". To change the root, update the Root vault folder in General settings.`
-				: `Set a root vault folder in General → Root vault folder to enable Skills.\n` +
-				  `Skills will be stored at <root>/Skills/, each as a sub-folder with a SKILL.md file.`,
-		});
 
 		if (!skillsFolder) return;
 
 		// Show the skills discovered in the current folder
 		const skills = this.plugin.skillRegistry?.getSkills() ?? [];
-		if (skills.length === 0) {
-			el.createDiv({
-				cls: "setting-item-description",
-				text: `No skills found in "${skillsFolder}". Create a sub-folder with a SKILL.md file to add one (e.g. "${skillsFolder}/my-skill/SKILL.md").`,
-			});
-			return;
-		}
-
-		el.createEl("p", {
-			text: `${skills.length} skill${skills.length === 1 ? "" : "s"} discovered:`,
-			cls: "setting-item-description",
-		});
+		if (skills.length === 0) return;
 
 		for (const skill of skills) {
 			new Setting(el)
@@ -1545,16 +1486,8 @@ export class LLMSettingsModal extends Modal {
 
 	private renderProjects() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Projects");
 
 		const projectsFolder = this.plugin.projectsFolder;
-		el.createDiv({
-			cls: "setting-item-description",
-			text: projectsFolder
-				? `Projects are loaded from "${projectsFolder}". Each project is a sub-folder containing a PROJECT.md file.`
-				: `Set a root vault folder in General → Root vault folder to enable Projects.\n` +
-				  `Projects will be stored at <root>/Projects/, each as a sub-folder with a PROJECT.md file.`,
-		});
 
 		// ── Create new project form ───────────────────────────────────────────
 		const createGroup = this.addSettingGroup(el, "New Project");
@@ -1619,16 +1552,9 @@ export class LLMSettingsModal extends Modal {
 
 		// ── Existing projects ─────────────────────────────────────────────────
 		const projects = this.plugin.projectManager?.getProjects() ?? [];
-		if (projects.length === 0) {
-			el.createDiv({
-				cls: "setting-item-description",
-				text: "No projects yet. Create one above.",
-			});
-			return;
-		}
+		if (projects.length === 0) return;
 
 		const listGroup = this.addSettingGroup(el, `${projects.length} Project${projects.length === 1 ? "" : "s"}`);
-		const activeId = this.plugin.settings.projectSettings?.activeProjectId;
 
 		for (const project of projects) {
 			const descParts: string[] = [];
@@ -1636,7 +1562,6 @@ export class LLMSettingsModal extends Modal {
 			if (project.pinnedNotes.length > 0) {
 				descParts.push(`${project.pinnedNotes.length} pinned note${project.pinnedNotes.length === 1 ? "" : "s"}`);
 			}
-			if (activeId === project.id) descParts.push("● Active");
 
 			const setting = new Setting(listGroup)
 				.setName(project.name)
@@ -1657,32 +1582,12 @@ export class LLMSettingsModal extends Modal {
 					});
 			});
 
-			// Activate / deactivate
-			setting.addButton((btn) => {
-				const isActive = activeId === project.id;
-				btn.setButtonText(isActive ? "Deactivate" : "Activate")
-					.setTooltip(isActive ? "Clear active project" : "Set as active project")
-					.onClick(async () => {
-						this.plugin.settings.projectSettings = {
-							...this.plugin.settings.projectSettings,
-							activeProjectId: isActive ? null : project.id,
-						};
-						await this.plugin.saveSettings();
-						this.renderTab("projects");
-					});
-			});
-
 			// Delete
 			setting.addButton((btn) => {
 				btn.setIcon("trash")
 					.setTooltip("Delete project")
 					.setWarning()
 					.onClick(async () => {
-						// If deleting the active project, clear active
-						if (this.plugin.settings.projectSettings?.activeProjectId === project.id) {
-							this.plugin.settings.projectSettings.activeProjectId = null;
-							await this.plugin.saveSettings();
-						}
 						await this.plugin.projectManager.deleteProject(project.id);
 						new Notice(`Project "${project.name}" deleted.`);
 						this.renderTab("projects");
@@ -1693,16 +1598,8 @@ export class LLMSettingsModal extends Modal {
 
 	private renderAssistants() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Assistants");
 
 		const assistantsFolder = this.plugin.assistantsFolder;
-		el.createDiv({
-			cls: "setting-item-description",
-			text: assistantsFolder
-				? `Assistants are loaded from "${assistantsFolder}". Each assistant is a sub-folder containing an ASSISTANT.md file.`
-				: `Set a root vault folder in General → Root vault folder to enable Assistants.\n` +
-				  `Assistants will be stored at <root>/Assistants/, each as a sub-folder with an ASSISTANT.md file.`,
-		});
 
 		// ── Create new assistant form ──────────────────────────────────────────
 		const createGroup = this.addSettingGroup(el, "New Assistant");
@@ -1767,13 +1664,7 @@ export class LLMSettingsModal extends Modal {
 
 		// ── Existing assistants ────────────────────────────────────────────────
 		const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
-		if (assistants.length === 0) {
-			el.createDiv({
-				cls: "setting-item-description",
-				text: "No assistants yet. Create one above.",
-			});
-			return;
-		}
+		if (assistants.length === 0) return;
 
 		const listGroup = this.addSettingGroup(
 			el,
@@ -1849,7 +1740,6 @@ export class LLMSettingsModal extends Modal {
 
 	private renderObsidianAgent() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Obsidian Agent");
 
 		const s = this.plugin.settings.obsidianAgentSettings ?? {
 			enabled: false,
@@ -2046,14 +1936,10 @@ export class LLMSettingsModal extends Modal {
 
 		// ── Agent Guidance File ──────────────────────────────────────────────
 		const guidanceGroup = this.addSettingGroup(el, "Agent Guidance");
-		el.createEl("p", {
-			cls: "setting-item-description",
-			text: "A vault note that tells the Obsidian Agent how to navigate this vault — its structure, naming conventions, routing rules, and off-limits folders. Unlike the General Instructions file, this is only injected when the Obsidian Agent is active.",
-		});
 		this.renderGuidanceFilePicker(
 			guidanceGroup,
 			"Guidance file",
-			"Vault-relative path to your agent guidance note (e.g. AI/OBSIDIAN-AGENT.md).",
+			"Vault-relative path to your agent guidance note (e.g. AI/OBSIDIAN-AGENT.md). Tells the Obsidian Agent how to navigate this vault — its structure, naming conventions, routing rules, and off-limits folders. Only injected when the Obsidian Agent is active.",
 			"AI/OBSIDIAN-AGENT.md",
 			`# Obsidian Agent Guidance\n\nThis note guides the Obsidian Agent when working in this vault.\n\n## Vault Structure\n\n<!-- Describe your folder layout and what lives where. -->\n\n## Conventions\n\n<!-- Note naming conventions, file templates, frontmatter patterns, etc. -->\n\n## Routing Rules\n\n<!-- Describe when to delegate to specific assistants. -->\n\n## Off-Limits\n\n<!-- List folders or files the agent should never modify. -->\n`,
 			() => this.plugin.settings.obsidianAgentSettings.agentGuidanceFile ?? "",
@@ -2068,7 +1954,6 @@ export class LLMSettingsModal extends Modal {
 
 	private renderTranscription() {
 		const el = this.mainContentEl;
-		this.addTabHeader(el, "Transcription");
 
 		const s = this.plugin.settings.whisperSettings;
 
@@ -2486,5 +2371,101 @@ export class LLMSettingsModal extends Modal {
 				});
 			row.setName(ws.name || `Workspace ${index + 1}`);
 		});
+	}
+}
+
+// ── Guidance file inline editor ───────────────────────────────────────────────
+// Uses a plain overlay div rendered inside the parent modal's containerEl
+// rather than extending Modal, so closing it never touches the parent modal's
+// keymap scope or background-click handlers.
+
+class GuidanceEditorOverlay {
+	private plugin: LLMPlugin;
+	private parentEl: HTMLElement;
+	private filePath: string;
+	private template: string;
+	private overlayEl: HTMLElement | null = null;
+
+	constructor(plugin: LLMPlugin, parentEl: HTMLElement, filePath: string, template: string) {
+		this.plugin = plugin;
+		this.parentEl = parentEl;
+		this.filePath = filePath;
+		this.template = template;
+	}
+
+	async open() {
+		const app = this.plugin.app;
+
+		// ── Ensure file exists ────────────────────────────────────────────────
+		let tfile = app.vault.getAbstractFileByPath(this.filePath);
+		if (!(tfile instanceof TFile)) {
+			const dir = this.filePath.includes("/")
+				? this.filePath.substring(0, this.filePath.lastIndexOf("/"))
+				: "";
+			if (dir) {
+				try { await app.vault.adapter.mkdir(dir); } catch { /* already exists */ }
+			}
+			try {
+				tfile = await app.vault.create(this.filePath, this.template);
+			} catch (e) {
+				new Notice(`Could not create ${this.filePath}: ${String(e)}`);
+				return;
+			}
+		}
+
+		const content = await app.vault.read(tfile as TFile);
+		const fileName = this.filePath.includes("/")
+			? this.filePath.substring(this.filePath.lastIndexOf("/") + 1)
+			: this.filePath;
+
+		// ── Overlay (fills the parent modal container) ────────────────────────
+		this.overlayEl = this.parentEl.createDiv({ cls: "llm-guidance-editor-overlay" });
+
+		// ── Inner panel (styled like an Obsidian modal) ───────────────────────
+		const panel = this.overlayEl.createDiv({ cls: "llm-guidance-editor-panel" });
+
+		// Header
+		panel.createEl("h2", { text: fileName, cls: "llm-guidance-editor-title" });
+		panel.createEl("p", { text: this.filePath, cls: "llm-guidance-editor-path" });
+
+		// Textarea
+		const textarea = panel.createEl("textarea", { cls: "llm-guidance-editor-textarea" });
+		textarea.value = content;
+
+		requestAnimationFrame(() => {
+			textarea.focus();
+			textarea.setSelectionRange(0, 0);
+			textarea.scrollTop = 0;
+		});
+
+		// Buttons
+		const buttonRow = panel.createDiv({ cls: "modal-button-container" });
+
+		new ButtonComponent(buttonRow)
+			.setButtonText("Cancel")
+			.onClick(() => this.close());
+
+		new ButtonComponent(buttonRow)
+			.setButtonText("Save")
+			.setCta()
+			.onClick(async () => {
+				const file = app.vault.getAbstractFileByPath(this.filePath);
+				if (file instanceof TFile) {
+					await app.vault.modify(file, textarea.value);
+					new Notice(`Saved ${fileName}`);
+					this.plugin.refreshAllChips?.();
+				}
+				this.close();
+			});
+
+		// Clicking the backdrop (outside the panel) also cancels
+		this.overlayEl.addEventListener("click", (e) => {
+			if (e.target === this.overlayEl) this.close();
+		});
+	}
+
+	close() {
+		this.overlayEl?.remove();
+		this.overlayEl = null;
 	}
 }

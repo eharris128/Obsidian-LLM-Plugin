@@ -200,7 +200,12 @@ function formatResultsAsContext(results: SearchResult[]): string {
 	];
 
 	for (const result of results) {
-		lines.push(`### ${result.filePath}`);
+		// Use wikilink format so the model echoes [[Note Name]] in its response,
+		// which linkifyMdRefs / linkifyRenderedWikilinks can convert to a clickable link
+		// even when the filename contains spaces (plain filenames with spaces are
+		// intentionally excluded from the linkifyMdRefs regex).
+		const wikiTarget = result.filePath.replace(/\.md$/, "");
+		lines.push(`### [[${wikiTarget}]]`);
 		lines.push(result.text);
 		lines.push("");
 	}

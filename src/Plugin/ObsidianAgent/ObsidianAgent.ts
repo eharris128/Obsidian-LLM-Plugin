@@ -44,7 +44,9 @@ export class ObsidianAgent {
 			"You can read, create, modify, and search notes, and orchestrate complex " +
 			"multi-step tasks across the user's knowledge base.\n\n" +
 			"Always prefer reading actual vault notes over guessing their contents. " +
-			"Use available tools to ground every response in real data."
+			"Use available tools to ground every response in real data.\n\n" +
+			"When referencing vault notes in your response, always use Obsidian wikilink format: [[Note Name]] or [[folder/Note Name]]. " +
+			"Never write bare filenames like 'Note Name.md' — these produce broken partial links when the name contains spaces."
 		);
 
 		// ── Available Assistants (one-liner) ──────────────────────────────────

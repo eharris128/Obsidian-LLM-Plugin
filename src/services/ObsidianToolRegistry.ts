@@ -488,7 +488,9 @@ export class ObsidianToolRegistry {
 								const start = Math.max(0, i - ctxLines);
 								const end = Math.min(lines.length - 1, i + ctxLines);
 								const excerpt = lines.slice(start, end + 1).join("\n");
-								matches.push(`${file.path} (line ${i + 1}):\n${excerpt}`);
+								// Use wikilink format so filenames with spaces become fully clickable links.
+								const wikiTarget = file.path.replace(/\.md$/, "");
+								matches.push(`[[${wikiTarget}]] (line ${i + 1}):\n${excerpt}`);
 							}
 						}
 					}

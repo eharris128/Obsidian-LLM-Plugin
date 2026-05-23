@@ -774,6 +774,9 @@ export class LLMSettingsModal extends Modal {
 						(this.plugin.settings[config.key] as string) = value;
 						void this.plugin.saveSettings();
 					}
+					// Refresh empty state live so the setup hint appears/disappears
+					// as the user types or clears a key.
+					this.plugin.refreshAllEmptyStates();
 				});
 			})
 			.addButton((button: ButtonComponent) => {
@@ -889,6 +892,7 @@ export class LLMSettingsModal extends Modal {
 						Object.assign(models, built.models);
 						Object.assign(modelNames, built.names);
 						await this.plugin.saveSettings();
+						this.plugin.refreshAllEmptyStates();
 						this.renderTab("ollama");
 					} catch {
 						modelListEl.setText(
@@ -943,6 +947,7 @@ export class LLMSettingsModal extends Modal {
 						Object.assign(models, built.models);
 						Object.assign(modelNames, built.names);
 						await this.plugin.saveSettings();
+						this.plugin.refreshAllEmptyStates();
 						this.renderTab("lmstudio");
 					} catch {
 						modelListEl.setText(

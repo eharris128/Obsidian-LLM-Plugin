@@ -2298,6 +2298,20 @@ export class ChatContainer extends Component {
 		parentElement.scrollTo(0, 9999);
 	}
 
+	/** Returns true if the user has configured at least one model provider. */
+	private hasAnyModelConfigured(): boolean {
+		const s = this.plugin.settings;
+		return !!(
+			s.openAIAPIKey?.trim() ||
+			s.claudeAPIKey?.trim() ||
+			s.claudeCodeOAuthToken?.trim() ||
+			s.geminiAPIKey?.trim() ||
+			s.mistralAPIKey?.trim() ||
+			(s.ollamaModels?.length ?? 0) > 0 ||
+			(s.lmStudioModels?.length ?? 0) > 0
+		);
+	}
+
 	displayNoChatView(parentElement: Element) {
 		parentElement.addClass("llm-justify-content-center");
 		parentElement.addClass("center-llmgal");
@@ -2313,6 +2327,23 @@ export class ChatContainer extends Component {
 		const svgElement = svgDoc.documentElement;
 
 		llmGal.appendChild(svgElement);
+
+		// If no model is configured yet, show a setup nudge below the avatar.
+		if (!this.hasAnyModelConfigured()) {
+			const hint = (parentElement as HTMLElement).createDiv({ cls: "llm-setup-hint" });
+			hint.createEl("p", {
+				cls: "llm-setup-hint-text",
+				text: "Add a model to get started.",
+			});
+			const btn = hint.createEl("button", {
+				cls: "mod-cta llm-setup-hint-button",
+				text: "Open Settings",
+			});
+			btn.addEventListener("click", () => {
+				(this.plugin.app as any).setting.open();
+				(this.plugin.app as any).setting.openTabById(this.plugin.manifest.id);
+			});
+		}
 	}
 
 	// ── Chat Details panel integration ───────────────────────────────────────

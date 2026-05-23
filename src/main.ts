@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, Platform, addIcon } from "obsidian";
+import { Plugin, WorkspaceLeaf, Platform, addIcon, Notice } from "obsidian";
 import {
 	AssistantSettings,
 	FeatureSettings,
@@ -132,6 +132,8 @@ export interface LLMPluginSettings {
 	 * Defaults to "AI/AGENTS.md". Empty string = disabled.
 	 */
 	agentsFilePath: string;
+	/** Set to true after the first-run Notice has been shown — prevents repeat on subsequent loads. */
+	hasOnboarded: boolean;
 }
 
 const defaultSettings = {
@@ -166,7 +168,7 @@ const defaultSettings = {
 		includeSelection: true,
 		selectedFiles: [],
 		maxContextTokensPercent: 70, // 70% for context, 30% for response
-		showModelLabel: true, // Show model/assistant name below each response
+		showModelLabel: false, // Show model/assistant name below each response
 	},
 	agentSettings: {
 		permissionMode: "ask" as import("./Types/types").PermissionMode,
@@ -264,6 +266,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	},
 	rootVaultFolder: "",
 	agentsFilePath: "AI/AGENTS.md",
+	hasOnboarded: false,
 	featureSettings: {
 		obsidianAgent: false,
 		transcription: false,
@@ -344,6 +347,18 @@ export default class LLMPlugin extends Plugin {
 			? new DesktopOperatingSystem()
 			: new MobileOperatingSystem();
 		await this.loadSettings();
+
+		// Show a one-time welcome Notice on first load (new installs and upgraders alike).
+		if (!this.settings.hasOnboarded) {
+			new Notice(
+				"👋 Large Language Models: your chats are saved as markdown files in your vault. " +
+				"Open Settings → Large Language Models to add an API key and get started.",
+				10000
+			);
+			this.settings.hasOnboarded = true;
+			await this.saveSettings();
+		}
+
 		this.initVaultIndexer();
 		this.initMemoryService();
 		this.initWhisperService();

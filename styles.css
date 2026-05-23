@@ -1062,6 +1062,33 @@ div.im-like-message.llm-widget-chat-message > p {
 	pointer-events: none;
 }
 
+/* Setup nudge shown in the empty state when no model provider is configured. */
+.llm-setup-hint {
+	position: absolute;
+	top: calc(50% + 12px);
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-3) var(--size-4-4);
+	background: var(--background-secondary);
+	border-radius: var(--radius-m);
+	white-space: nowrap;
+}
+
+.llm-setup-hint-text {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: var(--line-height-tight);
+}
+
+.llm-setup-hint-button {
+	font-size: var(--font-ui-small);
+}
+
 #llm-settings-credits {
 	text-align: center;
 }

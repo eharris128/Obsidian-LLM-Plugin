@@ -521,6 +521,12 @@ export class LLMSettingsModal extends Modal {
 					this.plugin.settings.memorySettings.enabled = true;
 					await this.plugin.saveSettings();
 					this.plugin.initMemoryService();
+					if (!this.plugin.settings.ragSettings?.enabled) {
+						new Notice(
+							"Memory requires Embeddings to work. Enable Embeddings in the Features section below.",
+							8000
+						);
+					}
 				},
 				onDisable: async () => {
 					this.plugin.settings.memorySettings.enabled = false;

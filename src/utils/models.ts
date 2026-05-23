@@ -317,6 +317,11 @@ export const modelNames: Record<string, string> = {
 	"codestral-latest": "Codestral",
 };
 
+/** Set of all OpenAI model id strings — used for provider detection in validation logic. */
+export const openAIModelIds: Set<string> = new Set(
+	Object.values(openAIModels).map((m) => m.model)
+);
+
 export function buildOllamaModels(ollamaModelNames: string[]): { models: Record<string, Model>, names: Record<string, string> } {
 	const ollamaModels: Record<string, Model> = {};
 	const ollamaNames: Record<string, string> = {};

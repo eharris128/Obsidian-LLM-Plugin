@@ -1,5 +1,5 @@
-import LLMPlugin, { LLMPluginSettings } from "main";
-import { Editor, requestUrl, RequestUrlParam } from "obsidian";
+import LLMPlugin from "main";
+import { Editor, Platform, requestUrl, RequestUrlParam } from "obsidian";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import {
@@ -10,7 +10,6 @@ import {
 	gemini,
 	gemini2FlashStableModel,
 	images,
-	ollama,
 } from "utils/constants";
 import { query as claudeCodeQuery } from "@anthropic-ai/claude-agent-sdk";
 import { ensureSDKInstalled } from "services/ClaudeAgentSDKInstaller";
@@ -19,22 +18,23 @@ import { ensureSDKInstalled } from "services/ClaudeAgentSDKInstaller";
 // The Agent SDK calls setMaxListeners(n, abortSignal), but Electron's
 // renderer-process AbortSignal doesn't extend Node.js EventTarget,
 // causing a TypeError. This wrapper catches and ignores that case.
-const events = require("events");
-const _origSetMaxListeners = events.setMaxListeners;
-if (_origSetMaxListeners) {
-	events.setMaxListeners = function (n: number, ...eventTargets: any[]) {
-		try {
-			return _origSetMaxListeners(n, ...eventTargets);
-		} catch {
-			// Electron: browser AbortSignal is not a Node.js EventTarget
-		}
-	};
+if (Platform.isDesktop) {
+	const events = require("events");
+	const _origSetMaxListeners = events.setMaxListeners;
+	if (_origSetMaxListeners) {
+		events.setMaxListeners = function (n: number, ...eventTargets: unknown[]) {
+			try {
+				return _origSetMaxListeners(n, ...eventTargets);
+			} catch {
+				// Electron: browser AbortSignal is not a Node.js EventTarget
+			}
+		};
+	}
 }
 import { models, modelNames } from "utils/models";
 import {
 	ChatParams,
 	ImageParams,
-	Message,
 	ProviderKeyPair,
 	ViewSettings,
 	ViewType,
@@ -50,24 +50,24 @@ async function retryWithBackoff<T>(
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
 		try {
 			return await fn();
-		} catch (error: any) {
-			const status = error?.status ?? error?.httpStatus ?? error?.code;
+		} catch (error: unknown) {
+			const e = error as { status?: number; httpStatus?: number; code?: number; headers?: { get?: (k: string) => string; [k: string]: unknown }; errorDetails?: Array<{ metadata?: { retry_delay?: string } }> };
+			const status = e?.status ?? e?.httpStatus ?? e?.code;
 			if (status === 429 && attempt < maxRetries) {
 				const delay = baseDelayMs * Math.pow(2, attempt);
 				const jitter = Math.random() * delay * 0.5;
-				await new Promise((r) => setTimeout(r, delay + jitter));
+				await new Promise((r) => activeWindow.setTimeout(r, delay + jitter));
 				continue;
 			}
 			if (status === 429) {
 				const retryAfter =
-					error?.headers?.get?.("retry-after") ??
-					error?.headers?.["retry-after"] ??
-					error?.errorDetails?.[0]?.metadata?.retry_delay;
+					e?.headers?.get?.("retry-after") ??
+					e?.headers?.["retry-after"] ??
+					e?.errorDetails?.[0]?.metadata?.retry_delay;
 				const retryMsg = retryAfter
 					? `Rate limit exceeded — retry after ${retryAfter} seconds.`
 					: "Rate limit exceeded — please wait a moment and try again.";
-				const rateLimitError = new Error(retryMsg);
-				(rateLimitError as any).status = 429;
+				const rateLimitError: Error & { status: number } = Object.assign(new Error(retryMsg), { status: 429 });
 				throw rateLimitError;
 			}
 			throw error;
@@ -95,7 +95,7 @@ export function upperCaseFirst(input: string): string {
 }
 
 export async function messageGPT4AllServer(params: ChatParams, url: string) {
-	const body: Record<string, any> = {
+	const body: Record<string, unknown> = {
 		model: params.model,
 		messages: params.messages,
 		temperature: params.temperature,
@@ -116,7 +116,7 @@ export async function fetchOllamaModels(host: string): Promise<string[]> {
 		method: "GET",
 	} as RequestUrlParam;
 	const response = await requestUrl(request).then((res) => res.json);
-	return (response.models || []).map((m: any) => m.name as string);
+	return (response.models || []).map((m: { name: string }) => m.name);
 }
 
 /** Fetches the list of models currently loaded in LM Studio via its OpenAI-compatible /v1/models endpoint. */
@@ -126,7 +126,7 @@ export async function fetchLMStudioModels(host: string): Promise<string[]> {
 		method: "GET",
 	} as RequestUrlParam;
 	const response = await requestUrl(request).then((res) => res.json);
-	return (response.data || []).map((m: any) => m.id as string);
+	return (response.data || []).map((m: { id: string }) => m.id);
 }
 
 export async function ollamaMessage(params: ChatParams, host: string) {
@@ -172,7 +172,7 @@ export async function mistralMessage(params: ChatParams, mistralAPIKey: string) 
 					}
 				}
 			}
-			return globalThis.fetch(url, init);
+			return activeWindow.fetch(url, init);
 		},
 	});
 
@@ -231,8 +231,6 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 					providerKeyPair.provider
 				)}.`
 			);
-		} else {
-			console.log("An error occurred:", error.message);
 		}
 		return false;
 	}
@@ -242,7 +240,7 @@ export async function geminiMessage(
 	params: ChatParams,
 	Gemini_API_KEY: string
 ) {
-	const { model, topP, messages, tokens, temperature, systemContext } = params as ChatParams;
+	const { model, topP, messages, tokens, temperature, systemContext } = params;
 	const client = new GoogleGenAI({ apiKey: Gemini_API_KEY });
 
 	const contents = messages.map((message) => {
@@ -274,6 +272,7 @@ export async function geminiMessage(
 // Resolve the absolute path to `node` by checking common install locations.
 // Electron's renderer process has a limited PATH, so we check the filesystem directly.
 function resolveNodePath(): string {
+	if (!Platform.isDesktop) return "";
 	const fs = require("fs");
 	const homedir = require("os").homedir();
 	const candidates: string[] = [];
@@ -319,6 +318,7 @@ export async function claudeCodeMessage(
 	pluginDir: string,
 	sessionId?: string
 ) {
+	if (!Platform.isDesktop) throw new Error("Claude Code is only available on desktop.");
 	await ensureSDKInstalled(pluginDir);
 	const path = require("path");
 	const { spawn } = require("child_process");
@@ -332,7 +332,7 @@ export async function claudeCodeMessage(
 	const nodePath = resolveNodePath();
 
 	// Build MCP servers and allowedTools from workspace list
-	const mcpServers: Record<string, any> = {};
+	const mcpServers: Record<string, { type: "http"; url: string; headers: Record<string, string> }> = {};
 	const allowedTools: string[] = [];
 
 	for (const ws of linearWorkspaces) {
@@ -354,7 +354,7 @@ export async function claudeCodeMessage(
 		options: {
 			pathToClaudeCodeExecutable: cliPath,
 			...(sessionId ? { resume: sessionId } : {}),
-			spawnClaudeCodeProcess: (options: any) => {
+			spawnClaudeCodeProcess: (options: { command: string; args: string[]; cwd?: string; env?: Record<string, string | undefined> }) => {
 				const cmd =
 					options.command === "node" ? nodePath : options.command;
 				return spawn(cmd, options.args, {
@@ -386,7 +386,7 @@ export async function claudeMessage(
 		dangerouslyAllowBrowser: true,
 	});
 
-	const { model, messages, tokens, temperature, systemContext } = params as ChatParams;
+	const { model, messages, tokens, temperature, systemContext } = params;
 
 	// Anthropic SDK Docs - https://github.com/anthropics/anthropic-sdk-typescript/blob/HEAD/helpers.md#messagestream-api
 	// Claude API requires max_tokens; default to 4096 when user hasn't set it
@@ -425,6 +425,7 @@ export async function openAIMessage(
 				...(tokens ? { max_tokens: tokens } : {}),
 				temperature,
 				stream: true,
+				stream_options: { include_usage: true },
 			},
 			{ path: endpoint }
 		);
@@ -553,6 +554,7 @@ export function getViewInfo(
 			includeSelection: false,
 			selectedFiles: [],
 			maxContextTokensPercent: 0,
+			showModelLabel: true,
 		},
 		agentSettings: { permissionMode: "ask" },
 	};
@@ -573,7 +575,7 @@ export function setHistoryFilePath(
 		| "widgetSettings"
 		| "fabSettings";
 	plugin.settings[settingType].historyFilePath = filePath;
-	plugin.saveSettings();
+	void plugin.saveSettings();
 }
 
 export function changeDefaultModel(model: string, plugin: LLMPlugin) {
@@ -601,7 +603,7 @@ export function changeDefaultModel(model: string, plugin: LLMPlugin) {
 	plugin.settings.fabSettings.endpointURL = models[modelName].url;
 	plugin.settings.fabSettings.modelEndpoint = models[modelName].endpoint;
 
-	plugin.saveSettings();
+	void plugin.saveSettings();
 }
 
 export function setHistoryIndex(
@@ -620,16 +622,16 @@ export function setHistoryIndex(
 		| "fabSettings";
 	if (!length) {
 		plugin.settings[settingType].historyIndex = -1;
-		plugin.saveSettings();
+		void plugin.saveSettings();
 		return;
 	}
 	plugin.settings[settingType].historyIndex = length - 1;
-	plugin.saveSettings();
+	void plugin.saveSettings();
 }
 
 export function setView(plugin: LLMPlugin, viewType: ViewType) {
 	plugin.settings.currentView = viewType
-	plugin.saveSettings();
+	void plugin.saveSettings();
 }
 
 function moveCursorToEndOfFile(editor: Editor) {
@@ -649,11 +651,11 @@ function moveCursorToEndOfFile(editor: Editor) {
 }
 
 export function appendMessage(editor: Editor, message: string) {
-	moveCursorToEndOfFile(editor!);
+	moveCursorToEndOfFile(editor);
 	const newLine = `${message}\n`;
 	editor.replaceRange(newLine, editor.getCursor());
 
-	moveCursorToEndOfFile(editor!);
+	moveCursorToEndOfFile(editor);
 }
 
 export function getSettingType(viewType: ViewType) {

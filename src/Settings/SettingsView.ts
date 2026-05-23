@@ -54,7 +54,7 @@ export default class SettingsView extends PluginSettingTab {
 
 		llmGuy.appendChild(svgElement);
 
-		const credits = llmGuy.createEl("div", {
+		const credits = llmGuy.createDiv({
 			attr: { id: "llm-settings-credits" }
 		});
 
@@ -68,7 +68,7 @@ export default class SettingsView extends PluginSettingTab {
 			attr: { class: "llm-hero-names llm-text-muted" }
 		});
 		credits.appendChild(creditsNames);
-		const creditsVersion = credits.createEl("span", {
+		const creditsVersion = credits.createSpan({
 			text: `v${this.plugin.manifest.version}`,
 			attr: { class: "llm-text-muted version" }
 		});

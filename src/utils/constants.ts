@@ -1,3 +1,12 @@
+// Obsidian registered view type for the LLM widget (sidebar + tab).
+export const TAB_VIEW_TYPE = "tab-view";
+
+// Obsidian registered view type for the Chats panel (sidebar leaf listing all conversations).
+export const CHATS_VIEW_TYPE = "llm-chats-view";
+
+// Obsidian registered view type for the Chat Details panel (right sidebar, live chat context).
+export const CHAT_DETAILS_VIEW_TYPE = "llm-chat-details-view";
+
 export const claude = "claude"
 export const claudeCode = "claudeCode"
 export const openAI = "openAI"
@@ -21,7 +30,7 @@ export const gemini25FlashLiteModel = "gemini-2.5-flash-lite"
 export const gemini3ProPreviewModel = "gemini-3-pro-preview"
 export const geminiFlashLatestModel = "gemini-flash-latest"
 export const geminiFlashLiteLatestModel = "gemini-flash-lite-latest"
-export const openAIModel = "gpt-3.5-turbo"
+export const openAIModel = "gpt-4o"
 
 export const messages = "messages"
 export const assistant = "assistant"

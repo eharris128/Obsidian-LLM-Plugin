@@ -6,6 +6,7 @@ export type ContextSettings = {
 	includeSelection: boolean;
 	selectedFiles: string[]; // Array of file paths
 	maxContextTokensPercent: number; // Percentage of maxTokens to use for context (0-100)
+	showModelLabel: boolean; // Whether to show the model/assistant name below each response
 };
 
 export type VaultContext = {
@@ -162,6 +163,130 @@ type GeminiSettings = {
 
 type GPT4AllSettings = {};
 
+export type SkillsSettings = {
+	/**
+	 * Per-skill enabled state keyed by skill id (folder name).
+	 * When true the skill's instructions are injected for every message in all views.
+	 * The skills folder is derived from LLMPluginSettings.rootVaultFolder: "<root>/Skills".
+	 */
+	enabledSkills: Record<string, boolean>;
+};
+
+export type MemorySettings = {
+	/** Whether the memory feature is enabled at all. */
+	enabled: boolean;
+	/**
+	 * When to run memory extraction:
+	 * - "end-of-chat": automatically after newChat() or view close
+	 * - "manual": only when user clicks "Extract memories now"
+	 */
+	extractionTrigger: "end-of-chat" | "manual";
+	/** How many recalled memory chunks to inject as system context before each send. */
+	recallTopK: number;
+	/**
+	 * When true, memory recall is active by default in every new conversation
+	 * (equivalent to the brain button starting as enabled).
+	 * When false (default), the user must toggle recall on per-conversation.
+	 */
+	recallAlways: boolean;
+};
+
+export type Project = {
+	/** Unique key derived from the folder name. */
+	id: string;
+	/** Display name from frontmatter `name:`, or falls back to id. */
+	name: string;
+	/** One-line description from frontmatter `description:`. */
+	description: string;
+	/** Vault-relative paths to notes injected as context for every conversation. */
+	pinnedNotes: string[];
+	/** Optional default assistant name (for future Assistants feature). */
+	defaultAssistant?: string;
+	/** ISO date from frontmatter `created:`. */
+	created: string;
+	/** Vault path of the PROJECT.md file. */
+	filePath: string;
+	/** The system instructions body (everything below the --- frontmatter block). */
+	instructions: string;
+};
+
+export type ProjectSettings = {
+	/** The id of the currently active project, or null for "No project". */
+	activeProjectId: string | null;
+};
+
+export type Assistant = {
+	/** Unique key derived from the folder name. */
+	id: string;
+	/** Display name from frontmatter `name:`, or falls back to id. */
+	name: string;
+	/** One-line description from frontmatter `description:`. */
+	description: string;
+	/** Provider hint from frontmatter `provider:` (informational). */
+	provider: string;
+	/** Model hint from frontmatter `model:` (informational). */
+	model: string;
+	/** Preferred model value (e.g. "claude-sonnet-4-6") from frontmatter `preferred-model:`.
+	 *  When set, selecting this assistant in the dropdown auto-switches to this model. */
+	preferredModel: string;
+	/** Skill ids from `enabled-skills:` — activated when this assistant is active. */
+	enabledSkills: string[];
+	/** Tool names from `allowed-tools:` — restricts the tool registry when active. Empty = all tools. */
+	allowedTools: string[];
+	/** ISO date from frontmatter `created:`. */
+	created: string;
+	/** Vault path of the ASSISTANT.md file. */
+	filePath: string;
+	/** The system prompt body (everything below the --- frontmatter block). */
+	systemPrompt: string;
+};
+
+export type AssistantSettings = {
+	/** The id of the currently active assistant, or null for none. */
+	activeAssistantId: string | null;
+};
+
+export type ObsidianAgentSettings = {
+	/** Whether the Obsidian Agent is enabled. When true, FAB and status bar open in agent mode. */
+	enabled: boolean;
+	/** Whether to enable web search (placeholder — for when providers support it). */
+	enableWebSearch: boolean;
+	/**
+	 * The model key (from `models` map) used when the agent is active.
+	 * When undefined/empty the active view's current model is used as-is.
+	 */
+	defaultModel?: string;
+	/**
+	 * Per-skill availability keyed by skill id.
+	 * Explicitly false = excluded from the agent. Missing = available (default true).
+	 */
+	availableSkills: Record<string, boolean>;
+	/**
+	 * Per-assistant availability keyed by assistant id.
+	 * Explicitly false = excluded. Missing = available (default true).
+	 */
+	availableAssistants: Record<string, boolean>;
+	/**
+	 * Vault-relative path to a markdown file used as the agent's guidance document.
+	 * Content is injected into the agent system prompt on every turn.
+	 * Empty string = no guidance file.
+	 */
+	agentGuidanceFile: string;
+};
+
+export type ToolSettings = {
+	/**
+	 * Tool names that are permanently disabled and will never be offered to the
+	 * model, regardless of permission mode or active skill.
+	 */
+	disabledTools: string[];
+	/**
+	 * Maximum number of tool-call/execute cycles per agent turn before the loop
+	 * is forced to stop. Prevents runaway agents.
+	 */
+	maxToolCalls: number;
+};
+
 export type RAGSettings = {
 	/** Whether RAG / vault semantic search is enabled at all. */
 	enabled: boolean;
@@ -177,4 +302,63 @@ export type RAGSettings = {
 	lastIndexed: number | null;
 	/** Number of files in the current index. */
 	indexedFileCount: number;
+};
+
+export type SearxngSettings = {
+	/** Whether SearXNG web search is enabled. */
+	enabled: boolean;
+	/** Base URL of the SearXNG instance (e.g. "http://localhost:8080"). */
+	host: string;
+	/** Maximum number of results to return per query (1–10). */
+	maxResults: number;
+};
+
+export type FeatureSettings = {
+	/** Master gate for the Obsidian Agent feature (FAB / status-bar agent mode). */
+	obsidianAgent: boolean;
+	/** Master gate for the Transcription (Whisper) feature. */
+	transcription: boolean;
+	/** Master gate for the Projects feature. */
+	projects: boolean;
+	/** Master gate for the Assistants feature. */
+	assistants: boolean;
+	/** Master gate for the Memory feature. */
+	memory: boolean;
+	/** Master gate for the Vault Search (RAG / embeddings) feature. */
+	vaultSearch: boolean;
+};
+
+export type WhisperBackend = "openai" | "sidecar";
+
+export type WhisperSettings = {
+	/** Whether Whisper transcription is enabled at all. */
+	enabled: boolean;
+	/**
+	 * Which backend to use:
+	 * - "openai": OpenAI Whisper API (requires openAIAPIKey; audio sent to OpenAI).
+	 * - "sidecar": Local Python whisper-server.py (fully private, no API key needed).
+	 */
+	backend: WhisperBackend;
+	/** URL of the local Python sidecar server (default: http://localhost:8765). */
+	sidecarHost: string;
+	/**
+	 * Whisper model size to request from the sidecar server.
+	 * Ignored when backend is "openai" (always uses whisper-1).
+	 */
+	whisperModel: string;
+	/** ISO language code (e.g. "en", "ja") or "" for auto-detect. */
+	language: string;
+	/** Whether to include [MM:SS] timestamps in transcription notes (Feature 2). */
+	includeTimestamps: boolean;
+	/** Vault-relative folder where transcription notes are saved (e.g. "Transcripts"). */
+	outputFolder: string;
+	/** Open the transcription note automatically after creation. */
+	autoOpenNote: boolean;
+	/**
+	 * Voice input (Feature 1): if true, the transcript is sent immediately as a chat
+	 * message; if false, it is inserted into the input field for review first.
+	 */
+	autoSend: boolean;
+	/** Last directory used in the audio file picker — persisted so the dialog reopens there. */
+	lastPickerDirectory: string;
 };

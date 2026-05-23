@@ -3,7 +3,8 @@ import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
 import { SettingsContainer } from "Plugin/Components/SettingsContainer";
 import LLMPlugin from "main";
-import { Notice, setIcon } from "obsidian";
+import { Menu, Notice, setIcon } from "obsidian";
+import { LLMSettingsModal } from "Settings/LLMSettingsModal";
 import { getViewInfo, getSettingType, setView, setHistoryFilePath } from "utils/utils";
 import { models } from "utils/models";
 
@@ -15,6 +16,7 @@ export class StatusBarButton {
 	private header: Header | null = null;
 	private chatContainerDiv: HTMLElement | null = null;
 	private chatHistoryContainer: HTMLElement | null = null;
+	private boundRepositionHandler: (() => void) | null = null;
 
 	constructor(plugin: LLMPlugin) {
 		this.plugin = plugin;
@@ -38,12 +40,61 @@ export class StatusBarButton {
 			e.stopPropagation();
 			this.togglePopover();
 		});
+
+		this.statusBarEl.addEventListener("contextmenu", (e: MouseEvent) => {
+			e.preventDefault();
+			e.stopPropagation();
+			this.showContextMenu(e);
+		});
+	}
+
+	private showContextMenu(e: MouseEvent) {
+		const menu = new Menu();
+
+		menu.addItem((item) => {
+			item.setTitle("Open chat in tab")
+				.setIcon("layout-dashboard")
+				.onClick(() => {
+					this.hidePopover();
+					void this.plugin.activateTab();
+				});
+		});
+
+		menu.addItem((item) => {
+			item.setTitle("Open chat in sidebar")
+				.setIcon("panel-right")
+				.onClick(() => {
+					this.hidePopover();
+					void this.plugin.activateSidebar();
+				});
+		});
+
+		menu.addSeparator();
+
+		menu.addItem((item) => {
+			item.setTitle("Plugin settings")
+				.setIcon("settings")
+				.onClick(() => {
+					new LLMSettingsModal(this.plugin.app, this.plugin, this.plugin.fab).open();
+				});
+		});
+
+		menu.showAtMouseEvent(e);
 	}
 
 	private buildPopover() {
 		this.popoverEl = document.body.createDiv();
 		this.popoverEl.addClass("llm-status-bar-popover");
 		this.popoverEl.style.display = "none";
+
+		// Reposition whenever the window is resized or the Obsidian frame is
+		// moved (which fires a "resize" event on the window object).
+		this.boundRepositionHandler = () => {
+			if (this.popoverEl && this.popoverEl.style.display !== "none") {
+				this.repositionPopover();
+			}
+		};
+		window.addEventListener("resize", this.boundRepositionHandler);
 
 		const savedHeight = this.plugin.settings.fabViewHeight ?? 600;
 		this.popoverEl.style.height = `${savedHeight}px`;
@@ -54,15 +105,19 @@ export class StatusBarButton {
 			"floating-action-button",
 			this.plugin.conversationRegistry
 		);
+		// Enable agent mode when the Obsidian Agent feature is on or set as default.
+		if (this.plugin.settings.obsidianAgentSettings?.enabled || this.plugin.settings.defaultAgentMode) {
+			this.chatContainer.isObsidianAgent = true;
+		}
 		const historyContainer = new HistoryContainer(
 			this.plugin,
 			"floating-action-button"
 		);
 		const settingsContainer = new SettingsContainer(
 			this.plugin,
-			"floating-action-button"
+			"floating-action-button",
+			this.chatContainer
 		);
-
 		// Resize handle sits outside contentArea so it can straddle the top
 		// border (mirrors FAB's implementation).
 		const resizeHandle = this.popoverEl.createDiv();
@@ -91,9 +146,6 @@ export class StatusBarButton {
 			settingsContainer,
 			() => this.hidePopover()
 		);
-
-		// The status bar popover uses the FAB header which has a chevron menu
-		// instead of a dedicated history button — no button to hide here.
 
 		settingsContainerDiv.setAttr("style", "display: none");
 		settingsContainerDiv.addClass("fab-settings-container", "llm-flex");
@@ -148,7 +200,7 @@ export class StatusBarButton {
 				if (this.popoverEl) {
 					this.plugin.settings.fabViewHeight =
 						this.popoverEl.offsetHeight;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				}
 			};
 
@@ -192,7 +244,7 @@ export class StatusBarButton {
 			);
 			setView(this.plugin, "floating-action-button");
 			this.plugin.settings.currentIndex = historyIndex;
-			this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 
 			this.popoverEl.style.display = "flex";
 
@@ -213,7 +265,7 @@ export class StatusBarButton {
 				if (this.popoverEl.offsetHeight > safeMax) {
 					this.popoverEl.style.height = `${safeMax}px`;
 					this.plugin.settings.fabViewHeight = safeMax;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				}
 				this.repositionPopover();
 			});
@@ -250,7 +302,7 @@ export class StatusBarButton {
 			this.plugin.settings[settingType].modelEndpoint = m.endpoint;
 			this.plugin.settings[settingType].endpointURL = m.url;
 		}
-		this.plugin.saveSettings();
+		void this.plugin.saveSettings();
 
 		// Show the popover if it's currently hidden
 		if (this.popoverEl?.style.display === "none") {
@@ -267,7 +319,7 @@ export class StatusBarButton {
 				if (this.popoverEl.offsetHeight > safeMax) {
 					this.popoverEl.style.height = `${safeMax}px`;
 					this.plugin.settings.fabViewHeight = safeMax;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				}
 				this.repositionPopover();
 			});
@@ -313,7 +365,7 @@ export class StatusBarButton {
 				if (this.popoverEl.offsetHeight > safeMax) {
 					this.popoverEl.style.height = `${safeMax}px`;
 					this.plugin.settings.fabViewHeight = safeMax;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				}
 				this.repositionPopover();
 			});
@@ -322,8 +374,11 @@ export class StatusBarButton {
 		// Load the file-based conversation
 		this.plugin.chatHistory
 			.load(filePath)
-			.then(({ meta, messages }) => {
+			.then(({ meta, messages, toolCallsByTurn, skillsByTurn, modelsByTurn }) => {
 				this.chatContainer!.resetChat();
+				this.chatContainer!.setToolCallsByTurn(toolCallsByTurn);
+				this.chatContainer!.setSkillsByTurn(skillsByTurn);
+				this.chatContainer!.setModelsByTurn(modelsByTurn);
 				this.chatContainer!.messageStore.setMessages(messages);
 				this.chatContainer!.generateIMLikeMessages(messages);
 
@@ -341,15 +396,26 @@ export class StatusBarButton {
 					this.plugin.settings[settingType].endpointURL = m.url;
 				}
 
+				// Restore agent mode from the saved chat so the dropdown reflects
+				// the model/assistant used in this conversation (not the current default).
+				this.chatContainer!.isObsidianAgent = !!meta.agent;
+
 				// Track the open file so subsequent messages update it
 				setHistoryFilePath(this.plugin, "floating-action-button", filePath);
 				this.chatContainer!.currentHistoryFilePath = filePath;
-				this.plugin.saveSettings();
+
+				// Restore (or clear) the active project based on file location / frontmatter
+				this.chatContainer!.restoreProjectFromChat(filePath, meta.project);
+
+				void this.plugin.saveSettings();
 
 				this.header!.setHeader(this.plugin.settings[settingType].modelName);
 				this.header!.resetHistoryButton();
 				this.header!.setTitle(meta.title ?? filePath);
 				this.header!.showTitle();
+
+				// Sync the model dropdown to reflect the restored settings/agent mode.
+				this.chatContainer!.syncModelDropdown();
 			})
 			.catch((e) => {
 				console.error("[StatusBarButton] Failed to load chat file:", e);
@@ -362,8 +428,38 @@ export class StatusBarButton {
 		this.chatContainer?.refreshEmptyState();
 	}
 
+	/** Rebuilds the assistants optgroup in the model dropdown after hot-reload. */
+	syncAssistantDropdownOptions() {
+		this.chatContainer?.syncAssistantDropdownOptions();
+	}
+
+	/** Re-syncs the selected value in the model dropdown to match current settings. */
+	syncModelDropdown() {
+		this.chatContainer?.syncModelDropdown();
+	}
+
+	syncChips() {
+		this.chatContainer?.syncChips();
+	}
+
+	syncMicButton() {
+		this.chatContainer?.syncMicButton();
+	}
+
+	/** Sets agent mode on the chat container and refreshes the dropdown. */
+	setAgentMode(enabled: boolean) {
+		if (this.chatContainer) {
+			this.chatContainer.isObsidianAgent = enabled;
+			this.chatContainer.syncModelDropdown();
+		}
+	}
+
 	remove() {
 		this.hidePopover();
+		if (this.boundRepositionHandler) {
+			window.removeEventListener("resize", this.boundRepositionHandler);
+			this.boundRepositionHandler = null;
+		}
 		this.chatContainer?.destroy();
 		this.chatContainer = null;
 		this.header = null;

@@ -147,6 +147,17 @@
 	flex: 1;
 }
 
+/* Default header (Widget/Tab/Modal): left side shrinks to content width */
+.llm-left-buttons-div--shrink {
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 60%;
+}
+
+.llm-left-buttons-div--shrink .llm-chat-title {
+	flex: 0 1 auto;
+}
+
 /* FAB popover: chat title in the header */
 .llm-chat-title {
 	font-size: var(--font-ui-small);
@@ -162,12 +173,6 @@
 
 
 /*MODAL VIEW*/
-.llm-modal-chat-history-container {
-}
-
-.llm-modal-assistants-container {
-}
-
 .llm-modal-settings-container {
 	padding-top: var(--size-4-4);
 }
@@ -175,14 +180,9 @@
 .llm-modal-chat-container,
 .llm-modal-chat-history-container,
 .llm-modal-settings-container,
-.llm-modal-assistants-container {
+.llm-modal-assistants-container,
+.llm-modal-skills-container {
 	min-height: 50vh;
-}
-
-.llm-modal-chat-container,
-.llm-modal-chat-history-container,
-.llm-modal-settings-container,
-.llm-modal-assistants-container {
 	max-height: var(--modal-view-max-height);
 }
 
@@ -190,14 +190,17 @@
 .llm-modal-chat-history-container,
 .llm-modal-settings-container,
 .llm-modal-assistants-container,
+.llm-modal-skills-container,
 .llm-widget-chat-container,
 .llm-widget-settings-container,
 .llm-widget-chat-history-container,
 .llm-widget-assistant-container,
+.llm-widget-skills-container,
 .fab-chat-container,
 .fab-settings-container,
 .fab-chat-history-container,
-.fab-assistants-container {
+.fab-assistants-container,
+.fab-skills-container {
 	flex-direction: column;
 	width: calc(100% - var(--size-4-1));
 	padding: 0 var(--size-2-1);
@@ -310,6 +313,18 @@ button.llm-send-button:disabled {
 	pointer-events: none;
 }
 
+/* Stop mode — shown while the model is generating */
+button.llm-send-button.llm-stop-mode {
+	background-color: var(--color-red);
+	color: white;
+}
+
+button.llm-send-button.llm-stop-mode:hover {
+	background-color: var(--color-red);
+	opacity: 0.8;
+	color: white;
+}
+
 .llm-modal-send-button,
 .fab-send-button,
 .llm-widget-send-button {
@@ -326,8 +341,59 @@ button.llm-send-button:disabled {
 	display: flex;
 }
 
-.llm-input-section textarea {
+/* Wrapper that stacks the mirror div and textarea on top of each other */
+.llm-prompt-wrapper {
+	position: relative;
 	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.llm-input-section textarea {
+	/* No flex: the wrapper (.llm-prompt-wrapper) already fills the row width via
+	   its own flex:1. Using flex:1 here (flex-basis:0%) on the textarea inside a
+	   column flex container causes the flex algorithm to own the height and ignore
+	   the explicit height: Xpx set by auto_height, breaking textarea expansion. */
+	width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
+}
+
+/* Mirror overlay — rendered on top of the textarea (pointer-events:none).
+   Copies the textarea's text, but the skill prefix span is accent-colored. */
+.llm-input-mirror {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	pointer-events: none;
+	white-space: pre-wrap;
+	word-wrap: break-word;
+	overflow-y: auto;
+	overflow-x: hidden;
+	box-sizing: border-box;
+	color: var(--text-normal);
+	background: transparent;
+	border: 1px solid transparent; /* match textarea border thickness */
+	z-index: 1;
+}
+
+/* Accent color for the leading "/skill-id " portion */
+.llm-skill-prefix {
+	color: var(--interactive-accent);
+}
+
+/* The rest of the message text in the mirror (normal color) */
+.llm-mirror-rest {
+	color: var(--text-normal);
+}
+
+/* When the mirror is active, hide the textarea's text (keep caret visible) */
+textarea.llm-input-with-mirror {
+	color: transparent !important;
+	caret-color: var(--text-normal) !important;
 }
 
 .llm-input-toolbar {
@@ -497,6 +563,7 @@ button.llm-send-button:disabled {
 
 .im-like-message {
 	padding: var(--size-4-1) var(--size-4-2);
+	width: 100%;
 	p {
 		margin: 0;
 	}
@@ -508,10 +575,6 @@ div.im-like-message.llm-widget-chat-message > p {
 .center-llmgal {
 	margin-top: auto;
 	margin-bottom: auto;
-}
-
-.im-like-message {
-	width: 100%;
 }
 
 .llm-hide {
@@ -560,6 +623,14 @@ div.im-like-message.llm-widget-chat-message > p {
 
 /* WIDGET*/
 
+/* Make the Obsidian view-content div a flex column so llm-widget-body's
+   flex:1 takes effect and fills the remaining height below the header. */
+.llm-widget-root {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
 .llm-widget-chat-container {
 	padding-bottom: var(--size-4-4);
 }
@@ -595,20 +666,85 @@ div.im-like-message.llm-widget-chat-message > p {
 }
 
 .llm-widget-chat-container,
-.llm-widget-settings-container,
-.llm-widget-chat-history-container {
-	max-height: var(--widget-view-max-height);
-}
-
-.llm-widget-chat-container,
 .llm-widget-chat-history-container,
 .llm-widget-settings-container {
+	max-height: var(--widget-view-max-height);
 	height: calc(100% - 70px);
 }
 
 .llm-widget-chat-history-container,
 .llm-widget-settings-container {
 	padding-top: var(--size-4-4);
+}
+
+/* ── Widget inline layout (PDF-reader style body + sidebars) ────────────────
+   The widget's content area splits into a flex row:
+     llm-widget-body
+       llm-widget-chats-sidebar  (fixed width, left, shown via .is-open)
+       llm-widget-main           (flex:1 — chat/history/settings panels)
+       llm-widget-details-sidebar (fixed width, right, shown via .is-open)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.llm-widget-body {
+	display: flex;
+	flex-direction: row;
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	gap: var(--size-4-3);
+}
+
+.llm-widget-main {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+}
+
+/* Inside the flex layout the containers fill the column — override the
+   absolute-height rule that was needed before the flex wrapper existed. */
+.llm-widget-main > .llm-widget-chat-container,
+.llm-widget-main > .llm-widget-chat-history-container,
+.llm-widget-main > .llm-widget-settings-container {
+	flex: 1;
+	height: 100%;
+	max-height: none;
+}
+
+/* Inline Chats sidebar (left side) */
+.llm-widget-chats-sidebar {
+	width: 260px;
+	flex-shrink: 0;
+	border-right: var(--border-width) solid var(--background-modifier-border);
+	overflow: hidden;
+	display: none;
+	flex-direction: column;
+}
+
+.llm-widget-chats-sidebar.is-open {
+	display: flex;
+}
+
+/* The file list inside the chats sidebar should scroll, not the whole sidebar */
+.llm-widget-chats-sidebar .nav-files-container {
+	flex: 1;
+	overflow-y: auto;
+	min-height: 0;
+}
+
+/* Inline Chat Details sidebar (right side) */
+.llm-widget-details-sidebar {
+	width: 260px;
+	flex-shrink: 0;
+	border-left: var(--border-width) solid var(--background-modifier-border);
+	overflow-y: auto;
+	padding: var(--size-4-2) 0;
+	display: none;
+}
+
+.llm-widget-details-sidebar.is-open {
+	display: block;
 }
 
 
@@ -677,7 +813,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	flex-direction: column;
 	border: var(--border-width) solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
-	overflow: hidden;
+	/* overflow: visible so the slash-command menu can float above the container */
 	background-color: var(--background-primary);
 }
 
@@ -926,6 +1062,33 @@ div.im-like-message.llm-widget-chat-message > p {
 	pointer-events: none;
 }
 
+/* Setup nudge shown in the empty state when no model provider is configured. */
+.llm-setup-hint {
+	position: absolute;
+	top: calc(50% + 12px);
+	left: 50%;
+	transform: translateX(-50%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-3) var(--size-4-4);
+	background: var(--background-secondary);
+	border-radius: var(--radius-m);
+	white-space: nowrap;
+}
+
+.llm-setup-hint-text {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	line-height: var(--line-height-tight);
+}
+
+.llm-setup-hint-button {
+	font-size: var(--font-ui-small);
+}
+
 #llm-settings-credits {
 	text-align: center;
 }
@@ -1021,6 +1184,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
 	max-width: 220px;
+	flex-shrink: 0; /* prevent flex from squishing chips — container scrolls instead */
 }
 
 .llm-context-chip-icon {
@@ -1089,6 +1253,125 @@ button.llm-scan-button.is-active {
 	color: var(--icon-color);
 	background-color: var(--background-modifier-hover);
 	box-shadow: none;
+}
+
+/* ── SKILLS TAB ─────────────────────────────────────────────────── */
+
+/* Top-level padding (mirrors llm-modal-settings-container) */
+.llm-modal-skills-container.llm-flex,
+.llm-widget-skills-container.llm-flex,
+.fab-skills-container.llm-flex {
+	padding-top: var(--size-4-4);
+}
+
+/* Empty-state message when no skills are found */
+.llm-skills-empty {
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	text-align: center;
+	padding: var(--size-4-4) var(--size-4-2);
+}
+
+/* Header row above the skills list */
+.llm-skills-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 var(--size-2-1) var(--size-4-2);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+	margin-bottom: var(--size-4-2);
+}
+
+.llm-skills-header-title {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.llm-skills-folder-hint {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+}
+
+/* Individual skill row */
+.llm-skill-item {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2);
+	border-radius: var(--radius-s);
+	transition: background-color 80ms ease;
+}
+
+.llm-skill-item:hover {
+	background-color: var(--background-modifier-hover);
+}
+
+/* Left column: icon */
+.llm-skill-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: var(--size-4-6);
+	height: var(--size-4-6);
+	border-radius: var(--radius-s);
+	background-color: var(--background-modifier-form-field);
+	color: var(--text-muted);
+	--icon-size: var(--icon-s);
+	--icon-stroke: var(--icon-s-stroke-width);
+}
+
+/* Centre column: name + description + metadata */
+.llm-skill-info {
+	flex: 1;
+	min-width: 0;
+}
+
+.llm-skill-name {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.llm-skill-description {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	margin-top: var(--size-2-1);
+	line-height: 1.4;
+}
+
+/* Badge row: slash command + allowed tools */
+.llm-skill-badges {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-1);
+	margin-top: var(--size-4-1);
+}
+
+.llm-skill-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+	padding: 1px var(--size-4-1);
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	background-color: var(--background-modifier-form-field);
+	border: var(--border-width) solid var(--background-modifier-border);
+	font-family: var(--font-monospace);
+}
+
+/* Right column: toggle */
+.llm-skill-toggle {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
 }
 
 button.llm-scan-button.is-active:hover {
@@ -1191,6 +1474,58 @@ button.llm-permission-deny:hover {
 button.llm-permission-allow {
 	/* mod-cta provides accent background; just ensure sizing */
 	padding: var(--size-4-1) var(--size-4-3);
+}
+
+/* MEMORY SCOPE PICKER (extends permission card) */
+
+.llm-memory-content-preview {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	font-style: italic;
+	background-color: var(--background-modifier-form-field);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-1) var(--size-4-2);
+	margin-bottom: var(--size-4-1);
+}
+
+.llm-memory-scope-label {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	margin-bottom: var(--size-4-1);
+}
+
+.llm-memory-scope-options {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+}
+
+.llm-memory-scope-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	cursor: pointer;
+}
+
+.llm-memory-scope-row input[type="checkbox"] {
+	cursor: pointer;
+	accent-color: var(--interactive-accent);
+}
+
+.llm-memory-scope-row label {
+	cursor: pointer;
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+}
+
+.llm-memory-scope-row label span.llm-memory-scope-tag {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	background-color: var(--background-modifier-hover);
+	border-radius: var(--radius-s);
+	padding: 1px var(--size-4-1);
+	margin-left: var(--size-4-1);
 }
 
 .llm-status-bar-button:hover {
@@ -1375,6 +1710,12 @@ button.llm-permission-allow {
 	height: min(740px, 88vh);
 }
 
+/* Needed so the guidance editor overlay (position: absolute) is clipped to
+   the modal box rather than escaping to the viewport. */
+.llm-dedicated-settings-modal {
+	position: relative;
+}
+
 /* Matches .modal.mod-settings .vertical-tab-header in app.css exactly,
    since our modal uses .llm-dedicated-settings-modal instead of .mod-settings. */
 .llm-dedicated-settings-modal .vertical-tab-header {
@@ -1383,6 +1724,28 @@ button.llm-permission-allow {
 	max-width: 250px;
 	overflow: auto;
 	border-inline-end: var(--border-width) solid var(--divider-color);
+}
+
+/* The modal is pinned via fixed top/bottom, but .modal-content and the flex
+   container must explicitly fill that height — otherwise flex children can
+   grow unbounded and overflow-y never activates. */
+.llm-dedicated-settings-modal .modal-content {
+	height: 100%;
+	overflow: hidden;
+}
+
+.llm-dedicated-settings-modal .vertical-tabs-container {
+	height: 100%;
+	overflow: hidden;
+}
+
+/* Allow the content pane to scroll independently when tab content is taller
+   than the modal. min-height: 0 is required so a flex child can shrink below
+   its content size and let overflow-y kick in. */
+.llm-dedicated-settings-modal .vertical-tab-content-container {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
 }
 
 /* Tab section header — sits above the first setting-group card. */
@@ -1407,6 +1770,13 @@ button.llm-permission-allow {
 /* Ollama discovered-models helper text. */
 .llm-settings-ollama-models {
 	margin: 0 0 var(--size-4-3);
+}
+
+/* Read-only path display in provider settings (e.g. GPT4All model path, port). */
+.llm-settings-readonly-path {
+	color: var(--text-muted);
+	cursor: default;
+	user-select: all;
 }
 
 /* About tab credits block. */
@@ -1470,6 +1840,66 @@ details[open] .llm-rag-sources-summary::before {
 }
 
 .llm-rag-source-link:hover {
+	text-decoration: underline;
+}
+
+/* ── Web sources collapsible panel ──────────────────────────────────────── */
+
+.llm-web-sources {
+	margin-top: var(--size-4-2);
+	border-top: 1px solid var(--background-modifier-border);
+	padding-top: var(--size-4-2);
+}
+
+.llm-web-sources-summary {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	cursor: pointer;
+	user-select: none;
+	list-style: none;
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+
+.llm-web-sources-summary::before {
+	content: "›";
+	display: inline-block;
+	transition: transform 100ms ease;
+}
+
+details[open] .llm-web-sources-summary::before {
+	transform: rotate(90deg);
+}
+
+.llm-web-sources-icon {
+	display: flex;
+	align-items: center;
+	color: var(--text-muted);
+}
+
+.llm-web-sources-icon svg {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.llm-web-sources-list {
+	margin: var(--size-4-2) 0 0 var(--size-4-4);
+	padding: 0;
+	list-style: disc;
+}
+
+.llm-web-sources-list li {
+	margin-bottom: var(--size-4-1);
+}
+
+.llm-web-source-link {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-accent);
+	text-decoration: none;
+}
+
+.llm-web-source-link:hover {
 	text-decoration: underline;
 }
 
@@ -1554,4 +1984,966 @@ details[open] .llm-tool-calls-chevron {
 	border-radius: var(--radius-s);
 	word-break: break-all;
 	white-space: pre-wrap;
+}
+
+/* ── Settings → Tools: risk tier badges and tool name code ───────────────── */
+
+.llm-tool-badge {
+	display: inline-block;
+	padding: 1px 6px;
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	vertical-align: middle;
+	line-height: 1.6;
+}
+
+.llm-tool-badge-safe {
+	background: hsla(var(--color-green-hsl), 0.15);
+	color: var(--color-green);
+}
+
+.llm-tool-badge-write {
+	background: hsla(var(--color-yellow-hsl), 0.15);
+	color: var(--color-yellow);
+}
+
+.llm-tool-badge-danger {
+	background: hsla(var(--color-red-hsl), 0.15);
+	color: var(--color-red);
+}
+
+.llm-tool-name-code {
+	margin-top: var(--size-4-1);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+}
+
+/* ── Active skill indicator (shown above an assistant message) ────────────── */
+
+.llm-skill-panel {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-bottom: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-2);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.llm-skill-panel-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.llm-skill-panel-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 200px;
+}
+
+/* ── Model / assistant attribution badge (shown below each assistant message) */
+
+.llm-model-panel {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-top: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-2);
+	border-radius: var(--radius-s);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+}
+
+.llm-model-panel-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+	opacity: 0.6;
+}
+
+.llm-model-panel-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 200px;
+}
+
+/* ── Slash command skill token (shown inside the input area) ─────────────── */
+
+/* ── Slash command picker menu ────────────────────────────────────────────── */
+/* Mounted on document.body; position: fixed is set via JS so it clears any
+   overflow:hidden ancestor container. Width/bottom are also set dynamically. */
+
+.llm-slash-menu {
+	position: fixed;
+	background: var(--background-primary);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	box-shadow: var(--shadow-l);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	z-index: 9999;
+	max-height: 320px;
+	min-width: 260px;
+	max-width: 420px;
+	overflow-y: auto;
+}
+
+.llm-slash-menu-header {
+	padding: var(--size-4-2) var(--size-4-3) var(--size-2-1);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	color: var(--text-faint);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+}
+
+.llm-slash-menu-item {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	cursor: pointer;
+	flex-shrink: 0;
+}
+
+.llm-slash-menu-item:hover,
+.llm-slash-menu-item-selected {
+	background: var(--background-modifier-hover);
+}
+
+.llm-slash-menu-item-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 28px;
+	height: 28px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	color: var(--text-normal);
+	--icon-size: var(--icon-s);
+}
+
+.llm-slash-menu-item-text {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	flex: 1;
+}
+
+/* Row containing skill name + argument hint */
+.llm-slash-menu-item-name-row {
+	display: flex;
+	align-items: baseline;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.llm-slash-menu-item-name {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+	white-space: nowrap;
+	flex-shrink: 0;
+}
+
+/* Argument hint — grayed out, shown next to the name */
+.llm-slash-menu-item-hint {
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-normal);
+	color: var(--text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.llm-slash-menu-item-desc {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Edit (pencil) icon on each slash menu item — hidden until hover */
+.llm-slash-menu-item-edit {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: 24px;
+	height: 24px;
+	border-radius: var(--radius-s);
+	color: var(--text-faint);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.1s ease, color 0.1s ease, background 0.1s ease;
+	--icon-size: var(--icon-xs);
+}
+
+.llm-slash-menu-item:hover .llm-slash-menu-item-edit,
+.llm-slash-menu-item-selected .llm-slash-menu-item-edit {
+	opacity: 1;
+}
+
+.llm-slash-menu-item-edit:hover {
+	color: var(--text-normal);
+	background: var(--background-modifier-hover);
+}
+
+/* ── Memory panel ──────────────────────────────────────────────────────────── */
+
+.llm-memory-panel {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-bottom: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-2);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.llm-memory-panel-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.llm-memory-panel-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 200px;
+}
+
+/* ── Memory chip (chip strip) ──────────────────────────────────────────────── */
+/* Shows just the brain icon at rest; "Memory" label + remove revealed on hover. */
+
+.llm-memory-chip {
+	border: 1px solid var(--color-purple);
+	background-color: color-mix(in srgb, var(--color-purple) 10%, transparent);
+	min-width: 32px;
+	max-width: 32px;
+	overflow: hidden;
+	transition: max-width 0.2s ease;
+	cursor: default;
+}
+
+.llm-memory-chip:hover {
+	max-width: 180px;
+	background-color: color-mix(in srgb, var(--color-purple) 16%, transparent);
+}
+
+.llm-memory-chip .llm-context-chip-icon {
+	color: var(--color-purple);
+	flex-shrink: 0;
+}
+
+.llm-memory-chip-name {
+	white-space: nowrap;
+	color: var(--text-normal);
+}
+
+/* ── Project chip (chip strip) ─────────────────────────────────────────────── */
+/* Shows just the box icon at rest; name + remove button revealed on hover.    */
+
+.llm-project-chip {
+	border: 1px solid var(--interactive-accent);
+	background-color: color-mix(in srgb, var(--interactive-accent) 10%, transparent);
+	/* Clamp to icon-only width at rest: horizontal padding (2×8px) + icon (12px) */
+	min-width: 32px;
+	max-width: 32px;
+	overflow: hidden;
+	transition: max-width 0.2s ease;
+	cursor: default;
+}
+
+.llm-project-chip:hover {
+	max-width: 220px;
+	background-color: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+}
+
+.llm-project-chip .llm-context-chip-icon {
+	color: var(--interactive-accent);
+	flex-shrink: 0;
+}
+
+.llm-project-chip-name {
+	white-space: nowrap;
+	color: var(--text-normal);
+}
+
+/* ── Assistant switcher (header pill) ────────────────────────────────────── */
+
+.llm-assistant-switcher {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-1);
+	padding: var(--size-2-1) var(--size-4-2);
+	background: transparent;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	max-width: 160px;
+	white-space: nowrap;
+	overflow: hidden;
+	transition: background 100ms ease, border-color 100ms ease;
+	box-shadow: none;
+	margin-left: var(--size-2-2);
+}
+
+.llm-assistant-switcher:hover {
+	background: var(--background-modifier-hover);
+	border-color: var(--background-modifier-border-hover);
+	color: var(--text-normal);
+}
+
+.llm-assistant-switcher--active {
+	border-color: var(--color-purple);
+	color: var(--text-normal);
+}
+
+.llm-assistant-switcher--hidden {
+	display: none;
+}
+
+.llm-assistant-switcher-icon {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	--icon-size: var(--icon-xs);
+	--icon-stroke: 1.5;
+	color: var(--text-faint);
+}
+
+.llm-assistant-switcher--active .llm-assistant-switcher-icon {
+	color: var(--color-purple);
+}
+
+.llm-assistant-switcher-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	flex: 1;
+}
+
+.llm-assistant-switcher-chevron {
+	display: inline-flex;
+	align-items: center;
+	flex-shrink: 0;
+	--icon-size: var(--icon-xs);
+	--icon-stroke: 1.5;
+	color: var(--text-faint);
+}
+
+/* ── Assistant panel indicator (below assistant message) ─────────────────── */
+
+.llm-assistant-panel {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-bottom: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-2);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.llm-assistant-panel-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+	color: var(--color-purple);
+}
+
+.llm-assistant-panel-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 200px;
+}
+
+/* ── Agent routing panel indicator (below Obsidian Agent message) ─────────── */
+
+.llm-agent-routing-panel {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-bottom: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-2);
+	border: var(--border-width) solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background: var(--background-secondary);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
+
+.llm-agent-routing-panel-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+	color: var(--interactive-accent);
+}
+
+.llm-agent-routing-panel-label {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 220px;
+}
+
+/* ── Token usage indicator ──────────────────────────────────────────────────── */
+
+.llm-token-usage {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-top: var(--size-4-1);
+	margin-bottom: var(--size-4-2);
+	padding: 2px var(--size-4-2);
+	border-radius: var(--radius-s);
+	background: transparent;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	font-variant-numeric: tabular-nums;
+	user-select: none;
+}
+
+.llm-token-usage-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+	color: var(--text-faint);
+}
+
+/* ── Obsidian Agent brand icon (end of last agent message) ─────────────────── */
+
+.llm-obsidian-agent-brand {
+	display: flex;
+	align-items: center;
+	padding: var(--size-4-1) var(--size-4-2) var(--size-4-2);
+}
+
+.llm-obsidian-agent-brand-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--icon-xl);
+	height: var(--icon-xl);
+	color: var(--interactive-accent);
+	opacity: 0.9;
+}
+
+.llm-obsidian-agent-brand-icon svg {
+	width: var(--icon-xl);
+	height: var(--icon-xl);
+}
+
+/* ── Guidance file path input in settings ──────────────────────────────────── */
+
+.llm-guidance-file-input {
+	width: 240px;
+}
+
+/* ── Guidance file inline editor overlay ───────────────────────────────────── */
+
+/* Full-cover backdrop rendered inside the existing settings modal container */
+.llm-guidance-editor-overlay {
+	position: absolute;
+	inset: 0;
+	background-color: var(--background-modifier-cover);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 10;
+	border-radius: var(--modal-radius, var(--radius-m));
+}
+
+/* Inner panel — mirrors Obsidian's .modal sizing and chrome */
+.llm-guidance-editor-panel {
+	width: min(640px, 90%);
+	background-color: var(--background-primary);
+	border-radius: var(--modal-radius, var(--radius-m));
+	box-shadow: var(--shadow-l);
+	padding: var(--size-4-6) var(--size-4-6) var(--size-4-4);
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+}
+
+.llm-guidance-editor-title {
+	margin: 0;
+	font-size: var(--font-ui-larger);
+	font-weight: var(--font-semibold);
+}
+
+.llm-guidance-editor-path {
+	margin: 0;
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	font-family: var(--font-monospace);
+}
+
+.llm-guidance-editor-textarea {
+	width: 100%;
+	min-height: 360px;
+	resize: vertical;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+	background-color: var(--background-primary);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2);
+	box-sizing: border-box;
+	line-height: var(--line-height-normal);
+}
+
+.llm-guidance-editor-textarea:focus {
+	outline: none;
+	border-color: var(--interactive-accent);
+	box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+/* ── Pinned note chip (project pinned notes — non-removable) ──────────────── */
+
+.llm-context-chip--pinned {
+	border: 1px dashed var(--interactive-accent);
+	background-color: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
+}
+
+.llm-context-chip--pinned .llm-context-chip-icon {
+	color: var(--interactive-accent);
+}
+
+.llm-context-chip--clickable {
+	cursor: pointer;
+}
+
+.llm-context-chip--clickable:hover {
+	background-color: color-mix(in srgb, var(--interactive-accent) 16%, transparent);
+	border-color: var(--interactive-accent-hover);
+}
+
+/* ── Whisper: mic button states ────────────────────────────────────────────── */
+
+/* Recording — button pulses red */
+button.llm-mic-button.llm-mic-recording {
+	color: var(--color-red);
+	animation: llm-mic-pulse 1.2s ease-in-out infinite;
+}
+
+button.llm-mic-button.llm-mic-recording:hover {
+	color: var(--color-red);
+}
+
+/* Transcribing — button is muted and disabled */
+button.llm-mic-button.llm-mic-transcribing {
+	color: var(--text-faint);
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+@keyframes llm-mic-pulse {
+	0%, 100% { opacity: 1; }
+	50%       { opacity: 0.4; }
+}
+
+/* ── Whisper: settings tab UI ──────────────────────────────────────────────── */
+
+/* Sidecar setup instructions panel */
+.llm-whisper-setup-panel {
+	margin-top: var(--size-4-2);
+}
+
+.llm-whisper-setup-code {
+	user-select: text;
+	-webkit-user-select: text;
+	cursor: text;
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2) var(--size-4-3);
+	margin: var(--size-4-2) 0;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-normal);
+	white-space: pre;
+	overflow-x: auto;
+}
+
+/* Test connection status line */
+.llm-whisper-status {
+	margin-top: var(--size-4-1);
+	font-size: var(--font-ui-smaller);
+}
+
+.llm-whisper-status-ok {
+	color: var(--color-green);
+}
+
+.llm-whisper-status-err {
+	color: var(--color-red);
+}
+
+/* Warning text when OpenAI key is missing */
+.llm-whisper-warning {
+	color: var(--color-orange);
+}
+
+/* ── Whisper: sidecar setup wizard ─────────────────────────────────────────── */
+
+.llm-whisper-env-row {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) 0;
+	font-size: var(--font-ui-small);
+}
+
+.llm-whisper-env-icon {
+	font-size: var(--font-ui-small);
+	flex-shrink: 0;
+	width: 1.2em;
+	text-align: center;
+}
+
+.llm-whisper-env-ok   { color: var(--color-green); }
+.llm-whisper-env-err  { color: var(--color-red); }
+.llm-whisper-env-warn { color: var(--color-orange); }
+.llm-whisper-env-checking { color: var(--text-faint); }
+
+.llm-whisper-env-label {
+	color: var(--text-normal);
+}
+
+.llm-whisper-env-link {
+	color: var(--link-color);
+	text-decoration: underline;
+	cursor: pointer;
+	font-size: var(--font-ui-smaller);
+}
+
+.llm-whisper-btn-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-3);
+}
+
+.llm-whisper-setup-log {
+	margin-top: var(--size-4-2);
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2) var(--size-4-3);
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+	white-space: pre-wrap;
+	max-height: 180px;
+	overflow-y: auto;
+}
+
+.llm-context-section-header {
+	margin-top: 1.5em;
+	margin-bottom: 0.5em;
+}
+
+/* ── Chats Panel ──────────────────────────────────────────────────────────── */
+/*
+ * Most styling comes from Obsidian's native classes:
+ *   nav-header / nav-buttons-container / nav-action-button  — toolbar
+ *   search-input-container                                   — search box (via SearchComponent)
+ *   nav-files-container                                      — scrollable list
+ *   tree-item / tree-item-self / tree-item-inner / tree-item-flair — rows
+ *   tag                                                      — project / agent badges
+ *   pane-empty                                               — empty state
+ *
+ * Only the bits Obsidian doesn't already cover are defined here.
+ */
+
+/* Left icon column — size + colour to match file-explorer icons */
+.llm-chats-row-icon {
+	color: var(--nav-item-color);
+}
+
+.llm-chats-row-icon svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+
+/* Subtitle row that sits below the title inside tree-item-inner */
+.llm-chats-meta {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	margin-top: 2px;
+	flex-wrap: wrap;
+}
+
+/* Project badge — accent colour tint (overrides .tag defaults) */
+.llm-chats-tag-project {
+	color: var(--text-accent);
+	background-color: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+	border-color: transparent;
+	cursor: default;
+}
+
+/* Agent badge — purple tint */
+.llm-chats-tag-agent {
+	color: var(--color-purple);
+	background-color: color-mix(in srgb, var(--color-purple) 12%, transparent);
+	border-color: transparent;
+	cursor: default;
+}
+
+/* ── Three-dot context-menu button ──────────────────────────────────────────
+   The button carries Obsidian's native `clickable-icon` class which handles
+   all sizing, padding, hover/focus colours, and border-radius automatically.
+   We only add the overlay positioning and fade animation on top.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+.llm-chats-row-date {
+	transition: opacity 120ms ease;
+}
+
+/* Give the flair outer a stacking context so the button can overlay the date */
+.tree-item-flair-outer:has(.llm-chats-row-menu-btn) {
+	position: relative;
+}
+
+.llm-chats-row-menu-btn {
+	/* Overlay the date stamp — centred vertically, flush to the right edge */
+	position: absolute;
+	top: 50%;
+	right: 0;
+	transform: translateY(-50%);
+
+	/* Hidden until row hover — clickable-icon handles everything else */
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 120ms ease;
+}
+
+/* On row hover: reveal the button, hide the date */
+.tree-item-self:hover .llm-chats-row-menu-btn,
+.tree-item-self:focus-within .llm-chats-row-menu-btn {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.tree-item-self:hover .llm-chats-row-date,
+.tree-item-self:focus-within .llm-chats-row-date {
+	opacity: 0;
+}
+
+/* ── Rename modal input ───────────────────────────────────────────────────── */
+.llm-rename-input {
+	width: 100%;
+	margin-bottom: var(--size-4-3);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Chat Details Panel  (.llm-chat-details-*)
+   Right-sidebar panel that shows live state for the active chat:
+   model/assistant, recalled memories, and context files.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.llm-chat-details-root {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+}
+
+.llm-chat-details-content {
+	flex: 1;
+	overflow-y: auto;
+	padding: var(--size-4-2) 0;
+}
+
+/* ── Section ─────────────────────────────────────────────────────────────── */
+
+.llm-chat-details-section {
+	margin-bottom: var(--size-4-3);
+}
+
+.llm-chat-details-section-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: var(--size-4-1) var(--size-4-4);
+	margin-bottom: var(--size-4-1);
+}
+
+.llm-chat-details-section-title {
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-semibold);
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.llm-chat-details-section-count {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	background: var(--background-modifier-hover);
+	border-radius: var(--radius-s);
+	padding: 0 var(--size-4-1);
+	min-width: 18px;
+	text-align: center;
+}
+
+.llm-chat-details-section-body {
+	/* rows are placed directly inside the body */
+}
+
+/* ── Row ─────────────────────────────────────────────────────────────────── */
+
+/* Matches Obsidian's tree-item-self pattern */
+.llm-chat-details-row {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--size-4-2);
+	padding: var(--size-4-1) var(--size-4-4);
+	min-height: 32px;
+}
+
+.llm-chat-details-row--clickable {
+	cursor: pointer;
+	border-radius: var(--radius-s);
+}
+
+.llm-chat-details-row--clickable:hover {
+	background: var(--background-modifier-hover);
+}
+
+.llm-chat-details-row-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	width: var(--icon-s);
+	height: var(--icon-s);
+	margin-top: 2px;
+	color: var(--text-muted);
+}
+
+.llm-chat-details-row-icon svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+
+/* Assistant icon gets accent colour */
+.llm-chat-details-row-icon--assistant {
+	color: var(--interactive-accent);
+}
+
+/* Guidance icon uses muted colour — guidance files are ambient context, not primary */
+.llm-chat-details-row-icon--guidance {
+	color: var(--text-muted);
+}
+
+.llm-chat-details-row-body {
+	flex: 1;
+	min-width: 0;
+}
+
+/* Memory bodies use muted normal-size text (memories can be a sentence long) */
+.llm-chat-details-row-body--memory {
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	line-height: var(--line-height-tight);
+	padding-top: 2px;
+	white-space: normal;
+	word-break: break-word;
+}
+
+.llm-chat-details-row-title {
+	font-size: var(--font-ui-small);
+	color: var(--text-normal);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* Assistant name in accent colour */
+.llm-chat-details-row-title--assistant {
+	color: var(--interactive-accent);
+}
+
+.llm-chat-details-row-subtitle {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	margin-top: 1px;
+}
+
+/* ── Empty state ──────────────────────────────────────────────────────────── */
+
+.llm-chat-details-empty {
+	padding: var(--size-4-1) var(--size-4-4);
+	font-size: var(--font-ui-small);
+	color: var(--text-faint);
+	font-style: italic;
+}
+
+/* ── Badge row (project pill under model section) ───────────────────────── */
+
+.llm-chat-details-badge-row {
+	padding: 0 var(--size-4-4) var(--size-4-2);
+	display: flex;
+	gap: var(--size-4-1);
+	flex-wrap: wrap;
+}
+
+.llm-chat-details-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	cursor: default;
+}
+
+.llm-chat-details-badge svg {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+/* Project badge — accent tint (matches .llm-chats-tag-project) */
+.llm-chat-details-badge--project {
+	color: var(--text-accent);
+	background-color: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
+	border-color: transparent;
 }

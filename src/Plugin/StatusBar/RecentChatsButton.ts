@@ -255,7 +255,7 @@ export class RecentChatsButton {
 					this.hidePopover();
 				}
 			};
-			setTimeout(() => {
+			activeWindow.setTimeout(() => {
 				document.addEventListener("click", this.clickOutsideHandler!);
 				document.addEventListener("keydown", this.keydownHandler!);
 			}, 0);

@@ -2,10 +2,10 @@
 	"id": "large-language-models",
 	"name": "Large Language Models",
 	"version": "0.23.0",
-	"minAppVersion": "0.15.0",
-	"description": "Enables access to LLMs via remote providers (OpenAI, Claude, Gemini) and local LLMs via GPT4ALL.",
+	"minAppVersion": "1.7.2",
+	"description": "Chat with LLMs (OpenAI, Claude, Gemini, Mistral, Ollama, LM Studio) directly in Obsidian. Includes Skills, Projects, Assistants, Memory, vault search, voice transcription, and an Obsidian Agent that can read and write your vault.",
 	"author": "eharris128, r-mahoney, & jsmorabito",
-	"authorUrl": "https://bsky.app/profile/evanharris.bsky.social",
+	"authorUrl": "https://github.com/eharris128/Obsidian-LLM-Plugin",
 	"fundingUrl": "https://www.buymeacoffee.com/johnny1093",
 	"isDesktopOnly": false
 }

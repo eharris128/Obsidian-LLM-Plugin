@@ -11,6 +11,10 @@ export interface ChatFileMeta {
 	provider: string;
 	tags: string[];
 	context?: string[];
+	/** Name of the active project when this chat was created, if any. */
+	project?: string;
+	/** True when this conversation was conducted through the Obsidian Agent. */
+	agent?: boolean;
 }
 
 export interface LoadedChat {
@@ -18,6 +22,9 @@ export interface LoadedChat {
 	messages: Message[];
 	filePath: string;
 	toolCallsByTurn: Map<number, ToolCallRecord[]>;
+	skillsByTurn: Map<number, string>;
+	/** Model or assistant name that generated each assistant turn, keyed by 0-based turn index. */
+	modelsByTurn: Map<number, string>;
 }
 
 /**
@@ -32,12 +39,22 @@ export class ChatHistory {
 		return this.plugin.settings.chatHistoryFolder || "LLM Chats";
 	}
 
+	/** Return the chats sub-folder path for a given project id. */
+	folderForProject(projectId: string): string {
+		return `${this.plugin.projectsFolder}/${projectId}/chats`;
+	}
+
 	// ─── Folder ──────────────────────────────────────────────────────────────
 
 	async ensureFolder(): Promise<void> {
-		const exists = await this.plugin.app.vault.adapter.exists(this.folder);
+		await this.ensureFolderPath(this.folder);
+	}
+
+	/** Recursively ensure an arbitrary vault folder exists. */
+	async ensureFolderPath(folder: string): Promise<void> {
+		const exists = await this.plugin.app.vault.adapter.exists(folder);
 		if (!exists) {
-			await this.plugin.app.vault.createFolder(this.folder);
+			await this.plugin.app.vault.createFolder(folder);
 		}
 	}
 
@@ -55,11 +72,11 @@ export class ChatHistory {
 	}
 
 	/**
-	 * Return a path that doesn't collide with existing files.
+	 * Return a collision-free path inside the given folder.
 	 * Appends -2, -3 … when the base name is already taken.
 	 */
-	async uniquePath(slug: string): Promise<string> {
-		const base = `${this.folder}/${slug}`;
+	async uniquePathInFolder(slug: string, folder: string): Promise<string> {
+		const base = `${folder}/${slug}`;
 		let path = `${base}.md`;
 		let counter = 2;
 		while (await this.plugin.app.vault.adapter.exists(path)) {
@@ -67,6 +84,65 @@ export class ChatHistory {
 			counter++;
 		}
 		return path;
+	}
+
+	/**
+	 * Return a path that doesn't collide with existing files (uses default chat folder).
+	 * Appends -2, -3 … when the base name is already taken.
+	 */
+	async uniquePath(slug: string): Promise<string> {
+		return this.uniquePathInFolder(slug, this.folder);
+	}
+
+	/**
+	 * Move a chat file to a new folder, preserving the filename.
+	 * Updates the `project` frontmatter field to match `projectName` (omit to clear).
+	 * Returns the new file path.
+	 */
+	async moveToFolder(filePath: string, targetFolder: string, projectName?: string): Promise<string> {
+		const file = this.plugin.app.vault.getFileByPath(filePath);
+		if (!file) throw new Error(`Chat file not found: ${filePath}`);
+
+		await this.ensureFolderPath(targetFolder);
+
+		// Compute a collision-free destination path
+		const slug = file.basename;
+		const newPath = await this.uniquePathInFolder(slug, targetFolder);
+
+		// Move the file (updates internal links in the vault)
+		await this.plugin.app.fileManager.renameFile(file, newPath);
+
+		// Patch the frontmatter project field in the moved file
+		await this.updateProjectField(newPath, projectName);
+
+		return newPath;
+	}
+
+	/**
+	 * Rewrite the `project:` frontmatter field in an existing chat file.
+	 * Pass `undefined` to remove the field entirely.
+	 */
+	async updateProjectField(filePath: string, projectName: string | undefined): Promise<void> {
+		const file = this.plugin.app.vault.getFileByPath(filePath);
+		if (!file) return;
+
+		const existing = await this.load(filePath);
+		const updatedMeta: ChatFileMeta = { ...existing.meta };
+		if (projectName) {
+			updatedMeta.project = projectName;
+		} else {
+			delete updatedMeta.project;
+		}
+
+		const content = this.buildFileContent(
+			updatedMeta,
+			existing.messages,
+			undefined,
+			existing.toolCallsByTurn.size > 0 ? existing.toolCallsByTurn : undefined,
+			existing.skillsByTurn.size > 0 ? existing.skillsByTurn : undefined,
+			existing.modelsByTurn.size > 0 ? existing.modelsByTurn : undefined
+		);
+		await this.plugin.app.vault.modify(file, content);
 	}
 
 	// ─── Serialisation ───────────────────────────────────────────────────────
@@ -83,6 +159,12 @@ export class ChatHistory {
 			`tags:`,
 			...meta.tags.map((t) => `  - ${t}`),
 		];
+		if (meta.project) {
+			lines.push(`project: "${meta.project.replace(/"/g, '\\"')}"`);
+		}
+		if (meta.agent) {
+			lines.push(`agent: true`);
+		}
 		if (meta.context?.length) {
 			lines.push("context:");
 			for (const link of meta.context) {
@@ -96,7 +178,9 @@ export class ChatHistory {
 	private messagesToMarkdown(
 		messages: Message[],
 		selectedText?: string,
-		toolCallsByTurn?: Map<number, ToolCallRecord[]>
+		toolCallsByTurn?: Map<number, ToolCallRecord[]>,
+		skillsByTurn?: Map<number, string>,
+		modelsByTurn?: Map<number, string>
 	): string {
 		let body = "";
 		let assistantIdx = 0;
@@ -114,6 +198,15 @@ export class ChatHistory {
 			if (msg.role === "system") continue;
 			if (msg.role === "assistant") {
 				body += `## Assistant\n\n`;
+				// Model/assistant attribution — first callout so it's easy to scan
+				const modelLabel = modelsByTurn?.get(assistantIdx);
+				if (modelLabel) {
+					body += this.renderModelBlock(modelLabel);
+				}
+				const skillId = skillsByTurn?.get(assistantIdx);
+				if (skillId) {
+					body += this.renderSkillBlock(skillId);
+				}
 				const toolCalls = toolCallsByTurn?.get(assistantIdx);
 				if (toolCalls?.length) {
 					body += this.renderToolCallBlock(toolCalls);
@@ -126,6 +219,16 @@ export class ChatHistory {
 		}
 
 		return body.trimEnd();
+	}
+
+	/** Render a single-line callout recording which model/assistant answered this turn. */
+	private renderModelBlock(label: string): string {
+		return `> [!note]- ${label}\n\n`;
+	}
+
+	/** Render a single-line callout recording which skill was used for this turn. */
+	private renderSkillBlock(skillId: string): string {
+		return `> [!tip]- Skill: ${skillId}\n\n`;
 	}
 
 	/** Render a collapsible callout listing the tool calls for one agent turn. */
@@ -172,9 +275,18 @@ export class ChatHistory {
 		for (let i = 1; i < parts.length; i += 2) {
 			const role = parts[i] === "User" ? "user" : "assistant";
 			let content = (parts[i + 1] ?? "").trim();
-			// Strip any leading tool-call callout blocks (written by renderToolCallBlock)
-			// so they don't pollute re-submitted conversation context.
+			// Strip any leading skill or tool-call callout blocks so they don't
+			// pollute re-submitted conversation context.
 			if (role === "assistant") {
+				// Strip model/assistant attribution callout: "> [!note]- <label>"
+				content = content
+					.replace(/^> \[!note\]- [^\n]+\n\n?/, "")
+					.trim();
+				// Strip skill callout: "> [!tip]- Skill: <id>"
+				content = content
+					.replace(/^> \[!tip\]-? Skill: [^\n]+\n\n?/, "")
+					.trim();
+				// Strip tool-call callout: "> [!info]- N tool call(s)"
 				content = content
 					.replace(/^> \[!info\]-? \d+ tool calls?\n(?:>[ \t]?[^\n]*\n)*\n?/, "")
 					.trim();
@@ -190,10 +302,12 @@ export class ChatHistory {
 		meta: ChatFileMeta,
 		messages: Message[],
 		selectedText?: string,
-		toolCallsByTurn?: Map<number, ToolCallRecord[]>
+		toolCallsByTurn?: Map<number, ToolCallRecord[]>,
+		skillsByTurn?: Map<number, string>,
+		modelsByTurn?: Map<number, string>
 	): string {
 		const fm = this.buildFrontmatter(meta);
-		const body = this.messagesToMarkdown(messages, selectedText, toolCallsByTurn);
+		const body = this.messagesToMarkdown(messages, selectedText, toolCallsByTurn, skillsByTurn, modelsByTurn);
 		return `---\n${fm}\n---\n\n${body}`;
 	}
 
@@ -211,9 +325,16 @@ export class ChatHistory {
 		messages: Message[],
 		item: ChatHistoryItem,
 		vaultContext?: VaultContext,
-		toolCallsByTurn?: Map<number, ToolCallRecord[]>
+		toolCallsByTurn?: Map<number, ToolCallRecord[]>,
+		skillsByTurn?: Map<number, string>,
+		projectName?: string,
+		isAgent?: boolean,
+		modelsByTurn?: Map<number, string>,
+		/** Override the folder for new file creation (e.g. a project's chats folder). */
+		saveFolder?: string
 	): Promise<string> {
-		await this.ensureFolder();
+		const targetFolder = saveFolder ?? this.folder;
+		await this.ensureFolderPath(targetFolder);
 
 		const now = new Date().toISOString();
 		const provider = this.inferProvider(item.model);
@@ -233,13 +354,13 @@ export class ChatHistory {
 			};
 			await this.plugin.app.vault.modify(
 				file,
-				this.buildFileContent(meta, messages, selectedText, toolCallsByTurn)
+				this.buildFileContent(meta, messages, selectedText, toolCallsByTurn, skillsByTurn, modelsByTurn)
 			);
 			return filePath;
 		} else {
 			// ── Create new file ───────────────────────────────────────────
 			const slug = this.slugify(title);
-			const newPath = await this.uniquePath(slug);
+			const newPath = await this.uniquePathInFolder(slug, targetFolder);
 			const meta: ChatFileMeta = {
 				type: "Chat",
 				title,
@@ -248,11 +369,13 @@ export class ChatHistory {
 				model: item.model,
 				provider,
 				tags: ["llm-chats"],
+				...(projectName ? { project: projectName } : {}),
+				...(isAgent ? { agent: true } : {}),
 				...(contextLinks.length ? { context: contextLinks } : {}),
 			};
 			await this.plugin.app.vault.create(
 				newPath,
-				this.buildFileContent(meta, messages, selectedText, toolCallsByTurn)
+				this.buildFileContent(meta, messages, selectedText, toolCallsByTurn, skillsByTurn, modelsByTurn)
 			);
 			return newPath;
 		}
@@ -271,8 +394,10 @@ export class ChatHistory {
 		const rawBody = fmMatch[2].trim();
 		const { messages } = this.markdownToMessages(rawBody);
 		const toolCallsByTurn = this.parseToolCallsFromBody(rawBody);
+		const skillsByTurn = this.parseSkillsFromBody(rawBody);
+		const modelsByTurn = this.parseModelsFromBody(rawBody);
 
-		return { meta, messages, filePath, toolCallsByTurn };
+		return { meta, messages, filePath, toolCallsByTurn, skillsByTurn, modelsByTurn };
 	}
 
 	/**
@@ -287,15 +412,63 @@ export class ChatHistory {
 		for (let i = 1; i < parts.length; i += 2) {
 			if (parts[i] !== "Assistant") continue;
 			const section = (parts[i + 1] ?? "").trimStart();
-			if (section.startsWith("> [!info]-")) {
+			// Search for the [!info] callout anywhere in the section — it may follow
+			// a model attribution ([!note]) or skill ([!tip]) callout written first.
+			const infoIdx = section.search(/^> \[!info\]-/m);
+			if (infoIdx !== -1) {
+				const fromInfo = section.slice(infoIdx);
 				// Extract consecutive lines starting with ">"
 				const calloutLines: string[] = [];
-				for (const line of section.split("\n")) {
+				for (const line of fromInfo.split("\n")) {
 					if (line.startsWith(">")) calloutLines.push(line);
 					else break;
 				}
 				const toolCalls = this.parseToolCallCallout(calloutLines);
 				if (toolCalls.length > 0) result.set(assistantIdx, toolCalls);
+			}
+			assistantIdx++;
+		}
+		return result;
+	}
+
+	/**
+	 * Parse skill callout blocks from the raw markdown body.
+	 * Returns a map of assistant-turn-index → skill id.
+	 */
+	private parseSkillsFromBody(rawBody: string): Map<number, string> {
+		const result = new Map<number, string>();
+		// Use the same split as markdownToMessages so indices stay in sync.
+		const parts = rawBody.split(/\n?## (User|Assistant)\n\n?/);
+		let assistantIdx = 0;
+		for (let i = 1; i < parts.length; i += 2) {
+			if (parts[i] !== "Assistant") continue;
+			const section = (parts[i + 1] ?? "").trimStart();
+			// Use multiline flag so ^ matches start of any line (model callout may precede skill callout).
+			const skillMatch = section.match(/^> \[!tip\]-? Skill: ([^\n]+)/m);
+			if (skillMatch) {
+				result.set(assistantIdx, skillMatch[1].trim());
+			}
+			assistantIdx++;
+		}
+		return result;
+	}
+
+	/**
+	 * Parse model/assistant attribution callouts from the raw markdown body.
+	 * Returns a map of assistant-turn-index → model/assistant label.
+	 */
+	private parseModelsFromBody(rawBody: string): Map<number, string> {
+		const result = new Map<number, string>();
+		// Use the same split as markdownToMessages so indices stay in sync.
+		const parts = rawBody.split(/\n?## (User|Assistant)\n\n?/);
+		let assistantIdx = 0;
+		for (let i = 1; i < parts.length; i += 2) {
+			if (parts[i] !== "Assistant") continue;
+			const section = (parts[i + 1] ?? "").trimStart();
+			// Model attribution is the first callout: "> [!note]- <label>"
+			const modelMatch = section.match(/^> \[!note\]- ([^\n]+)/);
+			if (modelMatch) {
+				result.set(assistantIdx, modelMatch[1].trim());
 			}
 			assistantIdx++;
 		}
@@ -325,14 +498,27 @@ export class ChatHistory {
 	}
 
 	/**
-	 * List all chat files in the history folder, newest first.
+	 * List all chat files — default folder + all project chats subfolders — newest first.
 	 * Uses file mtime so the list stays current without re-reading content.
 	 */
 	async list(): Promise<TFile[]> {
-		const prefix = this.folder + "/";
+		const defaultPrefix = this.folder + "/";
+		const projectsFolder = this.plugin.projectsFolder + "/";
+
 		return this.plugin.app.vault
 			.getFiles()
-			.filter((f) => f.path.startsWith(prefix) && f.extension === "md")
+			.filter((f) => {
+				if (f.extension !== "md") return false;
+				// Default chat history folder
+				if (f.path.startsWith(defaultPrefix)) return true;
+				// Project chats: Projects/<id>/chats/<file>.md (exactly 3 segments deep)
+				if (f.path.startsWith(projectsFolder)) {
+					const relative = f.path.slice(projectsFolder.length);
+					const segments = relative.split("/");
+					return segments.length === 3 && segments[1] === "chats";
+				}
+				return false;
+			})
 			.sort((a, b) => b.stat.mtime - a.stat.mtime);
 	}
 

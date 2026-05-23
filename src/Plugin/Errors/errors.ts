@@ -29,6 +29,16 @@ export function errorMessages(error: Error, params?: object) {
         new Notice("You must have an API key to access OpenAI models")
     }
 
+    // New-style API key errors thrown by ChatContainer before making any API call.
+    // The message already contains actionable text so we surface it directly.
+    if (
+        error.message.includes("API key configured") ||
+        error.message.includes("No Mistral API key") ||
+        error.message.includes("No Claude Code OAuth token")
+    ) {
+        new Notice(error.message, 8000);
+    }
+
     if(error.message === "GPT4All streaming") {
         new Notice("GPT4All is already working on another request. Please wait until that request is done to submit another prompt.")
     }

@@ -1065,17 +1065,6 @@ export class LLMSettingsModal extends Modal {
 					});
 			});
 
-		new Setting(mainItems)
-			.setName("Reset chat history")
-			.setDesc("Delete all previous prompts and chat contexts.")
-			.addButton((button: ButtonComponent) => {
-				button.setButtonText("Reset history");
-				button.setWarning();
-				button.onClick(() => {
-					this.plugin.history.reset();
-				});
-			});
-
 		// Dynamic section (folder + migration) — own group that re-renders on toggle.
 		const migrationGroup = el.createDiv("setting-group");
 		const migrationEl = migrationGroup.createDiv("setting-items");
@@ -1083,7 +1072,18 @@ export class LLMSettingsModal extends Modal {
 		const renderHistorySection = () => {
 			migrationEl.empty();
 			if (!this.plugin.settings.chatHistoryEnabled) {
-				migrationGroup.style.display = "none";
+				// Legacy mode — show the reset button for old promptHistory entries.
+				migrationGroup.style.display = "";
+				new Setting(migrationEl)
+					.setName("Reset legacy chat history")
+					.setDesc("Clears the old in-settings chat history only. Your saved markdown chat files in your vault are not affected.")
+					.addButton((button: ButtonComponent) => {
+						button.setButtonText("Reset history");
+						button.setWarning();
+						button.onClick(() => {
+							this.plugin.history.reset();
+						});
+					});
 				return;
 			}
 			migrationGroup.style.display = "";

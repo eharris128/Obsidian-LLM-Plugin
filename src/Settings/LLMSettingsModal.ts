@@ -1522,13 +1522,8 @@ export class LLMSettingsModal extends Modal {
 						);
 						if (filePath) {
 							new Notice(`✓ Project "${name}" created.`);
-							// Open the PROJECT.md in the vault for editing
-							const file = this.plugin.app.vault.getFileByPath(filePath);
-							if (file) {
-								const leaf = this.plugin.app.workspace.getLeaf(false);
-								await leaf.openFile(file);
-							}
 							this.renderTab("projects");
+							new GuidanceEditorOverlay(this.plugin, this.modalEl, filePath, "").open();
 						} else {
 							new Notice("Failed to create project.");
 						}
@@ -1552,18 +1547,12 @@ export class LLMSettingsModal extends Modal {
 				.setName(project.name)
 				.setDesc(descParts.join(" · ") || project.id);
 
-			// Edit: open PROJECT.md in vault
+			// Edit: open PROJECT.md in overlay editor
 			setting.addButton((btn) => {
 				btn.setIcon("pencil")
 					.setTooltip("Edit PROJECT.md")
-					.onClick(async () => {
-						const file = this.plugin.app.vault.getFileByPath(project.filePath);
-						if (file) {
-							const leaf = this.plugin.app.workspace.getLeaf(false);
-							await leaf.openFile(file);
-						} else {
-							new Notice("PROJECT.md not found in vault.");
-						}
+					.onClick(() => {
+						new GuidanceEditorOverlay(this.plugin, this.modalEl, project.filePath, "").open();
 					});
 			});
 
@@ -1655,7 +1644,6 @@ export class LLMSettingsModal extends Modal {
 			el,
 			`${assistants.length} Assistant${assistants.length === 1 ? "" : "s"}`
 		);
-		const activeId = this.plugin.settings.assistantSettings?.activeAssistantId;
 
 		for (const assistant of assistants) {
 			const descParts: string[] = [];
@@ -1666,39 +1654,17 @@ export class LLMSettingsModal extends Modal {
 			if (assistant.allowedTools.length > 0) {
 				descParts.push(`${assistant.allowedTools.length} tool${assistant.allowedTools.length === 1 ? "" : "s"}`);
 			}
-			if (activeId === assistant.id) descParts.push("● Active");
 
 			const setting = new Setting(listGroup)
 				.setName(assistant.name)
 				.setDesc(descParts.join(" · ") || assistant.id);
 
-			// Edit: open ASSISTANT.md in vault
+			// Edit: open ASSISTANT.md in overlay editor
 			setting.addButton((btn) => {
 				btn.setIcon("pencil")
 					.setTooltip("Edit ASSISTANT.md")
-					.onClick(async () => {
-						const file = this.plugin.app.vault.getFileByPath(assistant.filePath);
-						if (file) {
-							const leaf = this.plugin.app.workspace.getLeaf(false);
-							await leaf.openFile(file);
-						} else {
-							new Notice("ASSISTANT.md not found in vault.");
-						}
-					});
-			});
-
-			// Activate / deactivate
-			setting.addButton((btn) => {
-				const isActive = activeId === assistant.id;
-				btn.setButtonText(isActive ? "Deactivate" : "Activate")
-					.setTooltip(isActive ? "Clear active assistant" : "Set as active assistant")
-					.onClick(async () => {
-						this.plugin.settings.assistantSettings = {
-							...this.plugin.settings.assistantSettings,
-							activeAssistantId: isActive ? null : assistant.id,
-						};
-						await this.plugin.saveSettings();
-						this.renderTab("assistants");
+					.onClick(() => {
+						new GuidanceEditorOverlay(this.plugin, this.modalEl, assistant.filePath, "").open();
 					});
 			});
 
@@ -1708,11 +1674,6 @@ export class LLMSettingsModal extends Modal {
 					.setTooltip("Delete assistant")
 					.setWarning()
 					.onClick(async () => {
-						// If deleting the active assistant, clear active
-						if (this.plugin.settings.assistantSettings?.activeAssistantId === assistant.id) {
-							this.plugin.settings.assistantSettings.activeAssistantId = null;
-							await this.plugin.saveSettings();
-						}
 						await this.plugin.assistantManager.deleteAssistant(assistant.id);
 						new Notice(`Assistant "${assistant.name}" deleted.`);
 						this.renderTab("assistants");

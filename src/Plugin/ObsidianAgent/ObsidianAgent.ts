@@ -59,20 +59,15 @@ export class ObsidianAgent {
 		}
 
 		// ── Write-tool guidance ───────────────────────────────────────────────
-		// Encourage reading before writing and proactive offering of write outputs,
-		// but do NOT use prohibitive "NEVER" language — that causes the model to
-		// refuse write tools even when the user explicitly requests a write action.
-		// The Permission Mode setting already gates writes behind user approval.
+		// Keep this short and imperative. Small models ignore nuanced prose and
+		// stall after reading instead of proceeding to write. Two simple rules:
+		// 1. User asked to write → do it (read first, then write).
+		// 2. User didn't ask but a note would help → offer first, don't auto-write.
+		// The Permission Mode setting gates writes behind user approval regardless.
 		parts.push(
 			"## Vault Write Tools\n\n" +
-			"When the user asks you to create, update, modify, or append to a note, " +
-			"use the appropriate write tool (`obsidian_create_note`, `obsidian_modify_note`, " +
-			"`obsidian_patch_note`, `obsidian_insert_after_heading`, or `obsidian_update_frontmatter`). " +
-			"Always read the note first before modifying it.\n\n" +
-			"If you think a note would be a useful output after completing a task " +
-			"(e.g. after researching something), offer to create one in your response rather " +
-			"than writing automatically — but when the user has clearly asked for a write action, " +
-			"proceed with the appropriate tool."
+			"If the user asks you to create, add to, or modify a note: read it first if it exists, then make the change immediately using the appropriate tool. Do not stop to summarise or ask for confirmation — complete the action.\n\n" +
+			"If the user did not ask for a write action but you think creating a note would be useful, offer it rather than writing automatically."
 		);
 
 		// ── Agent guidance file ───────────────────────────────────────────────

@@ -67,6 +67,7 @@ import {
 	setHistoryFilePath,
 } from "utils/utils";
 import { AgentLoop, AgentCallbacks } from "services/AgentLoop";
+import { getToolTier, effectivePermissionMode } from "Plugin/ObsidianAgent/ToolSupportTier";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
@@ -1627,8 +1628,14 @@ export class ChatContainer extends Component {
 		allowedTools: string[] = []
 	): Promise<void> {
 		const settingType = getSettingType(this.viewType);
-		const permissionMode =
+		const configuredPermissionMode =
 			this.plugin.settings[settingType].agentSettings?.permissionMode ?? "ask";
+
+		// Tier 2 models (unknown/unreliable local models) must never auto-approve
+		// write tools — downgrade "auto-approve" to "ask" so vault writes always
+		// surface a confirmation dialog.
+		const modelTier = getToolTier(modelType, model);
+		const permissionMode = effectivePermissionMode(configuredPermissionMode, modelTier) as import("Types/types").PermissionMode;
 
 		// Capture the current assistant-message count to use as the turn index.
 		// Tool calls accumulated this turn will be associated with this index.

@@ -103,6 +103,21 @@ export class ObsidianAgent {
 			);
 		}
 
+		// ── Write-tool constraints ────────────────────────────────────────────
+		// Explicitly prevent the model from writing to the vault unless asked.
+		// This guards against smaller/ReAct-fallback models that over-execute
+		// and autonomously create notes when only asked to read or search.
+		parts.push(
+			"## Important: Do Not Write Without Being Asked\n\n" +
+			"You must NEVER call `obsidian_create_note`, `obsidian_modify_note`, " +
+			"`obsidian_append_note`, `obsidian_patch_note`, `obsidian_insert_after_heading`, " +
+			"or `obsidian_update_frontmatter` unless the user has explicitly asked you to " +
+			"save, create, write, update, or modify a note.\n\n" +
+			"If you think a note would be a useful output after completing a task " +
+			"(e.g. after researching something), offer to create one in your response — " +
+			"but do not call any write tool automatically. Always ask first."
+		);
+
 		// ── Agent guidance file ───────────────────────────────────────────────
 		// Read the vault-native guidance file if one is configured.
 		const guidancePath = settings.agentGuidanceFile?.trim();

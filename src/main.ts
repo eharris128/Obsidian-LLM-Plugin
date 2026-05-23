@@ -1283,6 +1283,26 @@ export default class LLMPlugin extends Plugin {
 				},
 			};
 
+			// Migrate old skillsSettings.folder → rootVaultFolder.
+			// The old system stored the skills folder path directly (e.g. "LLM-Skills" or "AI/Skills").
+			// The new system derives it from rootVaultFolder as "<root>/Skills".
+			const oldSkillsFolder: string | undefined = (dataJSON.skillsSettings as any)?.folder;
+			if (oldSkillsFolder && !this.settings.rootVaultFolder) {
+				if (oldSkillsFolder.endsWith("/Skills")) {
+					// e.g. "AI/Skills" → rootVaultFolder = "AI"
+					this.settings.rootVaultFolder = oldSkillsFolder.slice(0, -"/Skills".length);
+					await this.saveSettings();
+				} else {
+					// e.g. old default "LLM-Skills" — can't infer root safely; warn the user.
+					new Notice(
+						`⚠️ Skills location has changed. Your skills were in '${oldSkillsFolder}/'. ` +
+						`Please move them into '[Root vault folder]/Skills/' and set 'Root vault folder' ` +
+						`in Settings → Large Language Models → General.`,
+						0 // stay until dismissed
+					);
+				}
+			}
+
 			// Deep-merge memorySettings so new fields get defaults if missing from saved data
 			this.settings.memorySettings = {
 				...DEFAULT_SETTINGS.memorySettings,

@@ -959,6 +959,13 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	onunload() {
+		// Cancel any pending RAG debounce timers so they don't fire after the
+		// plugin is torn down and try to write to a null vaultIndexer.
+		for (const timer of this.ragDebounceTimers.values()) {
+			activeWindow.clearTimeout(timer);
+		}
+		this.ragDebounceTimers.clear();
+
 		this.fab.removeFab();
 		this.statusBarButton.remove();
 		this.recentChatsButton.remove();

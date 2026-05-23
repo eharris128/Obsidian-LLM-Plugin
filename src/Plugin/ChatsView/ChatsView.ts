@@ -1,6 +1,7 @@
 import {
 	ExtraButtonComponent,
 	ItemView,
+	Menu,
 	SearchComponent,
 	TFile,
 	WorkspaceLeaf,
@@ -23,14 +24,16 @@ export { CHATS_VIEW_TYPE };
  *  - ExtraButtonComponent for icon-only buttons
  *  - tree-item / tree-item-self / tree-item-inner for list rows (file-explorer pattern)
  *  - tree-item-flair for the right-side date stamp
- *  - .tag for project / agent badges
  *  - pane-empty for the empty state
+ *  - Menu for the filter dropdown (native Obsidian context menu)
  */
 export class ChatsView extends ItemView {
 	plugin: LLMPlugin;
 	private listEl: HTMLElement | null = null;
 	private searchComponent: SearchComponent | null = null;
+	private filterBtn: ExtraButtonComponent | null = null;
 	private allFiles: TFile[] = [];
+	private activeFilter: { type: "project" | "model"; value: string } | null = null;
 
 	constructor(leaf: WorkspaceLeaf, plugin: LLMPlugin) {
 		super(leaf);
@@ -55,6 +58,13 @@ export class ChatsView extends ItemView {
 		newChatBtn.setTooltip("New chat");
 		newChatBtn.extraSettingsEl.addClass("nav-action-button");
 		newChatBtn.onClick(() => void this.plugin.activateTab());
+
+		// Filter button — opens a Menu with dynamic project/model options
+		this.filterBtn = new ExtraButtonComponent(navBtns);
+		this.filterBtn.setIcon("sliders-horizontal");
+		this.filterBtn.setTooltip("Filter chats");
+		this.filterBtn.extraSettingsEl.addClass("nav-action-button");
+		this.filterBtn.extraSettingsEl.addEventListener("click", (evt) => this.openFilterMenu(evt));
 
 		// ── Search ─────────────────────────────────────────────────────────────
 		// SearchComponent renders Obsidian's native search-input-container with
@@ -111,16 +121,109 @@ export class ChatsView extends ItemView {
 		this.applyFilter();
 	}
 
-	/** Filter by current search query and re-render. */
+	/** Opens the native Obsidian Menu with dynamic filter options. */
+	private openFilterMenu(evt: MouseEvent) {
+		const menu = new Menu();
+
+		// "All chats" — clears the active filter
+		menu.addItem((item) => {
+			item.setTitle("All chats");
+			item.setIcon("messages-square");
+			item.setChecked(this.activeFilter === null);
+			item.onClick(() => {
+				this.activeFilter = null;
+				this.updateFilterBtnState();
+				this.applyFilter();
+			});
+		});
+
+		// Collect unique projects from loaded files
+		const projects = [...new Set(
+			this.allFiles.map((f) => this.getProject(f)).filter((p): p is string => p !== null)
+		)].sort();
+
+		if (projects.length > 0) {
+			menu.addSeparator();
+			menu.addItem((item) => {
+				item.setTitle("Filter by project").setDisabled(true);
+			});
+			for (const project of projects) {
+				menu.addItem((item) => {
+					item.setTitle(project);
+					item.setIcon("folder");
+					item.setChecked(this.activeFilter?.type === "project" && this.activeFilter.value === project);
+					item.onClick(() => {
+						this.activeFilter = { type: "project", value: project };
+						this.updateFilterBtnState();
+						this.applyFilter();
+					});
+				});
+			}
+		}
+
+		// Collect unique models from loaded files
+		const models = [...new Set(
+			this.allFiles.map((f) => this.getModel(f)).filter((m): m is string => m !== null)
+		)].sort();
+
+		if (models.length > 0) {
+			menu.addSeparator();
+			menu.addItem((item) => {
+				item.setTitle("Filter by model").setDisabled(true);
+			});
+			for (const model of models) {
+				menu.addItem((item) => {
+					item.setTitle(model);
+					item.setIcon("cpu");
+					item.setChecked(this.activeFilter?.type === "model" && this.activeFilter.value === model);
+					item.onClick(() => {
+						this.activeFilter = { type: "model", value: model };
+						this.updateFilterBtnState();
+						this.applyFilter();
+					});
+				});
+			}
+		}
+
+		menu.showAtMouseEvent(evt);
+	}
+
+	/** Sync the filter button's active state indicator. */
+	private updateFilterBtnState() {
+		if (!this.filterBtn) return;
+		if (this.activeFilter) {
+			this.filterBtn.extraSettingsEl.addClass("is-active");
+		} else {
+			this.filterBtn.extraSettingsEl.removeClass("is-active");
+		}
+	}
+
+	/** Filter by current search query + active filter, then re-render. */
 	private applyFilter() {
 		if (!this.listEl) return;
 		const query = (this.searchComponent?.getValue() ?? "").toLowerCase().trim();
-		const filtered = query
-			? this.allFiles.filter((f) =>
+
+		let filtered = this.allFiles;
+
+		// Apply active filter
+		if (this.activeFilter) {
+			const { type, value } = this.activeFilter;
+			if (type === "project") {
+				filtered = filtered.filter((f) => this.getProject(f) === value);
+			} else if (type === "model") {
+				filtered = filtered.filter((f) => this.getModel(f) === value);
+			}
+		}
+
+		// Apply search query
+		if (query) {
+			filtered = filtered.filter(
+				(f) =>
 					this.getTitle(f).toLowerCase().includes(query) ||
 					(this.getProject(f) ?? "").toLowerCase().includes(query)
-			  )
-			: this.allFiles;
+			);
+		}
+
 		this.renderList(filtered);
 	}
 
@@ -135,6 +238,10 @@ export class ChatsView extends ItemView {
 
 	private getProject(file: TFile): string | null {
 		return (this.app.metadataCache.getFileCache(file)?.frontmatter?.project as string) ?? null;
+	}
+
+	private getModel(file: TFile): string | null {
+		return (this.app.metadataCache.getFileCache(file)?.frontmatter?.model as string) ?? null;
 	}
 
 	private isAgent(file: TFile): boolean {
@@ -164,17 +271,16 @@ export class ChatsView extends ItemView {
 			// pane-empty is Obsidian's native empty-state class (used by file explorer, etc.)
 			this.listEl.createDiv({
 				cls: "pane-empty",
-				text: this.searchComponent?.getValue()?.trim()
-					? "No chats match your search."
+				text: this.activeFilter || this.searchComponent?.getValue()?.trim()
+					? "No chats match your filter."
 					: "No conversations yet.\nStart chatting to see them here.",
 			});
 			return;
 		}
 
 		for (const file of files) {
-			const title   = this.getTitle(file);
-			const project = this.getProject(file);
-			const agent   = this.isAgent(file);
+			const title = this.getTitle(file);
+			const agent = this.isAgent(file);
 
 			// Outer wrapper — tree-item nav-file mirrors the file-explorer row structure.
 			const item = this.listEl.createDiv({ cls: "tree-item nav-file" });
@@ -183,24 +289,13 @@ export class ChatsView extends ItemView {
 			const itemSelf = item.createDiv({ cls: "tree-item-self nav-file-title is-clickable" });
 			itemSelf.setAttr("tabindex", "0");
 
-			// Left icon (chat bubble or agent routing icon)
+			// Left icon (chat bubble or agent task-list icon)
 			const iconEl = itemSelf.createDiv({ cls: "tree-item-icon llm-chats-row-icon" });
-			setIcon(iconEl, agent ? "waypoints" : "message-square");
+			setIcon(iconEl, agent ? "list-todo" : "message-square");
 
-			// Centre: title + optional badge row
+			// Centre: title only (badges removed)
 			const inner = itemSelf.createDiv({ cls: "tree-item-inner" });
 			inner.createDiv({ cls: "tree-item-inner-text", text: title });
-
-			if (project || agent) {
-				const meta = inner.createDiv({ cls: "llm-chats-meta" });
-				if (project) {
-					// .tag is Obsidian's native pill class (used in tag pane, properties, etc.)
-					meta.createSpan({ cls: "tag llm-chats-tag-project", text: project });
-				}
-				if (agent) {
-					meta.createSpan({ cls: "tag llm-chats-tag-agent", text: "Agent" });
-				}
-			}
 
 			// Right flair: date stamp + three-dot context-menu button.
 			// The button is hidden by default and shown on row-hover via CSS.
@@ -221,6 +316,8 @@ export class ChatsView extends ItemView {
 	async onClose() {
 		this.listEl = null;
 		this.searchComponent = null;
+		this.filterBtn = null;
 		this.allFiles = [];
+		this.activeFilter = null;
 	}
 }

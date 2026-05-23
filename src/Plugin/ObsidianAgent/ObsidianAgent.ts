@@ -28,20 +28,16 @@ export class ObsidianAgent {
 	 */
 	async buildSystemPrompt(): Promise<string> {
 		const settings = this.plugin.settings.obsidianAgentSettings;
-		const skills = this.plugin.skillRegistry?.getSkills() ?? [];
 		const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
-		const projects = this.plugin.projectManager?.getProjects() ?? [];
 
 		// Respect per-item availability (missing key = available by default)
-		const availableSkills = skills.filter(
-			(s) => settings.availableSkills[s.id] !== false
-		);
 		const availableAssistants = assistants.filter(
 			(a) => settings.availableAssistants[a.id] !== false
 		);
 
 		const parts: string[] = [];
 
+		// ── Identity ──────────────────────────────────────────────────────────
 		parts.push(
 			"You are the Obsidian Agent — an intelligent, always-available assistant " +
 			"with full access to the user's Obsidian vault. " +
@@ -51,55 +47,14 @@ export class ObsidianAgent {
 			"Use available tools to ground every response in real data."
 		);
 
-		// ── Available Skills ──────────────────────────────────────────────────
-		if (availableSkills.length > 0) {
-			const lines = availableSkills
-				.map((s) => `- **${s.name}** (\`/${s.id}\`)${s.description ? ": " + s.description : ""}`)
-				.join("\n");
-			parts.push(`## Available Skills\n\n${lines}`);
-		}
-
-		// ── Available Assistants ──────────────────────────────────────────────
+		// ── Available Assistants (one-liner) ──────────────────────────────────
+		// Full names, IDs, and descriptions are already in the invoke_assistant
+		// tool definition — no need to repeat them here. A brief routing cue is
+		// enough to remind the model the mechanism exists.
 		if (availableAssistants.length > 0) {
-			const lines = availableAssistants
-				.map(
-					(a) =>
-						`- **${a.name}** (id: \`${a.id}\`)${a.description ? ": " + a.description : ""}`
-				)
-				.join("\n");
 			parts.push(
-				`## Available Assistants\n\n` +
-				`You can delegate sub-tasks to specialised assistants using the ` +
-				`\`invoke_assistant\` tool. Each assistant has its own persona and expertise:\n\n` +
-				`${lines}\n\n` +
-				`Call \`invoke_assistant\` when a request clearly aligns with an assistant's ` +
-				`domain. You will receive the assistant's persona instructions and should ` +
-				`continue the response from that perspective.`
-			);
-		}
-
-		// ── Projects in the vault ─────────────────────────────────────────────
-		if (projects.length > 0) {
-			const lines = projects
-				.map((p) => `- **${p.name}**${p.description ? ": " + p.description : ""}`)
-				.join("\n");
-			parts.push(`## Projects in the Vault\n\n${lines}`);
-		}
-
-		// ── Chat history ──────────────────────────────────────────────────────
-		if (this.plugin.settings.chatHistoryEnabled) {
-			const chatFolder = this.plugin.chatHistory.folder;
-			const projectsFolder = this.plugin.projectsFolder;
-			parts.push(
-				`## Chat History\n\n` +
-				`Saved conversations are stored as markdown files in the vault. ` +
-				`Use the \`get_chat_history\` tool to access them:\n\n` +
-				`- **Default chat folder**: \`${chatFolder}/\`\n` +
-				`- **Project chats**: \`${projectsFolder}/<project-id>/chats/\`\n\n` +
-				`Call \`get_chat_history\` with action \`list\` to browse recent chats ` +
-				`(filterable by project or agent flag), or action \`load\` with a file path ` +
-				`to read the full conversation. You can also use \`grep_vault\` to search ` +
-				`across all chat content by keyword.`
+				"Use the `invoke_assistant` tool to delegate tasks to a specialised assistant. " +
+				"Each assistant's name, id, and description are listed in the tool definition."
 			);
 		}
 
@@ -156,62 +111,124 @@ export class ObsidianAgent {
 		const availableAssistants = assistants.filter(
 			(a) => settings.availableAssistants[a.id] !== false
 		);
+		const availableSkills = (this.plugin.skillRegistry?.getSkills() ?? []).filter(
+			(s) => settings.availableSkills[s.id] !== false
+		);
 
+		// ── list_skills ───────────────────────────────────────────────────────
+		// Always registered so the model can discover skills on demand, even
+		// when no assistants are configured.
+		registry.registerDynamicTool(
+			{
+				name: "list_skills",
+				displayName: "List Skills",
+				description:
+					"Return the list of vault skills the user can invoke via /skill-name. " +
+					"Call this when the user asks what skills are available, or when you think " +
+					"a skill might be useful for their request and want to suggest one.",
+				parameters: { type: "object", properties: {}, required: [] },
+				risk: "safe",
+			},
+			async () => {
+				if (availableSkills.length === 0) {
+					return { success: true, result: "No skills are currently available in this vault." };
+				}
+				const lines = availableSkills.map((s) => {
+					const hint = s.argumentHint ? ` ${s.argumentHint}` : "";
+					const desc = s.description ? `: ${s.description}` : "";
+					return `- **${s.name}** (\`/${s.id}${hint}\`)${desc}`;
+				});
+				return { success: true, result: `## Available Skills\n\n${lines.join("\n")}` };
+			}
+		);
+
+		// ── list_projects ─────────────────────────────────────────────────────
+		registry.registerDynamicTool(
+			{
+				name: "list_projects",
+				displayName: "List Projects",
+				description:
+					"Return all projects in the vault with their names, ids, and descriptions. " +
+					"Call this when the user asks about their projects or wants to know what " +
+					"projects exist before switching context or asking project-specific questions.",
+				parameters: { type: "object", properties: {}, required: [] },
+				risk: "safe",
+			},
+			async () => {
+				const projects = this.plugin.projectManager?.getProjects() ?? [];
+				if (projects.length === 0) {
+					return { success: true, result: "No projects found in the vault." };
+				}
+				const lines = projects.map((p) => {
+					const desc = p.description ? `: ${p.description}` : "";
+					const pinned = p.pinnedNotes.length > 0
+						? ` (${p.pinnedNotes.length} pinned note${p.pinnedNotes.length > 1 ? "s" : ""})`
+						: "";
+					return `- **${p.name}** (id: \`${p.id}\`)${desc}${pinned}`;
+				});
+				return { success: true, result: `## Projects in the Vault\n\n${lines.join("\n")}` };
+			}
+		);
+
+		// ── invoke_assistant ──────────────────────────────────────────────────
+		// Only registered when assistants are available — avoids presenting a
+		// tool the model can never usefully call.
 		if (availableAssistants.length === 0) return;
 
 		const assistantIdList = availableAssistants.map((a) => a.id).join(", ");
-		const def: NeutralToolDefinition = {
-			name: "invoke_assistant",
-			displayName: "Invoke Assistant",
-			description:
-				`Activate a specialised assistant's persona and instructions for a sub-task. ` +
-				`Available assistant ids: ${assistantIdList}. ` +
-				`Use this when the task clearly aligns with an assistant's domain of expertise.`,
-			parameters: {
-				type: "object",
-				properties: {
-					assistant_id: {
-						type: "string",
-						description:
-							`The id of the assistant to invoke (one of: ${assistantIdList}).`,
+		const assistantRoster = availableAssistants
+			.map((a) => `- ${a.id} (${a.name})${a.description ? ": " + a.description : ""}`)
+			.join("\n");
+
+		registry.registerDynamicTool(
+			{
+				name: "invoke_assistant",
+				displayName: "Invoke Assistant",
+				description:
+					`Activate a specialised assistant's persona and instructions for a sub-task. ` +
+					`Use this when a request clearly aligns with an assistant's domain of expertise.\n\n` +
+					`Available assistants:\n${assistantRoster}`,
+				parameters: {
+					type: "object",
+					properties: {
+						assistant_id: {
+							type: "string",
+							description: `The id of the assistant to invoke (one of: ${assistantIdList}).`,
+						},
+						task: {
+							type: "string",
+							description: "A clear description of the task for the assistant to handle.",
+						},
 					},
-					task: {
-						type: "string",
-						description:
-							"A clear description of the task for the assistant to handle.",
-					},
+					required: ["assistant_id", "task"],
 				},
-				required: ["assistant_id", "task"],
+				risk: "safe",
 			},
-			risk: "safe",
-		};
+			async (input: { assistant_id: string; task: string }) => {
+				const assistantObj = this.plugin.assistantManager?.getAssistant(input.assistant_id);
+				if (!assistantObj) {
+					return {
+						success: false,
+						error: `Assistant "${input.assistant_id}" not found. Available: ${assistantIdList}`,
+					};
+				}
 
-		registry.registerDynamicTool(def, async (input: { assistant_id: string; task: string }) => {
-			const assistantObj = this.plugin.assistantManager?.getAssistant(input.assistant_id);
-			if (!assistantObj) {
-				return {
-					success: false,
-					error: `Assistant "${input.assistant_id}" not found. Available: ${assistantIdList}`,
-				};
-			}
+				const contextLines: string[] = [
+					`You are now operating as "${assistantObj.name}".`,
+				];
+				if (assistantObj.description) {
+					contextLines.push(`Role: ${assistantObj.description}`);
+				}
+				if (assistantObj.systemPrompt?.trim()) {
+					contextLines.push(
+						`\nApply the following persona instructions:\n\n${assistantObj.systemPrompt.trim()}`
+					);
+				}
+				contextLines.push(`\nTask to handle: ${input.task}`);
 
-			// Return the assistant's context to the main agent loop.
-			// The model will read this and continue the response from the assistant's perspective.
-			const contextLines: string[] = [
-				`You are now operating as "${assistantObj.name}".`,
-			];
-			if (assistantObj.description) {
-				contextLines.push(`Role: ${assistantObj.description}`);
+				return { success: true, result: contextLines.join("\n") };
 			}
-			if (assistantObj.systemPrompt?.trim()) {
-				contextLines.push(
-					`\nApply the following persona instructions:\n\n${assistantObj.systemPrompt.trim()}`
-				);
-			}
-			contextLines.push(`\nTask to handle: ${input.task}`);
-
-			return { success: true, result: contextLines.join("\n") };
-		});
+		);
 	}
 
 	// ─── Helpers ──────────────────────────────────────────────────────────────

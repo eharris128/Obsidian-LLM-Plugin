@@ -60,6 +60,18 @@ export class ObsidianAgent {
 			);
 		}
 
+		// ── Search strategy guidance ──────────────────────────────────────────
+		// Small models often reach for semantic search first, even for queries that
+		// are better served by exact-match grep. Give an explicit preference order
+		// and remind the model that grep supports regex (singular/plural variants).
+		parts.push(
+			"## Vault Search Strategy\n\n" +
+			"For any vault search, run BOTH tools and merge the results:\n" +
+			"1. `grep_vault` — for exact/near-exact matches. The pattern is a regex, so handle singular/plural and common variants in one call: e.g. to find 'empty state' or 'empty states' use pattern `empty states?`; for 'deadline' or 'deadlines' use `deadlines?`. Always make the trailing s optional with `s?`.\n" +
+			"2. `search_vault_semantic` — for conceptual/thematic matches that may not use the exact words.\n\n" +
+			"Combine the unique files from both results before responding. Never rely on only one tool — grep misses paraphrases, semantic search misses exact terms and can return literally-empty files when the query contains words like 'empty'."
+		);
+
 		// ── Write-tool guidance ───────────────────────────────────────────────
 		// Keep this short and imperative. Small models ignore nuanced prose and
 		// stall after reading instead of proceeding to write. Two simple rules:

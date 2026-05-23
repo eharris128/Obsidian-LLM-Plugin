@@ -28,6 +28,18 @@ export class ChatsSidebar extends Component {
 	private searchComponent: SearchComponent | null = null;
 	private allFiles: TFile[] = [];
 
+	/**
+	 * Optional callback for when the user clicks a chat row.
+	 *
+	 * When set (by the parent WidgetView), clicking a chat loads it directly
+	 * into that widget's ChatContainer rather than going through the plugin's
+	 * openChatFileInWidget() router — which is important when multiple widget
+	 * tabs are open and the user wants to load into a specific one.
+	 *
+	 * If not set, falls back to plugin.openChatFileInWidget().
+	 */
+	onOpenFile?: (path: string) => Promise<void>;
+
 	constructor(plugin: LLMPlugin) {
 		super();
 		this.plugin = plugin;
@@ -225,7 +237,11 @@ export class ChatsSidebar extends Component {
 			attachChatRowMenu(itemSelf, flairOuter, file, this.plugin, () => void this.refresh());
 
 			itemSelf.addEventListener("click", () => {
-				void this.plugin.openChatFileInWidget(file.path);
+				if (this.onOpenFile) {
+					void this.onOpenFile(file.path);
+				} else {
+					void this.plugin.openChatFileInWidget(file.path);
+				}
 			});
 		}
 	}

@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Multiple Chat Widget Tabs
+
+Multiple `WidgetView` instances can be open simultaneously (one per Obsidian tab/leaf). Each instance owns its own `ChatContainer` with a fully independent `MessageStore`, conversation history, and chat file path, so conversations are completely isolated.
+
+**"New chat widget" command** (`new-chat-widget`) always creates a fresh tab — use this to open additional widgets. The existing "Open chat in tab" command (`open-LLM-widget-tab`) and the ribbon icon still use the focus-or-open-one-tab pattern.
+
+**Focus tracking:** `LLMPlugin.lastFocusedWidgetLeaf: WorkspaceLeaf | null` is updated whenever a widget leaf becomes the active leaf (via `active-leaf-change`). `openChatFileInWidget()`, `activateTab()`, and related routing functions prefer this leaf so "open chat file" actions land in the widget the user was just using, not always in the first widget.
+
+**Inline chats sidebar routing:** `ChatsSidebar` has an optional `onOpenFile?: (path: string) => Promise<void>` callback. `WidgetView.onOpen()` sets it to `this.loadChatFile` so clicking a row in the sidebar loads the chat into *that* widget rather than going through the plugin router. The standalone `ChatsView` (right-sidebar panel) still calls `plugin.openChatFileInWidget()` which uses the focus-based routing.
+
+**Known limitation:** All widget tabs share `plugin.settings.widgetSettings` as their settings object. Model selection changes in one tab are reflected in `widgetSettings` but don't push reactively to other tabs' dropdowns. For v2, give each `WidgetView` its own `ViewSettings` clone (see notes below in Known Pitfalls).
+
+---
+
 ## Stop Button / Generation Abort
 
 `ChatContainer` has a `private _abortController: AbortController | null` instance variable. It is non-null while a generation is in-flight.

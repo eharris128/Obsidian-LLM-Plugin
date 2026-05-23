@@ -199,6 +199,7 @@ export const ALL_TOOL_DEFINITIONS: NeutralToolDefinition[] = [
 			properties: {
 				pattern: { type: "string", description: "Text or regular expression to search for across all notes. Examples: 'https?://' to find external links, 'TODO' to find todos, '\\[\\[' to find internal links." },
 				folder: { type: "string", description: "Optional vault-root folder path to restrict the search (e.g. 'Projects'). Leave empty to search all notes." },
+				exclude_folder: { type: "string", description: "Optional vault-root folder path to exclude from the search (e.g. 'AI/Chats' to skip chat logs). Useful when searching for documentation rather than conversation history." },
 				context_lines: { type: "string", description: "Number of surrounding lines to include with each match for context (0–5, default 1)." },
 				max_results: { type: "string", description: "Maximum number of matching lines to return (1–200, default 50)." },
 			},
@@ -453,9 +454,10 @@ export class ObsidianToolRegistry {
 					const {
 						pattern,
 						folder,
+						exclude_folder,
 						context_lines: ctxArg,
 						max_results: maxArg,
-					} = input as { pattern: string; folder?: string; context_lines?: string; max_results?: string };
+					} = input as { pattern: string; folder?: string; exclude_folder?: string; context_lines?: string; max_results?: string };
 
 					const ctxLines = Math.min(5, Math.max(0, parseInt(ctxArg ?? "1", 10) || 1));
 					const maxResults = Math.min(200, Math.max(1, parseInt(maxArg ?? "50", 10) || 50));
@@ -467,9 +469,14 @@ export class ObsidianToolRegistry {
 						return { success: false, error: `Invalid regex pattern: ${pattern}` };
 					}
 
+					const excludePrefix = exclude_folder
+						? (exclude_folder.endsWith("/") ? exclude_folder : exclude_folder + "/")
+						: null;
+
 					const files = this.app.vault
 						.getMarkdownFiles()
-						.filter(f => !folder || f.path.startsWith(folder.endsWith("/") ? folder : folder + "/"));
+						.filter(f => !folder || f.path.startsWith(folder.endsWith("/") ? folder : folder + "/"))
+						.filter(f => !excludePrefix || !f.path.startsWith(excludePrefix));
 
 					const matches: string[] = [];
 

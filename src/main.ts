@@ -309,6 +309,12 @@ export default class LLMPlugin extends Plugin {
 	sidecarManager: SidecarManager = new SidecarManager(this);
 	/** SearXNG web search service — null if searxngSettings.enabled is false. */
 	searxngService: SearxngService | null = null;
+	/**
+	 * The most recently focused widget leaf. Updated by the active-leaf-change event.
+	 * Used to route "open chat file" and similar actions to the correct widget when
+	 * multiple chat widget tabs are open simultaneously.
+	 */
+	lastFocusedWidgetLeaf: WorkspaceLeaf | null = null;
 
 	async onload() {
 		// Register custom icons that aren't in the Obsidian-bundled version of Lucide.
@@ -373,6 +379,17 @@ export default class LLMPlugin extends Plugin {
 		this.registerView(TAB_VIEW_TYPE, (tab) => new WidgetView(tab, this));
 		this.registerView(CHATS_VIEW_TYPE, (leaf) => new ChatsView(leaf, this));
 		this.registerView(CHAT_DETAILS_VIEW_TYPE, (leaf) => new ChatDetailsView(leaf, this));
+
+		// Track which widget leaf the user most recently focused so that file-open
+		// actions (from ChatsView, ChatsSidebar, file view-action buttons, etc.) are
+		// routed to the correct widget when multiple widget tabs are open.
+		this.registerEvent(
+			this.app.workspace.on("active-leaf-change", (leaf) => {
+				if (leaf && leaf.view instanceof WidgetView) {
+					this.lastFocusedWidgetLeaf = leaf;
+				}
+			})
+		);
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.fab = new FAB(this);
@@ -448,7 +465,15 @@ export default class LLMPlugin extends Plugin {
 				const btn: HTMLElement = view.addAction(
 					"bot-message-square",
 					"Open in chat widget",
-					async () => { await this.openChatFileInWidget(path); }
+					async () => {
+						// Transform THIS leaf in-place into a chat widget.
+						// The user clicked the button in a specific tab — the natural expectation
+						// is that THAT tab becomes the chat widget, not some other open tab.
+						await leaf.setViewState({ type: TAB_VIEW_TYPE, active: true });
+						this.app.workspace.revealLeaf(leaf);
+						// leaf.view is now a WidgetView; load the chat file directly.
+						await (leaf.view as WidgetView).loadChatFile(path);
+					}
 				);
 				btn.addClass("llm-open-in-widget-action");
 				leafButtons.set(leaf, { el: btn, path });
@@ -501,12 +526,23 @@ export default class LLMPlugin extends Plugin {
 		const tabs = workspace.getLeavesOfType(TAB_VIEW_TYPE);
 
 		if (tabs.length > 0) {
-			// Widget already open — load directly
-			const leaf = tabs[0];
+			// Route to the best available widget:
+			// 1. Last focused widget leaf (preferred — user's most recent context)
+			// 2. Currently active leaf if it's a widget
+			// 3. First widget leaf (fallback)
+			let leaf: WorkspaceLeaf;
+			if (this.lastFocusedWidgetLeaf && tabs.includes(this.lastFocusedWidgetLeaf)) {
+				leaf = this.lastFocusedWidgetLeaf;
+			} else {
+				const activeLeaf = workspace.activeLeaf;
+				leaf = (activeLeaf && activeLeaf.view instanceof WidgetView && tabs.includes(activeLeaf))
+					? activeLeaf
+					: tabs[0];
+			}
 			workspace.revealLeaf(leaf);
 			await (leaf.view as WidgetView).loadChatFile(filePath);
 		} else {
-			// Widget not open — set pending path and open a new tab; onOpen() will load it
+			// No widget open — set pending path and open a new tab; onOpen() will load it
 			this.pendingWidgetFilePath = filePath;
 			const leaf = workspace.getLeaf("tab");
 			await leaf.setViewState({ type: TAB_VIEW_TYPE, active: true });
@@ -937,6 +973,16 @@ export default class LLMPlugin extends Plugin {
 		});
 
 		this.addCommand({
+			id: "new-chat-widget",
+			name: "New chat widget",
+			callback: async () => {
+				const leaf = this.app.workspace.getLeaf("tab");
+				await leaf.setViewState({ type: TAB_VIEW_TYPE, active: true });
+				this.app.workspace.revealLeaf(leaf);
+			},
+		});
+
+		this.addCommand({
 			id: "toggle-LLM-fab",
 			name: "Toggle FAB",
 			callback: () => {
@@ -1108,7 +1154,10 @@ export default class LLMPlugin extends Plugin {
 		const tabs = workspace.getLeavesOfType(TAB_VIEW_TYPE);
 
 		if (tabs.length > 0) {
-			tab = tabs[0];
+			// Prefer the last focused widget leaf; fall back to the first available.
+			tab = (this.lastFocusedWidgetLeaf && tabs.includes(this.lastFocusedWidgetLeaf))
+				? this.lastFocusedWidgetLeaf
+				: tabs[0];
 			// View already exists — load conversation directly if one is pending.
 			if (pendingFilePath) {
 				this.pendingWidgetFilePath = null;

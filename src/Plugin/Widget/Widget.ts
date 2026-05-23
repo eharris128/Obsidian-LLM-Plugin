@@ -202,8 +202,15 @@ export class WidgetView extends ItemView {
 		header.detailsSidebarEl = this.detailsSidebarEl;
 		chatContainer.detailsSidebarEl = this.detailsSidebarEl;
 
-		// Populate the inline chats sidebar
+		// Populate the inline chats sidebar.
+		// Wire onOpenFile so that clicking a chat row loads it directly into THIS
+		// widget's ChatContainer rather than routing through the plugin's
+		// openChatFileInWidget() (which would pick the wrong widget when multiple
+		// widget tabs are open simultaneously).
 		this.chatsSidebar = new ChatsSidebar(this.plugin);
+		this.chatsSidebar.onOpenFile = async (path: string) => {
+			await this.loadChatFile(path);
+		};
 		this.chatsSidebar.render(this.chatsSidebarEl);
 
 		// All content panels live inside mainDiv

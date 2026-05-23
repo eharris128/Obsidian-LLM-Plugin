@@ -62,14 +62,25 @@ export class ObsidianAgent {
 
 		// ── Search strategy guidance ──────────────────────────────────────────
 		// Small models often reach for semantic search first, even for queries that
-		// are better served by exact-match grep. Give an explicit preference order
-		// and remind the model that grep supports regex (singular/plural variants).
+		// are better served by exact-match grep. Give an explicit preference order,
+		// remind the model that grep supports regex (singular/plural variants), and
+		// inject the actual chat folder path so the model can exclude it when needed.
+		const chatFolder = this.plugin.chatHistory?.folder ?? "AI/Chats";
+		const projectsFolder = this.plugin.projectsFolder;
 		parts.push(
 			"## Vault Search Strategy\n\n" +
-			"For any vault search, run BOTH tools and merge the results:\n" +
-			"1. `grep_vault` — for exact/near-exact matches. The pattern is a regex, so handle singular/plural and common variants in one call: e.g. to find 'empty state' or 'empty states' use pattern `empty states?`; for 'deadline' or 'deadlines' use `deadlines?`. Always make the trailing s optional with `s?`.\n" +
-			"2. `search_vault_semantic` — for conceptual/thematic matches that may not use the exact words.\n\n" +
-			"Combine the unique files from both results before responding. Never rely on only one tool — grep misses paraphrases, semantic search misses exact terms and can return literally-empty files when the query contains words like 'empty'."
+			`Chat log files (conversation history) live in \`${chatFolder}/\` and \`${projectsFolder}/<id>/chats/\`. ` +
+			"They are raw conversation transcripts, not documentation or notes.\n\n" +
+			"For any vault search, run BOTH tools and combine unique files before responding:\n\n" +
+			"1. **`grep_vault`** — exact/near-exact matches. The pattern is a regex:\n" +
+			"   - Handle singular/plural in one call: `empty states?` matches 'empty state' and 'empty states'.\n" +
+			"   - When the user asks about notes/docs (not chat history), set `exclude_folder` to the chat folder " +
+			`(\`${chatFolder}\`) so conversation logs don't drown out real notes.\n` +
+			"   - When the user explicitly asks about past conversations, search the chat folder instead.\n\n" +
+			"2. **`search_vault_semantic`** — conceptual/thematic matches. Use `limit: '10'` for thorough searches. " +
+			"Semantic search can return false positives when the query contains common words like 'empty' (it may return literally-empty files), " +
+			"so always cross-check with grep results.\n\n" +
+			"Never rely on only one tool — grep misses paraphrases, semantic search misses exact terms."
 		);
 
 		// ── Write-tool guidance ───────────────────────────────────────────────

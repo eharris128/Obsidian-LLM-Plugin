@@ -31,7 +31,8 @@ const context = await esbuild.context({
 		"@lezer/common",
 		"@lezer/highlight",
 		"@lezer/lr",
-		...builtinModules],
+		...builtinModules,
+		...builtinModules.map((m) => `node:${m}`)],
 	format: "cjs",
 	loader: {
 		".svg": "text",

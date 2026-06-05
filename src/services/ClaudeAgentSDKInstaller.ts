@@ -1,6 +1,6 @@
 import { Notice, Platform } from "obsidian";
 
-const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk@0.2.37";
+const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk@0.3.165";
 const INSTALL_TIMEOUT_MS = 120_000;
 
 function resolveNpmPath(): string {

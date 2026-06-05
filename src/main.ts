@@ -53,7 +53,6 @@ import {
 	gemini3ProPreviewModel,
 	geminiFlashLatestModel,
 	geminiFlashLiteLatestModel,
-	openAIModel,
 	openAI,
 	claude,
 	gemini,
@@ -1185,7 +1184,7 @@ export default class LLMPlugin extends Plugin {
 		const pendingIndex = this.pendingWidgetHistoryIndex;
 		const pendingFilePath = this.pendingWidgetFilePath;
 
-		let tab: WorkspaceLeaf | null = null;
+		let tab: WorkspaceLeaf;
 		const tabs = workspace.getLeavesOfType(TAB_VIEW_TYPE);
 
 		if (tabs.length > 0) {
@@ -1290,7 +1289,7 @@ export default class LLMPlugin extends Plugin {
 			// Migrate old skillsSettings.folder → rootVaultFolder.
 			// The old system stored the skills folder path directly (e.g. "LLM-Skills" or "AI/Skills").
 			// The new system derives it from rootVaultFolder as "<root>/Skills".
-			const oldSkillsFolder: string | undefined = (dataJSON.skillsSettings as any)?.folder;
+			const oldSkillsFolder: string | undefined = (dataJSON.skillsSettings)?.folder;
 			if (oldSkillsFolder && !this.settings.rootVaultFolder) {
 				if (oldSkillsFolder.endsWith("/Skills")) {
 					// e.g. "AI/Skills" → rootVaultFolder = "AI"

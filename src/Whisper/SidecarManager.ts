@@ -89,7 +89,7 @@ export class SidecarManager {
 					await this.exec(`python3 -c "import ${pkg}"`);
 					return null as string | null; // ok
 				} catch {
-					return pkg as string | null;
+					return pkg;
 				}
 			}),
 		);
@@ -110,7 +110,7 @@ export class SidecarManager {
 		try {
 			const res = await requestUrl({ url: `${host}/health`, method: "GET", throw: false });
 			if (res.status === 200) {
-				return { running: true, model: (res.json as any)?.model ?? "unknown" };
+				return { running: true, model: (res.json)?.model ?? "unknown" };
 			}
 			return { running: false };
 		} catch {
@@ -215,7 +215,7 @@ export class SidecarManager {
 
 	/** Open python.org download page in the system browser. */
 	openPythonDownloadPage(): void {
-		const { shell } = require("electron") as any;
+		const { shell } = require("electron");
 		shell.openExternal("https://www.python.org/downloads/");
 	}
 

@@ -1,5 +1,5 @@
 import { App, TFile } from "obsidian";
-import { EmbeddingService, OllamaModelNotFoundError } from "./EmbeddingService";
+import { EmbeddingService } from "./EmbeddingService";
 import { VectorStore } from "./VectorStore";
 
 const MAX_CHUNK_CHARS = 1500; // ~375 tokens — safe for all providers

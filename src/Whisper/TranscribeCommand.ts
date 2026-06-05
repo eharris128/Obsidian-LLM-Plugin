@@ -39,8 +39,8 @@ export async function transcribeAudioFile(plugin: LLMPlugin): Promise<void> {
 		// ── Open system file picker ──────────────────────────────────────────
 		// electron is an external module in Obsidian's Electron environment;
 		// we use `any` to avoid requiring @types/electron in the project.
-		// eslint-disable-next-line @typescript-eslint/no-var-requires
-		const { remote } = require("electron") as any;
+		 
+		const { remote } = require("electron");
 
 		const result = await remote.dialog.showOpenDialog({
 			title:           "Select audio file to transcribe",

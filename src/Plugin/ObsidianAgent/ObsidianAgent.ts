@@ -14,7 +14,7 @@
 
 import { Notice, TFile } from "obsidian";
 import LLMPlugin from "main";
-import { ObsidianToolRegistry, NeutralToolDefinition } from "services/ObsidianToolRegistry";
+import { ObsidianToolRegistry } from "services/ObsidianToolRegistry";
 
 export class ObsidianAgent {
 	constructor(private plugin: LLMPlugin) {}
@@ -140,10 +140,6 @@ export class ObsidianAgent {
 		const availableAssistants = assistants.filter(
 			(a) => settings.availableAssistants[a.id] !== false
 		);
-		const availableSkills = (this.plugin.skillRegistry?.getSkills() ?? []).filter(
-			(s) => settings.availableSkills[s.id] !== false
-		);
-
 		// ── list_skills ───────────────────────────────────────────────────────
 		// Always registered so the model can discover skills on demand, even
 		// when no assistants are configured.

@@ -205,10 +205,12 @@ export class WhisperService {
 				throw new Error(
 					"Transcription timed out after 60 s. " +
 					"The server may still be loading the model — try again in a moment.",
+					{ cause: err },
 				);
 			}
 			throw new Error(
 				`Whisper server not reachable. Is whisper-server.py running? (${err?.message ?? err})`,
+				{ cause: err },
 			);
 		} finally {
 			activeWindow.clearTimeout(timeout);
@@ -248,7 +250,7 @@ export class WhisperService {
 					error: `Server responded with status ${response.status}`,
 				};
 			}
-			const json = response.json as any;
+			const json = response.json;
 			return { ok: true, model: json?.model ?? "unknown" };
 		} catch {
 			return {

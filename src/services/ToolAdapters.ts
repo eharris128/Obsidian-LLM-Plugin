@@ -22,7 +22,7 @@ export function toAnthropicTools(tools: NeutralToolDefinition[]): Anthropic.Tool
 	return tools.map((t) => ({
 		name: t.name,
 		description: t.description,
-		input_schema: t.parameters as Anthropic.Tool["input_schema"],
+		input_schema: t.parameters,
 	}));
 }
 

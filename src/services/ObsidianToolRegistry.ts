@@ -2,7 +2,7 @@ import { App, TFile } from "obsidian";
 import { RiskTier } from "Types/types";
 import { VaultIndexer } from "RAG/VaultIndexer";
 import { ChatHistory } from "services/ChatHistory";
-import { SearxngService, SearxngHttpError } from "WebSearch/SearxngService";
+import { SearxngService } from "WebSearch/SearxngService";
 
 export interface NeutralToolDefinition {
 	name: string;

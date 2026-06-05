@@ -1,7 +1,6 @@
 import { ImageSize, ViewType } from "Types/types";
 import LLMPlugin from "main";
 import { DropdownComponent, Setting } from "obsidian";
-import { models } from "utils/models";
 import {
 	getSettingType,
 } from "utils/utils";
@@ -255,7 +254,7 @@ export class SettingsContainer {
 		const contextSettings = viewSettings.contextSettings;
 
 		// Context section header
-		const contextHeader = parentContainer.createEl("h3", {
+		parentContainer.createEl("h3", {
 			text: "Context Settings",
 			cls: "llm-context-section-header",
 		});

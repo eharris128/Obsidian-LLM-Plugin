@@ -865,9 +865,6 @@ export class ChatContainer extends Component {
 			contextSettings.maxContextTokensPercent
 		);
 
-		let vaultContext = null;
-		let contextString: string | null = null;
-
 		// Build context when the global feature flag is on OR when the user has
 		// explicitly added files via the + chip button (explicit intent always wins).
 		const hasExplicitFileContext = (contextSettings.selectedFiles?.length ?? 0) > 0;
@@ -881,12 +878,12 @@ export class ChatContainer extends Component {
 					...contextSettings,
 					includeActiveFile: this.useActiveFileContext,
 				};
-				contextString = await this.contextBuilder.buildFormattedContext(
+				const contextString = await this.contextBuilder.buildFormattedContext(
 					effectiveContextSettings,
 					contextTokenBudget
 				);
 				if (contextString) {
-					vaultContext = await this.contextBuilder.buildContext(effectiveContextSettings);
+					const vaultContext = await this.contextBuilder.buildContext(effectiveContextSettings);
 					// Store for use in historyPush
 					this.currentVaultContext = vaultContext;
 					// Store context string to be injected into API params (not rendered in UI)
@@ -2046,8 +2043,6 @@ export class ChatContainer extends Component {
 	 * are updated; the first save will land in the right folder automatically.
 	 */
 	async setActiveProject(projectId: string | null): Promise<void> {
-		const previousId = this.plugin.settings.projectSettings?.activeProjectId ?? null;
-
 		// Determine target folder and project display name
 		let targetFolder: string;
 		let projectName: string | undefined;
@@ -3577,7 +3572,7 @@ export class ChatContainer extends Component {
 		// No spaces in the character class — prevents "in Foo Bar.md" from being
 		// captured as a single match starting at "in".
 		return text.replace(
-			/(?<![\[(/])(\b[\w][\w./-]*?\.md\b)(?![)\]])/g,
+			/(?<![[(/])(\b[\w][\w./-]*?\.md\b)(?![)\]])/g,
 			"[[$1]]"
 		);
 	}
@@ -4392,7 +4387,7 @@ export class ChatContainer extends Component {
 	 * to run the extraction prompt.
 	 */
 	private buildMemoryCallModel(): ((system: string, user: string) => Promise<string>) | null {
-		const { model, modelType, modelEndpoint } = getViewInfo(this.plugin, this.viewType);
+		const { model, modelType } = getViewInfo(this.plugin, this.viewType);
 
 		if (modelType === claude) {
 			return async (system: string, user: string) => {

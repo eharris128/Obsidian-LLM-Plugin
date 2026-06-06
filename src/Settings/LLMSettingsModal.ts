@@ -1341,12 +1341,10 @@ export class LLMSettingsModal extends Modal {
 			? `Last indexed: ${new Date(rag.lastIndexed).toLocaleString()} · ${rag.indexedFileCount} file(s)`
 			: "Not yet indexed.";
 
-		let indexButton: ButtonComponent;
 		const indexSetting = new Setting(indexItems)
 			.setName("Index vault")
 			.setDesc(lastIndexedText)
 			.addButton((button) => {
-				indexButton = button;
 				button.setButtonText("Index now");
 				button.setCta();
 				button.onClick(async () => {
@@ -1507,8 +1505,6 @@ export class LLMSettingsModal extends Modal {
 	private renderProjects() {
 		const el = this.mainContentEl;
 
-		const projectsFolder = this.plugin.projectsFolder;
-
 		// ── Create new project form ───────────────────────────────────────────
 		const createGroup = this.addSettingGroup(el, "New Project");
 
@@ -1607,8 +1603,6 @@ export class LLMSettingsModal extends Modal {
 
 	private renderAssistants() {
 		const el = this.mainContentEl;
-
-		const assistantsFolder = this.plugin.assistantsFolder;
 
 		// ── Create new assistant form ──────────────────────────────────────────
 		const createGroup = this.addSettingGroup(el, "New Assistant");

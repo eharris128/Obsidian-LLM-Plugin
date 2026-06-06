@@ -256,7 +256,7 @@ export class AgentLoop {
 
 		const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
 			params.messages.map((m) => ({
-				role: m.role as "user" | "assistant" | "system",
+				role: m.role,
 				content: m.content,
 			}));
 

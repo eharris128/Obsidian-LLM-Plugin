@@ -1,13 +1,16 @@
 {
   "compilerOptions": {
-    "baseUrl": "src",
+    "paths": {
+      "*": ["./src/*"]
+    },
     "inlineSourceMap": true,
     "inlineSources": true,
     "module": "ESNext",
     "target": "ES6",
     "allowJs": true,
+    "strict": false,
     "noImplicitAny": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "importHelpers": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
@@ -17,7 +20,8 @@
       "DOM",
       "ES5",
       "ES6",
-      "ES7"
+      "ES7",
+      "ES2022.Error"
     ]
   },
   "include": [

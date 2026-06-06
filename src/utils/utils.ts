@@ -448,11 +448,7 @@ export async function openAIMessage(
 		const image = await openai.images.generate({
 			model,
 			prompt,
-			size: size as
-				| "1024x1024"
-				| "1536x1024"
-				| "1024x1536"
-				| "auto",
+			size: size,
 			quality: normalizedQuality,
 			n: numberOfImages,
 			response_format: response_format ?? "url",
@@ -646,7 +642,7 @@ function moveCursorToEndOfFile(editor: Editor) {
 
 		return newCursor;
 	} catch (err) {
-		throw new Error("Error moving cursor to end of file" + err);
+		throw new Error("Error moving cursor to end of file", { cause: err });
 	}
 }
 

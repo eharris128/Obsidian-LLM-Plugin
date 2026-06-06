@@ -54,7 +54,7 @@ export class RecentChatsButton {
 				placeholder: "Search chats…",
 				class: "llm-recent-chats-search",
 			},
-		}) as HTMLInputElement;
+		});
 
 		// List container
 		const listEl = this.popoverEl.createDiv("llm-recent-chats-list");
@@ -132,7 +132,7 @@ export class RecentChatsButton {
 				placeholder: "Search chats…",
 				class: "llm-recent-chats-search",
 			},
-		}) as HTMLInputElement;
+		});
 
 		const listEl = this.popoverEl.createDiv("llm-recent-chats-list");
 

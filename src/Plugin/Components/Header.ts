@@ -188,7 +188,6 @@ export class Header {
 				item.setTitle("New chat")
 					.setIcon("plus")
 					.onClick(() => {
-						const { modelName } = getViewInfo(this.plugin, this.viewType);
 						this.setTitle("");
 						this.showTitle();
 						chatContainerDiv.show();

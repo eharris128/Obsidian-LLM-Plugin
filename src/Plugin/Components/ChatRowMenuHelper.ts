@@ -20,11 +20,11 @@ export class RenameModal extends Modal {
 		contentEl.createEl("h2", { text: "Rename chat" });
 
 		const input = contentEl.createEl("input", { cls: "llm-rename-input" });
-		(input as HTMLInputElement).type = "text";
-		(input as HTMLInputElement).value = this.currentTitle;
+		(input).type = "text";
+		(input).value = this.currentTitle;
 
 		// Pre-select the text so the user can start typing immediately.
-		requestAnimationFrame(() => (input as HTMLInputElement).select());
+		requestAnimationFrame(() => (input).select());
 
 		const buttonRow = contentEl.createDiv({ cls: "modal-button-container" });
 
@@ -33,7 +33,7 @@ export class RenameModal extends Modal {
 			.onClick(() => this.close());
 
 		const doRename = () => {
-			const newTitle = ((input as HTMLInputElement).value ?? "").trim();
+			const newTitle = ((input).value ?? "").trim();
 			if (!newTitle) {
 				new Notice("Title must not be empty.");
 				return;

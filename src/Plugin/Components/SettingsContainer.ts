@@ -1,17 +1,19 @@
 import { ImageSize, ViewType } from "Types/types";
 import LLMPlugin from "main";
 import { DropdownComponent, Setting } from "obsidian";
-import { models } from "utils/models";
 import {
 	getSettingType,
 } from "utils/utils";
 import { chat, claudeCodeEndpoint, GPT4All, images, messages, openAI } from "utils/constants"
+import { ChatContainer } from "./ChatContainer";
 
 export class SettingsContainer {
 	viewType: ViewType;
+	private chatContainer?: ChatContainer;
 
-	constructor(private plugin: LLMPlugin, viewType: ViewType) {
+	constructor(private plugin: LLMPlugin, viewType: ViewType, chatContainer?: ChatContainer) {
 		this.viewType = viewType;
+		this.chatContainer = chatContainer;
 	}
 
 	async generateSettingsContainer(parentContainer: HTMLElement) {
@@ -47,7 +49,7 @@ export class SettingsContainer {
 		}
 	}
 
-	generateImageSettings(parentContainer: HTMLElement, model: string) {
+	generateImageSettings(parentContainer: HTMLElement, _model: string) {
 		const settingType = getSettingType(this.viewType);
 		const viewSettings = this.plugin.settings[settingType];
 		const imageSizes = ["1024x1024", "1536x1024", "1024x1536", "auto"];
@@ -63,7 +65,7 @@ export class SettingsContainer {
 				text.onChange((change) => {
 					viewSettings.imageSettings.numberOfImages =
 						parseInt(change);
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -80,7 +82,7 @@ export class SettingsContainer {
 					viewSettings.imageSettings.response_format = change as
 						| "url"
 						| "b64_json";
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -96,7 +98,7 @@ export class SettingsContainer {
 				});
 				dropdown.onChange((change: ImageSize) => {
 					viewSettings.imageSettings.size = change;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -112,7 +114,7 @@ export class SettingsContainer {
 				dropdown.addOption("high", "High");
 				dropdown.onChange((change: "low" | "medium" | "high") => {
 					viewSettings.imageSettings.quality = change;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 	}
@@ -133,7 +135,7 @@ export class SettingsContainer {
 				text.inputEl.type = "number";
 				text.onChange((change) => {
 					viewSettings.chatSettings.temperature = parseFloat(change);
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -145,7 +147,7 @@ export class SettingsContainer {
 				text.inputEl.type = "number";
 				text.onChange((change) => {
 					viewSettings.chatSettings.maxTokens = parseInt(change);
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				});
 			});
 
@@ -163,7 +165,7 @@ export class SettingsContainer {
 					text.onChange((change) => {
 						viewSettings.chatSettings.openAI!.frequencyPenalty =
 							parseFloat(change);
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 
@@ -175,7 +177,7 @@ export class SettingsContainer {
 				.addToggle((value) => {
 					value.onChange((change) => {
 						viewSettings.chatSettings.openAI!.logProbs = change;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 
@@ -192,7 +194,7 @@ export class SettingsContainer {
 					text.onChange((change) => {
 						viewSettings.chatSettings.openAI!.topLogProbs =
 							parseFloat(change);
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 
@@ -209,7 +211,7 @@ export class SettingsContainer {
 					text.onChange((change) => {
 						viewSettings.chatSettings.openAI!.presencePenalty =
 							parseFloat(change);
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 
@@ -225,7 +227,7 @@ export class SettingsContainer {
 					text.onChange((change) => {
 						viewSettings.chatSettings.openAI!.responseFormat =
 							change;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 
@@ -240,7 +242,7 @@ export class SettingsContainer {
 					text.onChange((change) => {
 						viewSettings.chatSettings.openAI!.topP =
 							parseFloat(change);
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					});
 				});
 		}
@@ -252,11 +254,10 @@ export class SettingsContainer {
 		const contextSettings = viewSettings.contextSettings;
 
 		// Context section header
-		const contextHeader = parentContainer.createEl("h3", {
+		parentContainer.createEl("h3", {
 			text: "Context Settings",
+			cls: "llm-context-section-header",
 		});
-		contextHeader.style.marginTop = "1.5em";
-		contextHeader.style.marginBottom = "0.5em";
 
 		// Include active file
 		new Setting(parentContainer)
@@ -303,12 +304,54 @@ export class SettingsContainer {
 					const value = parseInt(change);
 					if (!isNaN(value) && value >= 0 && value <= 100) {
 						contextSettings.maxContextTokensPercent = value;
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					}
 				});
 			});
 
+		// Show model label
+		new Setting(parentContainer)
+			.setName("Show model name")
+			.setDesc(
+				"Display the model or assistant name below each response."
+			)
+			.addToggle((toggle) => {
+				toggle
+					.setValue(contextSettings.showModelLabel ?? true)
+					.onChange(async (value) => {
+						contextSettings.showModelLabel = value;
+						await this.plugin.saveSettings();
+						// Immediately show/hide already-rendered model panels in this view
+						const leafContent = parentContainer.closest(".workspace-leaf-content");
+						const scope = leafContent ?? parentContainer.getRootNode() as HTMLElement;
+						scope.querySelectorAll<HTMLElement>(".llm-model-panel").forEach((el) => {
+							value ? el.show() : el.hide();
+						});
+					});
+			});
+
+		// Memory recall toggle — only visible when memory feature is enabled
+		if (
+			this.plugin.settings.memorySettings?.enabled &&
+			this.plugin.memoryService &&
+			this.chatContainer
+		) {
+			const cc = this.chatContainer;
+			new Setting(parentContainer)
+				.setName("Use memory recall")
+				.setDesc(
+					"Inject relevant memories as context before each message in this conversation."
+				)
+				.addToggle((toggle) => {
+					toggle
+						.setValue(cc.useMemory)
+						.onChange((value) => {
+							cc.useMemory = value;
+						});
+				});
+		}
+
 	}
 
-	generateModerationsSettings(parentContainer: HTMLElement) { }
+	generateModerationsSettings(_parentContainer: HTMLElement) { }
 }

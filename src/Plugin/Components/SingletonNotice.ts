@@ -11,7 +11,7 @@ export class SingletonNotice {
     SingletonNotice.activeNotice = new Notice(message, duration);
 
     // Clear the active notice reference after the duration
-    setTimeout(() => {
+    activeWindow.setTimeout(() => {
       SingletonNotice.activeNotice = null;
     }, duration);
   }

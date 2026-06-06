@@ -1,5 +1,5 @@
 import { App, TFile } from "obsidian";
-import { EmbeddingService, OllamaModelNotFoundError } from "./EmbeddingService";
+import { EmbeddingService } from "./EmbeddingService";
 import { VectorStore } from "./VectorStore";
 
 const MAX_CHUNK_CHARS = 1500; // ~375 tokens — safe for all providers
@@ -80,6 +80,10 @@ export class VaultIndexer {
 
 	/** Index (or re-index) a single file. Does NOT call store.save() — caller must. */
 	async indexFile(file: TFile): Promise<void> {
+		// Ensure the existing index is loaded before upserting, so a subsequent
+		// save() doesn't overwrite the full index with just this one file
+		// (can happen when the modify event fires before indexVault() has run).
+		await this.store.ensureLoaded();
 		const content = await this.app.vault.read(file);
 		const chunks = chunkMarkdown(content, file.path);
 		if (chunks.length === 0) return;
@@ -196,7 +200,12 @@ function formatResultsAsContext(results: SearchResult[]): string {
 	];
 
 	for (const result of results) {
-		lines.push(`### ${result.filePath}`);
+		// Use wikilink format so the model echoes [[Note Name]] in its response,
+		// which linkifyMdRefs / linkifyRenderedWikilinks can convert to a clickable link
+		// even when the filename contains spaces (plain filenames with spaces are
+		// intentionally excluded from the linkifyMdRefs regex).
+		const wikiTarget = result.filePath.replace(/\.md$/, "");
+		lines.push(`### [[${wikiTarget}]]`);
 		lines.push(result.text);
 		lines.push("");
 	}

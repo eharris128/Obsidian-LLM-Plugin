@@ -127,12 +127,12 @@ export class FileSelector extends Modal {
 			// File info
 			const fileInfo = fileItem.createDiv({ cls: "llm-file-selector-info" });
 
-			fileInfo.createEl("div", {
+			fileInfo.createDiv({
 				text: file.name,
 				cls: "llm-file-selector-name",
 			});
 
-			fileInfo.createEl("div", {
+			fileInfo.createDiv({
 				text: file.path,
 				cls: "llm-file-selector-path llm-text-muted",
 			});

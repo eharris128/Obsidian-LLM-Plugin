@@ -27,6 +27,19 @@ export default tseslint.config(
 		},
 	},
 	{
+		// Type-aware linting, scoped to the one type-checked rule we care about
+		files: ["src/**/*.ts"],
+		languageOptions: {
+			parserOptions: {
+				projectService: true,
+				tsconfigRootDir: import.meta.dirname,
+			},
+		},
+		rules: {
+			"@typescript-eslint/no-unnecessary-type-assertion": "error",
+		},
+	},
+	{
 		ignores: ["node_modules/", "main.js"],
 	},
 );

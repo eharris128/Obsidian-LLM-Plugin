@@ -1,11 +1,16 @@
 import LLMPlugin from "main";
 import {
 	ButtonComponent,
+	Component,
 	DropdownComponent,
 	MarkdownRenderer,
+	MarkdownView,
+	Menu,
 	Notice,
+	Platform,
 	setIcon,
 	TextAreaComponent,
+	TFile,
 } from "obsidian";
 import { ChatCompletionChunk } from "openai/resources";
 import { Stream } from "openai/streaming";
@@ -62,6 +67,7 @@ import {
 	setHistoryFilePath,
 } from "utils/utils";
 import { AgentLoop, AgentCallbacks } from "services/AgentLoop";
+import { getToolTier, effectivePermissionMode } from "Plugin/ObsidianAgent/ToolSupportTier";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
@@ -75,6 +81,9 @@ import ninjaCatLogo from "assets/ninja-cat.svg";
 import llmGuyLogo from "assets/llm-guy.svg";
 import llmGalLogo from "assets/llm-gal.svg";
 import { ContextBuilder } from "services/ContextBuilder";
+import { ParsedSkill } from "Skills/SkillRegistry";
+import { MemoryContext } from "Memory/MemoryService";
+import { renderChatDetailsInto } from "Plugin/ChatDetailsView/ChatDetailsRenderer";
 
 const avatarSvgs: Record<string, string> = {
 	"llm-gal": llmGalLogo,
@@ -83,7 +92,7 @@ const avatarSvgs: Record<string, string> = {
 	"ninja-cat": ninjaCatLogo,
 };
 
-export class ChatContainer {
+export class ChatContainer extends Component {
 	historyMessages: HTMLElement;
 	prompt: string;
 	messages: Message[];
@@ -97,7 +106,7 @@ export class ChatContainer {
 	// Stable bound reference so we can cleanly unsubscribe when switching stores.
 	private boundUpdateMessages: (messages: Message[]) => void;
 	contextBuilder: ContextBuilder;
-	currentVaultContext: any = null; // Store context for current generation
+	currentVaultContext: unknown = null; // Store context for current generation
 	pendingContextString: string | null = null; // Context string to inject into API call (not shown in UI)
 	claudeCodeSessionId: string | null = null;
 	useActiveFileContext: boolean = false;
@@ -105,14 +114,44 @@ export class ChatContainer {
 	useVaultSearch: boolean = false;
 	/** File paths retrieved by vault search for the current generation — cleared after appending sources panel. */
 	private pendingRagSources: string[] = [];
+	/** Web results retrieved by web_search tool calls this turn — cleared after appending web sources panel. */
+	private pendingWebSources: { title: string; url: string }[] = [];
 	/** Tool calls accumulated during the current agent turn — committed to allToolCallsByTurn at turn end. */
 	private pendingToolCalls: ToolCallRecord[] = [];
 	/**
 	 * Tool calls indexed by assistant-message turn (0-based).
 	 * Entry i holds all tool calls made before the i-th assistant response.
-	 * Cleared on newChat().
+	 * Cleared on newChat(). Populated by runAgentMode (live) or setToolCallsByTurn (from file load).
 	 */
-	private allToolCallsByTurn: Map<number, ToolCallRecord[]> = new Map();
+	allToolCallsByTurn: Map<number, ToolCallRecord[]> = new Map();
+	/**
+	 * Skill id active per assistant-message turn (0-based).
+	 * Entry i holds the skill id used when the i-th assistant response was generated.
+	 * Cleared on newChat(). Populated by handleGenerateClick / runAgentMode.
+	 */
+	allSkillsByTurn: Map<number, string> = new Map();
+	/**
+	 * Model or assistant display name per assistant-message turn (0-based).
+	 * Stored as the assistant name when an assistant is active, otherwise the model display name.
+	 * Written to the chat file as a `> [!note]-` callout and shown as a small badge in the UI.
+	 * Cleared on newChat(). Populated by handleGenerateClick / runAgentMode.
+	 */
+	allModelsByTurn: Map<number, string> = new Map();
+
+	/** Restore tool-call data when loading a conversation from a file. */
+	setToolCallsByTurn(map: Map<number, ToolCallRecord[]>): void {
+		this.allToolCallsByTurn = map;
+	}
+
+	/** Restore skill-usage data when loading a conversation from a file. */
+	setSkillsByTurn(map: Map<number, string>): void {
+		this.allSkillsByTurn = map;
+	}
+
+	/** Restore model/assistant attribution data when loading a conversation from a file. */
+	setModelsByTurn(map: Map<number, string>): void {
+		this.allModelsByTurn = map;
+	}
 	/** Resolves when the most recent generateIMLikeMessages render is complete. */
 	private renderingPromise: Promise<void> = Promise.resolve();
 	/** Incremented each time a new render starts; stale renders compare against this and abort. */
@@ -125,14 +164,72 @@ export class ChatContainer {
 	addFilesButton: ButtonComponent | null = null;
 	scanButton: ButtonComponent | null = null;
 	activeFileForChip: { name: string; path: string } | null = null;
+	/** Mic button for voice input — null when Whisper is disabled. */
+	private micButton: ButtonComponent | null = null;
+	/** Current recording state for the mic button. */
+	private micState: "idle" | "recording" | "transcribing" = "idle";
+	/** Active MediaRecorder instance during a voice recording. */
+	private mediaRecorder: MediaRecorder | null = null;
+	/** Accumulated audio chunks while recording. */
+	private audioChunks: Blob[] = [];
+	/**
+	 * Closure wired up by generateChatContainer so voice auto-send can trigger
+	 * the send action without needing direct access to header/sendButton.
+	 */
+	private _triggerSend: (() => void) | null = null;
 	/** Stored so StatusBarButton (and FAB) can re-sync the displayed model after settings change. */
 	private modelDropdown: DropdownComponent | null = null;
+	/** The <optgroup> for assistants inside the model dropdown — refreshed on hot-reload. */
+	private assistantsOptGroup: HTMLOptGroupElement | null = null;
+	/**
+	 * Skill id that is active for the current generation — set by /slash invocation
+	 * or by globally-enabled skills. Cleared after each generation.
+	 */
+	private activeSkillId: string | null = null;
+	/**
+	 * The floating slash-command menu element mounted on document.body.
+	 * Stored here so each ChatContainer instance manages only its own menu —
+	 * prevents other views' generateChatContainer calls from removing it.
+	 */
+	private slashMenuEl: HTMLElement | null = null;
+
+	/**
+	 * When true, memories are recalled before each send and (if extraction
+	 * trigger is "end-of-chat") extracted when a new chat starts.
+	 */
+	useMemory: boolean = false;
+	/** Whether memories were injected for the current generation (drives UI indicator). */
+	private memoriesInjectedThisTurn: boolean = false;
+	/** Individual memories recalled during the last generation — shown as clickable rows in Chat Details panel. */
+	lastRecalledMemories: { content: string; filePath: string }[] = [];
+	/** Inline sidebar element within the widget for the Chat Details panel. Set by Widget.ts. */
+	detailsSidebarEl: HTMLElement | null = null;
+	/** Stored reference so we can update the memory button's active state. */
+	/** Display name of the assistant active for the current generation — cleared after the indicator is shown. */
+	private activeAssistantNameThisTurn: string | null = null;
+	/**
+	 * When true this ChatContainer runs in Obsidian Agent mode:
+	 * - Agent system prompt is prepended automatically.
+	 * - invoke_assistant tool is registered on the AgentLoop.
+	 * - Routing indicator is shown when an assistant is invoked.
+	 * - History files are tagged with agent: true in frontmatter.
+	 * Set by FAB, StatusBarButton, or ChatModal2 when obsidianAgentSettings.enabled.
+	 */
+	isObsidianAgent: boolean = false;
+	/** Assistant name invoked via invoke_assistant during the current turn — drives routing indicator. */
+	private agentRoutedAssistantThisTurn: string | null = null;
+	/** Token usage reported by the provider for the last generation — null when unavailable. */
+	private lastTokenUsage: { inputTokens: number; outputTokens: number } | null = null;
+	/** AbortController for the current generation — non-null while a response is in-flight. */
+	private _abortController: AbortController | null = null;
 
 	constructor(
 		private plugin: LLMPlugin,
 		viewType: ViewType,
 		registry: ConversationRegistry
 	) {
+		super();
+		this.load();
 		this.viewType = viewType;
 		this.registry = registry;
 		// Each view starts with its own fresh ephemeral store.
@@ -143,6 +240,8 @@ export class ChatContainer {
 		this.boundUpdateMessages = this.updateMessages.bind(this);
 		this.messageStore.subscribe(this.boundUpdateMessages);
 		this.contextBuilder = new ContextBuilder(this.plugin.app);
+		// Memory recall is always active when the feature is enabled — no toggle required.
+		this.useMemory = !!this.plugin.settings.memorySettings?.enabled;
 	}
 
 	/**
@@ -162,6 +261,52 @@ export class ChatContainer {
 	 */
 	destroy(): void {
 		this.messageStore.unsubscribe(this.boundUpdateMessages);
+		this.slashMenuEl?.remove();
+		this.slashMenuEl = null;
+		this.detailsSidebarEl = null;
+		// Stop any in-flight recording so the microphone is released
+		if (this.mediaRecorder && this.mediaRecorder.state !== "inactive") {
+			this.mediaRecorder.stop();
+		}
+		this.mediaRecorder = null;
+		// Cancel any in-flight generation
+		this._abortController?.abort();
+		this._abortController = null;
+		this.unload();
+	}
+
+	/**
+	 * Switch the send button to "stop" mode while a generation is in flight.
+	 * Creates a fresh AbortController and updates the button appearance.
+	 */
+	private enterStopMode(sendButton: ButtonComponent): void {
+		this._abortController = new AbortController();
+		sendButton.setIcon("square");
+		sendButton.setTooltip("Stop generation");
+		sendButton.buttonEl.addClass("llm-stop-mode");
+		sendButton.setDisabled(false);
+		// Always show the stop button regardless of input contents
+		sendButton.buttonEl.style.display = "";
+		if (this.micButton) {
+			this.micButton.buttonEl.style.display = "none";
+		}
+	}
+
+	/**
+	 * Restore the send button to its normal "send" state after generation ends.
+	 */
+	private exitStopMode(sendButton: ButtonComponent): void {
+		this._abortController = null;
+		sendButton.setIcon("up-arrow-with-tail");
+		sendButton.setTooltip("Send prompt");
+		sendButton.buttonEl.removeClass("llm-stop-mode");
+		const isEmpty = this.prompt.trim().length === 0;
+		sendButton.setDisabled(isEmpty);
+		sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
+		if (this.micButton && this.micState === "idle") {
+			this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
+			sendButton.buttonEl.style.display = isEmpty ? "none" : "";
+		}
 	}
 
 	private updateMessages(messages: Message[]) {
@@ -185,7 +330,16 @@ export class ChatContainer {
 
 	getParams(endpoint: string, model: string, modelType: string) {
 		const settingType = getSettingType(this.viewType);
-		const storedMessages = this.getMessages();
+		const rawMessages = this.getMessages();
+
+		// Strip any tool-call structured messages (role: "tool", tool_calls
+		// arrays, Anthropic content-block arrays) before sending to models that
+		// don't support the agent/tool-call message format.  Models that do
+		// support agent mode receive messages as-is because their own AgentLoop
+		// manages the tool-call turns locally anyway.
+		const storedMessages = this.supportsAgentMode(modelType)
+			? rawMessages
+			: this.sanitizeMessagesForNonAgentModel(rawMessages);
 
 		// For OpenAI-compatible providers, inject context as a system message so it
 		// stays separate from the user's message. Claude and Gemini handle system
@@ -261,10 +415,7 @@ export class ChatContainer {
 		if (endpoint === messages) {
 			const params: ChatParams = {
 				prompt: this.prompt,
-				// The Claude API accepts the most recent user message
-				// as well as an optional most recent assistant message.
-				// This initial approach only sends the most recent user message.
-				messages: messagesForParams.slice(-1),
+				messages: messagesForParams,
 				model,
 				temperature:
 					this.plugin.settings[settingType].chatSettings.temperature,
@@ -284,7 +435,7 @@ export class ChatContainer {
 			this.messageStore.setMessages(messages);
 		}
 		this.removeLastMessageAndHistoryMessage();
-		this.handleGenerate();
+		await this.handleGenerate();
 	}
 
 	async handleGenerate(): Promise<boolean> {
@@ -297,15 +448,14 @@ export class ChatContainer {
 			modelName,
 		} = getViewInfo(this.plugin, this.viewType);
 		let shouldHaveAPIKey = modelType !== GPT4All && modelType !== ollama && modelType !== lmStudio && modelType !== mistral && modelEndpoint !== claudeCodeEndpoint;
-		const messagesForParams = this.getMessages();
-		// TODO - fix this logic to actually do an API key check against the current view model.
 		if (shouldHaveAPIKey) {
-			const API_KEY =
-				this.plugin.settings.openAIAPIKey ||
-				this.plugin.settings.claudeAPIKey ||
-				this.plugin.settings.geminiAPIKey;
+			let API_KEY: string | undefined;
+			if (modelType === openAI) API_KEY = this.plugin.settings.openAIAPIKey;
+			else if (modelType === claude) API_KEY = this.plugin.settings.claudeAPIKey;
+			else if (modelType === gemini) API_KEY = this.plugin.settings.geminiAPIKey;
 			if (!API_KEY) {
-				throw new Error("No API key");
+				const providerLabel = modelType === openAI ? "OpenAI" : modelType === claude ? "Claude" : modelType === gemini ? "Gemini" : "provider";
+				throw new Error(`No ${providerLabel} API key configured. Add one in Settings.`);
 			}
 		}
 		if (modelEndpoint === claudeCodeEndpoint) {
@@ -319,46 +469,39 @@ export class ChatContainer {
 			this.setDiv(true);
 			this.showThinkingAnimation();
 
+			if (!Platform.isDesktop) throw new Error("Claude Code is only available on desktop.");
 			const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
 			const path = require("path");
 			const pluginDir = path.join(vaultPath, this.plugin.manifest.dir);
-			let stream;
-			try {
-				stream = await claudeCodeMessage(
-					this.prompt,
-					this.plugin.settings.claudeCodeOAuthToken,
-					this.plugin.settings.linearWorkspaces,
-					vaultPath,
-					pluginDir,
-					this.claudeCodeSessionId ?? undefined
-				);
-			} catch (err) {
-				throw err;
-			}
+			const stream = await claudeCodeMessage(
+				this.prompt,
+				this.plugin.settings.claudeCodeOAuthToken,
+				this.plugin.settings.linearWorkspaces,
+				vaultPath,
+				pluginDir,
+				this.claudeCodeSessionId ?? undefined
+			);
 
-			try {
-				let firstText = true;
-				for await (const message of stream) {
-					// Capture session ID from first message
-					if (!this.claudeCodeSessionId && (message as any).session_id) {
-						this.claudeCodeSessionId = (message as any).session_id;
-					}
-					if (message.type === "assistant") {
-						for (const block of message.message.content) {
-							if (block.type === "text" && block.text) {
-								if (firstText) {
-									this.streamingDiv.empty();
-									firstText = false;
-								}
-								this.previewText += block.text;
-								this.streamingDiv.textContent = this.previewText;
-								this.historyMessages.scroll(0, 9999);
+			let firstText = true;
+			for await (const message of stream) {
+				if (this._abortController?.signal.aborted) break;
+				// Capture session ID from first message
+				if (!this.claudeCodeSessionId && (message as { session_id?: string }).session_id) {
+					this.claudeCodeSessionId = (message as { session_id?: string }).session_id ?? null;
+				}
+				if (message.type === "assistant") {
+					for (const block of message.message.content) {
+						if (block.type === "text" && block.text) {
+							if (firstText) {
+								this.streamingDiv.empty();
+								firstText = false;
 							}
+							this.previewText += block.text;
+							this.streamingDiv.textContent = this.previewText;
+							this.historyMessages.scroll(0, 9999);
 						}
 					}
 				}
-			} catch (err) {
-				throw err;
 			}
 
 			this.streamingDiv.empty();
@@ -403,7 +546,9 @@ export class ChatContainer {
 
 			try {
 				let firstChunk = true;
+				let geminiUsageMeta: { promptTokenCount?: number; candidatesTokenCount?: number } | null = null;
 				for await (const chunk of stream) {
+					if (this._abortController?.signal.aborted) break;
 					const chunkText = chunk.text || "";
 					if (firstChunk && chunkText) {
 						this.streamingDiv.empty();
@@ -414,6 +559,13 @@ export class ChatContainer {
 						this.streamingDiv.textContent = this.previewText;
 						this.historyMessages.scroll(0, 9999);
 					}
+					if ((chunk as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }).usageMetadata) geminiUsageMeta = (chunk as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number } }).usageMetadata ?? null;
+				}
+				if (geminiUsageMeta) {
+					this.lastTokenUsage = {
+						inputTokens: geminiUsageMeta.promptTokenCount ?? 0,
+						outputTokens: geminiUsageMeta.candidatesTokenCount ?? 0,
+					};
 				}
 			} catch (err) {
 				console.error(err);
@@ -443,6 +595,11 @@ export class ChatContainer {
 				this.plugin.settings.claudeAPIKey
 			);
 
+			// Wire up abort: calling stream.abort() causes finalMessage() to
+			// reject, which is caught below and treated as a graceful stop.
+			const abortHandler = () => stream.abort();
+			this._abortController?.signal.addEventListener("abort", abortHandler, { once: true });
+
 			let firstText = true;
 			stream.on("text", (text) => {
 				if (firstText && text) {
@@ -460,7 +617,21 @@ export class ChatContainer {
 			// Without this await, execution falls through immediately while text
 			// events are still firing, so previewText is "" when
 			// MarkdownRenderer.render and messageStore.addMessage are called.
-			await stream.finalMessage();
+			let finalClaudeMsg: Awaited<ReturnType<typeof stream.finalMessage>> | null = null;
+			try {
+				finalClaudeMsg = await stream.finalMessage();
+			} catch (err: any) {
+				// Abort requested — fall through with whatever previewText we have
+				if (!this._abortController?.signal.aborted) throw err;
+			} finally {
+				this._abortController?.signal.removeEventListener("abort", abortHandler);
+			}
+			if (finalClaudeMsg?.usage) {
+				this.lastTokenUsage = {
+					inputTokens: finalClaudeMsg.usage.input_tokens,
+					outputTokens: finalClaudeMsg.usage.output_tokens,
+				};
+			}
 
 			this.streamingDiv.empty();
 			await this.renderMarkdown(this.previewText, this.streamingDiv);
@@ -487,6 +658,7 @@ export class ChatContainer {
 
 			let firstChunk = true;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
+				if (this._abortController?.signal.aborted) break;
 				const content = chunk.choices[0]?.delta?.content || "";
 				if (firstChunk && content) {
 					this.streamingDiv.empty();
@@ -535,6 +707,7 @@ export class ChatContainer {
 
 			let firstChunk = true;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
+				if (this._abortController?.signal.aborted) break;
 				const content = chunk.choices[0]?.delta?.content || "";
 				if (firstChunk && content) {
 					this.streamingDiv.empty();
@@ -576,6 +749,7 @@ export class ChatContainer {
 
 			let firstChunk = true;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
+				if (this._abortController?.signal.aborted) break;
 				const content = chunk.choices[0]?.delta?.content || "";
 				if (firstChunk && content) {
 					this.streamingDiv.empty();
@@ -623,10 +797,19 @@ export class ChatContainer {
 				modelEndpoint
 			);
 			this.setDiv(true);
+			let openAIUsage: { prompt_tokens: number; completion_tokens: number } | null = null;
 			for await (const chunk of stream as Stream<ChatCompletionChunk>) {
+				if (this._abortController?.signal.aborted) break;
 				this.previewText += chunk.choices[0]?.delta?.content || "";
 				this.streamingDiv.textContent = this.previewText;
 				this.historyMessages.scroll(0, 9999);
+				if ((chunk as { usage?: { prompt_tokens: number; completion_tokens: number } }).usage) openAIUsage = (chunk as { usage?: { prompt_tokens: number; completion_tokens: number } }).usage ?? null;
+			}
+			if (openAIUsage) {
+				this.lastTokenUsage = {
+					inputTokens: openAIUsage.prompt_tokens,
+					outputTokens: openAIUsage.completion_tokens,
+				};
 			}
 			this.streamingDiv.empty();
 			await this.renderMarkdown(this.previewText, this.streamingDiv);
@@ -646,7 +829,7 @@ export class ChatContainer {
 
 	async handleGenerateClick(header: Header, sendButton: ButtonComponent) {
 		header.disableButtons();
-		sendButton.setDisabled(true);
+		this.enterStopMode(sendButton);
 		const {
 			model,
 			modelName,
@@ -682,9 +865,6 @@ export class ChatContainer {
 			contextSettings.maxContextTokensPercent
 		);
 
-		let vaultContext = null;
-		let contextString: string | null = null;
-
 		// Build context when the global feature flag is on OR when the user has
 		// explicitly added files via the + chip button (explicit intent always wins).
 		const hasExplicitFileContext = (contextSettings.selectedFiles?.length ?? 0) > 0;
@@ -698,12 +878,12 @@ export class ChatContainer {
 					...contextSettings,
 					includeActiveFile: this.useActiveFileContext,
 				};
-				contextString = await this.contextBuilder.buildFormattedContext(
+				const contextString = await this.contextBuilder.buildFormattedContext(
 					effectiveContextSettings,
 					contextTokenBudget
 				);
 				if (contextString) {
-					vaultContext = await this.contextBuilder.buildContext(effectiveContextSettings);
+					const vaultContext = await this.contextBuilder.buildContext(effectiveContextSettings);
 					// Store for use in historyPush
 					this.currentVaultContext = vaultContext;
 					// Store context string to be injected into API params (not rendered in UI)
@@ -786,6 +966,282 @@ export class ChatContainer {
 			}
 		}
 
+		// ── Resolve active project and assistant (needed by multiple blocks below) ──
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
+		const activeProject = activeProjectId
+			? this.plugin.projectManager?.getProject(activeProjectId)
+			: null;
+
+		// ── /remember built-in command ───────────────────────────────────────────
+		// Intercept "/remember [content]" before skill resolution.
+		// Saves the content directly as a memory without a model call.
+		const rememberMatch = this.prompt.match(/^\/remember\s+([\s\S]+)/);
+		if (rememberMatch) {
+			const content = rememberMatch[1].trim();
+			header.enableButtons();
+			this.exitStopMode(sendButton);
+
+			if (!this.plugin.memoryService) {
+				new Notice("Memory is not enabled. Enable it in Settings → Memory.");
+				return;
+			}
+			if (!content) {
+				new Notice("Usage: /remember [what to remember]");
+				return;
+			}
+
+			// Determine scope from active project/assistant (mirrors extractMemories() logic)
+			const rememberActiveAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
+			const rememberActiveAssistant = rememberActiveAssistantId
+				? (this.plugin.assistantManager?.getAssistant(rememberActiveAssistantId) ?? null)
+				: null;
+			let rememberScope: "global" | "project" | "assistant" = "global";
+			let rememberScopeName: string | undefined;
+			if (activeProject) {
+				rememberScope = "project";
+				rememberScopeName = activeProject.id; // id is the folder slug, not the display name
+			} else if (rememberActiveAssistant) {
+				rememberScope = "assistant";
+				rememberScopeName = rememberActiveAssistant.id;
+			}
+
+			// Show the user's message in the chat
+			this.messageStore.addMessage({ role: "user" as const, content: this.prompt });
+			await this.renderingPromise;
+			this.setDiv(true);
+
+			try {
+				const filePath = await this.plugin.memoryService.saveDirectly(content, "fact", rememberScope, rememberScopeName);
+				const scopeLabel = rememberScope === "global" ? "global memory" : `${rememberScope} memory (${rememberScopeName})`;
+				const response = filePath
+					? `✓ Saved to ${scopeLabel}: "${content}"`
+					: `This is already in my memory: "${content}"`;
+
+				await MarkdownRenderer.render(
+					this.plugin.app,
+					response,
+					this.streamingDiv,
+					"",
+					this
+				);
+				this.messageStore.addMessage({ role: assistant, content: response });
+			} catch (e) {
+				console.error("[Memory] /remember save failed:", e);
+				new Notice("Failed to save memory — see console for details.");
+			}
+
+			this.prompt = "";
+			this.pendingContextString = null;
+			this.loadingDivContainer.querySelector(".llm-assistant-buttons")?.removeClass("llm-hide");
+			return;
+		}
+		// ── End /remember ────────────────────────────────────────────────────────
+
+		// Resolve active assistant: explicit setting first, then project default-assistant
+		const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
+		let activeAssistant = activeAssistantId
+			? (this.plugin.assistantManager?.getAssistant(activeAssistantId) ?? null)
+			: null;
+		// Auto-activate project's default-assistant if no explicit assistant is set
+		if (!activeAssistant && activeProject?.defaultAssistant) {
+			activeAssistant = this.plugin.assistantManager?.getAssistantByName(activeProject.defaultAssistant) ?? null;
+		}
+		// Track for the post-generation UI indicator
+		this.activeAssistantNameThisTurn = activeAssistant?.name ?? null;
+		// ── End resolve active project / assistant ───────────────────────────────
+
+		// ── Skill resolution ────────────────────────────────────────────────────
+		// 1. Check for /skill-name prefix in the prompt (slash invocation).
+		// 2. If no slash invocation, apply globally-enabled skills + assistant-enabled skills.
+		this.activeSkillId = null;
+		let skillInstructions: string | null = null;
+		let skillAllowedTools: string[] = [];
+		let activeSkillDisableModelInvocation = false;
+
+		const slashMatch = this.prompt.match(/^\/([a-zA-Z0-9_-]+)\s*/);
+		if (slashMatch) {
+			const slashId = slashMatch[1];
+			const skill = this.plugin.skillRegistry?.getSkill(slashId);
+			if (skill) {
+				this.activeSkillId = skill.id;
+				// Capture args — everything after "/skill-id " — before stripping prefix.
+				const args = this.prompt.slice(slashMatch[0].length).trim();
+				// Strip the /skill-name prefix from the prompt so the model
+				// doesn't see it as part of the user's message.
+				this.prompt = args;
+				// Substitute {{args}} in the skill instructions with the captured argument text.
+				let instructions = skill.instructions || null;
+				if (instructions && args) {
+					instructions = instructions.replace(/\{\{args\}\}/g, args);
+				}
+				skillInstructions = instructions;
+				skillAllowedTools = skill.allowedTools;
+				activeSkillDisableModelInvocation = skill.disableModelInvocation;
+			}
+		}
+
+		// If no slash invocation, collect all globally-enabled + assistant-enabled skill instructions
+		if (!this.activeSkillId) {
+			const enabledSkills = this.plugin.settings.skillsSettings?.enabledSkills ?? {};
+			// Build the union of global enabled skill ids and assistant-enabled skill ids
+			const assistantSkillIds = new Set<string>(activeAssistant?.enabledSkills ?? []);
+			const activeSkills = (this.plugin.skillRegistry?.getSkills() ?? []).filter(
+				(s) => enabledSkills[s.id] || assistantSkillIds.has(s.id)
+			);
+			if (activeSkills.length > 0) {
+				const instructionBlocks = activeSkills
+					.filter((s) => s.instructions)
+					.map((s) => `## Skill: ${s.name}\n\n${s.instructions}`)
+					.join("\n\n---\n\n");
+				if (instructionBlocks) skillInstructions = instructionBlocks;
+				// Union of all enabled skills' allowed tools (empty list = no restriction)
+				const toolSets = activeSkills.map((s) => s.allowedTools);
+				if (toolSets.every((t) => t.length > 0)) {
+					// All skills have restrictions — intersect is too limiting; take union
+					const union = new Set<string>();
+					toolSets.forEach((t) => t.forEach((name) => union.add(name)));
+					skillAllowedTools = Array.from(union);
+				}
+				// If any skill has empty allowedTools it means "all tools" — keep skillAllowedTools empty (unrestricted)
+			}
+		}
+
+		// Apply assistant's allowed-tools as an additional restriction.
+		// If the assistant specifies allowed-tools, intersect with any skill restriction (most restrictive wins).
+		const assistantAllowedTools = activeAssistant?.allowedTools ?? [];
+		if (assistantAllowedTools.length > 0) {
+			if (skillAllowedTools.length > 0) {
+				// Both have restrictions — take the intersection
+				const assistantSet = new Set(assistantAllowedTools);
+				skillAllowedTools = skillAllowedTools.filter((t) => assistantSet.has(t));
+			} else {
+				// Only assistant has a restriction — use it
+				skillAllowedTools = assistantAllowedTools;
+			}
+		}
+
+		// Inject skill instructions into the pending context
+		if (skillInstructions) {
+			const block = `# Skill Instructions\n\n${skillInstructions}`;
+			this.pendingContextString = this.pendingContextString
+				? block + "\n\n---\n\n" + this.pendingContextString
+				: block;
+		}
+		// ── End skill resolution ─────────────────────────────────────────────────
+
+		// ── Assistant system prompt injection ─────────────────────────────────────
+		// Inject BEFORE project so that project context (outer) wraps assistant (inner).
+		// Effective order from model's top-of-context perspective: memories → project → assistant → skills → context
+		if (activeAssistant?.systemPrompt && modelEndpoint !== images) {
+			const block = `# Assistant: ${activeAssistant.name}\n\n${activeAssistant.systemPrompt}`;
+			this.pendingContextString = block +
+				(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
+		}
+		// ── End assistant system prompt injection ─────────────────────────────────
+
+		// ── Project context injection ─────────────────────────────────────────────
+		if (activeProject && modelEndpoint !== images) {
+			// Inject pinned notes as context
+			if (activeProject.pinnedNotes?.length > 0) {
+				try {
+					const pinnedContext = await this.buildPinnedNotesContext(activeProject.pinnedNotes);
+					if (pinnedContext) {
+						this.pendingContextString = pinnedContext +
+							(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
+					}
+				} catch (e) {
+					console.error("[Projects] Failed to build pinned notes context:", e);
+				}
+			}
+
+			// Inject project system instructions (at the front of context, after pinned notes)
+			if (activeProject.instructions) {
+				const block = `# Project Instructions: ${activeProject.name}\n\n${activeProject.instructions}`;
+				this.pendingContextString = block +
+					(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
+			}
+		}
+		// ── End project context injection ─────────────────────────────────────────
+
+		// ── General instructions (AGENTS.md) ─────────────────────────────────────
+		// Injected for every conversation regardless of model or assistant.
+		// Prepended here so that memory recall (below) will prepend on top of it,
+		// giving memories priority while AGENTS.md remains a visible base layer.
+		const agentsFilePath = this.plugin.settings.agentsFilePath?.trim();
+		if (agentsFilePath && modelEndpoint !== images) {
+			try {
+				const agentsAbstract = this.plugin.app.vault.getAbstractFileByPath(agentsFilePath);
+				if (agentsAbstract instanceof TFile) {
+					const agentsContent = await this.plugin.app.vault.read(agentsAbstract);
+					if (agentsContent.trim()) {
+						const block = `# General Instructions\n\n${agentsContent.trim()}`;
+						this.pendingContextString = block +
+							(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
+					}
+				}
+			} catch (e) {
+				console.warn("[ChatContainer] Could not read AGENTS.md:", e);
+			}
+		}
+		// ── End general instructions ──────────────────────────────────────────────
+
+		// ── Memory recall ─────────────────────────────────────────────────────────
+		this.memoriesInjectedThisTurn = false;
+		if (
+			this.useMemory &&
+			this.plugin.settings.memorySettings?.enabled &&
+			this.plugin.memoryService &&
+			this.plugin.vaultIndexer &&
+			modelEndpoint !== images
+		) {
+			try {
+				const memCtx: MemoryContext = {
+					// MemoryService uses the id as the folder name (slug), not the display name
+					activeAssistant: activeAssistant?.id,
+					activeProject: activeProject?.name,
+				};
+				const recalled = await this.plugin.memoryService.recall(
+					this.prompt,
+					memCtx,
+					this.plugin.settings.memorySettings.recallTopK ?? 5,
+					this.plugin.vaultIndexer,
+				);
+				if (recalled) {
+					// Prepend memories before everything else so the model sees them first
+					this.pendingContextString = recalled.context +
+						(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
+					this.memoriesInjectedThisTurn = true;
+					// Store structured records for the Chat Details panel (content + file path).
+					this.lastRecalledMemories = recalled.memories;
+					this.pushChatDetailsState();
+				}
+			} catch (e) {
+				console.error("[Memory] Recall failed:", e);
+			}
+		}
+		// ── End memory recall ─────────────────────────────────────────────────────
+
+		// ── Obsidian Agent base prompt ────────────────────────────────────────────
+		// Injected after memories (memories remain first) but before everything else.
+		// Only active when isObsidianAgent is true and the feature is enabled.
+		this.agentRoutedAssistantThisTurn = null;
+		if (
+			this.isObsidianAgent &&
+			this.plugin.settings.obsidianAgentSettings?.enabled &&
+			this.plugin.obsidianAgent &&
+			modelEndpoint !== images
+		) {
+			const agentSystemPrompt = await this.plugin.obsidianAgent.buildSystemPrompt();
+			if (agentSystemPrompt) {
+				// Append AFTER memories (which were prepended last → appear first).
+				// This places the agent prompt after memories but before all other context.
+				this.pendingContextString = this.pendingContextString
+					? this.pendingContextString + "\n\n---\n\n" + agentSystemPrompt
+					: agentSystemPrompt;
+			}
+		}
+		// ── End Obsidian Agent base prompt ────────────────────────────────────────
+
 		const userMessage = { role: "user" as const, content: this.prompt };
 		this.messageStore.addMessage(userMessage);
 		// Wait for the async DOM render triggered by addMessage to complete before
@@ -793,27 +1249,114 @@ export class ChatContainer {
 		// is appended before the user message and appears at the top of the chat.
 		await this.renderingPromise;
 		const params = this.getParams(modelEndpoint, model, modelType);
+		// Snapshot the assistant-message count before generation so we can key
+		// skill usage (and tool calls on the non-agent path) to the right turn.
+		const preTurnAssistantCount = this.getMessages().filter(
+			(m) => m.role === assistant
+		).length;
+		// Record which model/assistant answered this turn for the chat log.
+		// Prefer the assistant name when active (it's the meaningful "who"), else the model display name.
+		const turnModelLabel = this.activeAssistantNameThisTurn ?? modelName;
+		this.allModelsByTurn.set(preTurnAssistantCount, turnModelLabel);
 		try {
 			this.previewText = "";
+
+			// Pure-prompt skill: render the skill instructions directly as the
+			// assistant reply — no API call is made.
+			if (activeSkillDisableModelInvocation && modelEndpoint !== images) {
+				const response =
+					skillInstructions ??
+					`*(Skill **${this.activeSkillId}** applied — no instruction body defined)*`;
+				this.previewText = response;
+				this.setDiv(true);
+				await MarkdownRenderer.render(
+					this.plugin.app,
+					response,
+					this.streamingDiv,
+					"",
+					this
+				);
+				this.messageStore.addMessage({ role: assistant, content: response });
+				if (this.activeSkillId) {
+					this.allSkillsByTurn.set(preTurnAssistantCount, this.activeSkillId);
+				}
+				this.pendingContextString = null;
+				this.activeSkillId = null;
+				header.enableButtons();
+				this.exitStopMode(sendButton);
+				this.loadingDivContainer
+					.querySelector(".llm-assistant-buttons")
+					?.removeClass("llm-hide");
+				return;
+			}
+
 			if (modelEndpoint !== images) {
 				if (this.supportsAgentMode(modelType)) {
 					await this.runAgentMode(
 						params as ChatParams,
 						model,
 						modelType,
-						modelName
+						modelName,
+						skillAllowedTools
 					);
 				} else {
 					await this.handleGenerate();
+					// For non-agent mode, runAgentMode hasn't run, so record the
+					// active skill here (agent mode records it inside runAgentMode).
+					if (this.activeSkillId) {
+						this.allSkillsByTurn.set(preTurnAssistantCount, this.activeSkillId);
+					}
 				}
 				// Append cited sources panel if vault search was used
 				if (this.pendingRagSources.length > 0) {
 					this.appendSourcesPanel(this.loadingDivContainer, this.pendingRagSources);
 					this.pendingRagSources = [];
 				}
-				// Clear context after generation
+				// Append web sources panel if web_search was used
+				if (this.pendingWebSources.length > 0) {
+					this.appendWebSourcesPanel(this.loadingDivContainer, this.pendingWebSources);
+					this.pendingWebSources = [];
+				}
+				// Show memory indicator if memories were recalled this turn
+				if (this.memoriesInjectedThisTurn) {
+					this.appendMemoryIndicator(this.loadingDivContainer);
+					this.memoriesInjectedThisTurn = false;
+				}
+				// Show assistant indicator if an assistant was active this turn
+				if (this.activeAssistantNameThisTurn) {
+					this.appendAssistantIndicator(this.loadingDivContainer, this.activeAssistantNameThisTurn);
+					this.activeAssistantNameThisTurn = null;
+				}
+				// Show model/assistant attribution badge below the response
+				{
+					const settingType = getSettingType(this.viewType);
+					const showModelLabel = this.plugin.settings[settingType].contextSettings.showModelLabel ?? true;
+					if (showModelLabel) {
+						const liveLabel = this.allModelsByTurn.get(preTurnAssistantCount);
+						if (liveLabel) {
+							const contentWrap = this.loadingDivContainer.querySelector<HTMLElement>(".llm-flex-column");
+							if (contentWrap) this.appendModelPanel(contentWrap, liveLabel);
+						}
+					}
+				}
+				// Show agent routing indicator when invoke_assistant was called this turn
+				if (this.agentRoutedAssistantThisTurn) {
+					this.appendAgentRoutingIndicator(this.loadingDivContainer, this.agentRoutedAssistantThisTurn);
+					this.agentRoutedAssistantThisTurn = null;
+				}
+				// Show token usage when the provider reported it
+				if (this.lastTokenUsage) {
+					this.appendTokenUsage(
+						this.loadingDivContainer,
+						this.lastTokenUsage.inputTokens,
+						this.lastTokenUsage.outputTokens
+					);
+					this.lastTokenUsage = null;
+				}
+				// Clear context and active skill after generation
 				this.currentVaultContext = null;
 				this.pendingContextString = null;
+				this.activeSkillId = null;
 			}
 			if (modelEndpoint === images) {
 				this.setDiv(false);
@@ -848,20 +1391,41 @@ export class ChatContainer {
 				});
 			}
 			header.enableButtons();
-			sendButton.setDisabled(false);
+			this.exitStopMode(sendButton);
 			const buttonsContainer = this.loadingDivContainer.querySelector(
 				".llm-assistant-buttons"
 			);
 			buttonsContainer?.removeClass("llm-hide");
 		} catch (error) {
 			header.enableButtons();
-			sendButton.setDisabled(false);
+			// If the user deliberately stopped, render whatever partial text exists
+			// and treat the generation as complete rather than showing an error.
+			if (error?.name === "AbortError" || this._abortController?.signal.aborted) {
+				this.exitStopMode(sendButton);
+				if (this.previewText) {
+					this.streamingDiv.empty();
+					void this.renderMarkdown(this.previewText, this.streamingDiv);
+					this.messageStore.addMessage({ role: "assistant" as const, content: this.previewText });
+					const buttonsEl = this.loadingDivContainer.querySelector(".llm-assistant-buttons");
+					buttonsEl?.removeClass("llm-hide");
+				}
+				this.pendingRagSources = [];
+				this.pendingWebSources = [];
+				this.pendingContextString = null;
+				this.activeSkillId = null;
+				this.activeAssistantNameThisTurn = null;
+				return;
+			}
+			this.exitStopMode(sendButton);
 			this.plugin.settings.GPT4AllStreaming = false;
 			this.prompt = "";
 			this.pendingRagSources = [];
+			this.pendingWebSources = [];
+			this.activeSkillId = null;
+			this.activeAssistantNameThisTurn = null;
 			errorMessages(error, params);
 			if (this.getMessages().length > 0) {
-				setTimeout(() => {
+				activeWindow.setTimeout(() => {
 					this.removeMessage(header, modelName);
 				}, 1000);
 			}
@@ -881,6 +1445,85 @@ export class ChatContainer {
 			modelType === mistral ||
 			modelType === openAI
 		);
+	}
+
+	/**
+	 * Strip or flatten any tool-call structured messages from a message list so
+	 * that models which don't understand the tool-call message format receive
+	 * clean plain-text history.
+	 *
+	 * The MessageStore only ever stores { role, content: string } messages, so
+	 * this is currently a defensive guard. It becomes load-bearing if a future
+	 * code path ever writes OpenAI-format tool-call objects (role: "tool",
+	 * tool_calls arrays) or Anthropic structured content blocks into the store.
+	 *
+	 * Transformation rules:
+	 *  - role: "tool" messages → dropped entirely (their content is implicit in
+	 *    the following assistant turn's text response)
+	 *  - role: "assistant" with tool_calls → keep only the text portion
+	 *  - role: "user" with array content (Anthropic tool_result blocks) →
+	 *    flatten text blocks; summarise tool_result blocks as "[Tool result: …]"
+	 *  - Everything else → passed through unchanged
+	 */
+	private sanitizeMessagesForNonAgentModel(messages: Message[]): Message[] {
+		const out: Message[] = [];
+		for (const msg of messages) {
+			// Use `any` to inspect fields that the narrower Message type doesn't
+			// declare but that may appear in practice (e.g. OpenAI tool messages).
+			const raw = msg as any;
+
+			// Pure tool-result messages — drop them; their semantic content is
+			// already captured in the assistant's final text reply.
+			if (raw.role === "tool") continue;
+
+			// Assistant messages that contain tool_calls alongside (possibly
+			// empty) text — keep only the text portion.
+			if (raw.role === "assistant" && raw.tool_calls) {
+				const text =
+					typeof raw.content === "string"
+						? raw.content
+						: Array.isArray(raw.content)
+						? (raw.content as any[])
+								.filter((b) => b.type === "text")
+								.map((b) => b.text ?? "")
+								.join("\n")
+								.trim()
+						: "";
+				if (text) out.push({ role: "assistant", content: text });
+				continue;
+			}
+
+			// User messages whose content is an array (Anthropic tool_result
+			// blocks mixed with optional text blocks).
+			if (raw.role === "user" && Array.isArray(raw.content)) {
+				const parts: string[] = (raw.content as any[])
+					.map((b) => {
+						if (b.type === "text") return (b.text ?? "").trim();
+						if (b.type === "tool_result") {
+							const inner =
+								typeof b.content === "string"
+									? b.content
+									: Array.isArray(b.content)
+									? (b.content as any[])
+											.filter((x) => x.type === "text")
+											.map((x) => x.text ?? "")
+											.join(" ")
+									: "";
+							return inner ? `[Tool result: ${inner.trim()}]` : "";
+						}
+						return "";
+					})
+					.filter(Boolean);
+				if (parts.length > 0) {
+					out.push({ role: "user", content: parts.join("\n") });
+				}
+				continue;
+			}
+
+			// Standard { role, content: string } message — pass through.
+			out.push(msg);
+		}
+		return out;
 	}
 
 	/** Build the right OpenAI-compatible client for a given provider. */
@@ -929,16 +1572,16 @@ export class ChatContainer {
 
 			// Header row
 			const cardHeader = card.createDiv({ cls: "llm-permission-header" });
-			const iconEl = cardHeader.createEl("span", { cls: "llm-permission-icon" });
+			const iconEl = cardHeader.createSpan({ cls: "llm-permission-icon" });
 			setIcon(iconEl, "wand-sparkles");
-			cardHeader.createEl("span", {
+			cardHeader.createSpan({
 				text: "Agent wants to perform an action",
 				cls: "llm-permission-title",
 			});
 
 			// Body
 			const body = card.createDiv({ cls: "llm-permission-body" });
-			body.createEl("div", {
+			body.createDiv({
 				text: toolDescription,
 				cls: "llm-permission-description",
 			});
@@ -975,6 +1618,78 @@ export class ChatContainer {
 	}
 
 	/**
+	 * Render an inline scope-picker card and return the selected scopes,
+	 * or null if the user cancelled. Only shown when there are 2+ scope options.
+	 */
+	private showMemoryScopeUI(
+		content: string,
+		scopes: Array<{ scope: "global" | "project" | "assistant"; label: string; tag: string }>
+	): Promise<Array<{ scope: "global" | "project" | "assistant"; label: string }> | null> {
+		return new Promise((resolve) => {
+			const card = this.historyMessages.createDiv({ cls: "llm-permission-card" });
+
+			// Header
+			const cardHeader = card.createDiv({ cls: "llm-permission-header" });
+			const iconEl = cardHeader.createSpan({ cls: "llm-permission-icon" });
+			setIcon(iconEl, "brain");
+			cardHeader.createSpan({
+				text: "Where should I save this memory?",
+				cls: "llm-permission-title",
+			});
+
+			// Body
+			const body = card.createDiv({ cls: "llm-permission-body" });
+			body.createDiv({ text: `"${content}"`, cls: "llm-memory-content-preview" });
+			body.createDiv({ text: "Select one or more destinations:", cls: "llm-memory-scope-label" });
+
+			const optionsEl = body.createDiv({ cls: "llm-memory-scope-options" });
+			const checkboxes: Array<{ cb: HTMLInputElement; scope: "global" | "project" | "assistant"; label: string }> = [];
+
+			for (const { scope, label, tag } of scopes) {
+				const row = optionsEl.createDiv({ cls: "llm-memory-scope-row" });
+				const cb = row.createEl("input", { attr: { type: "checkbox" } });
+				cb.checked = true;
+				const lbl = row.createEl("label");
+				lbl.appendText(label);
+				lbl.createSpan({ text: tag, cls: "llm-memory-scope-tag" });
+				// Clicking the label toggles the checkbox
+				lbl.addEventListener("click", () => { cb.checked = !cb.checked; });
+				checkboxes.push({ cb, scope, label });
+			}
+
+			// Buttons
+			const btnRow = card.createDiv({ cls: "llm-permission-buttons" });
+
+			const cancelBtn = new ButtonComponent(btnRow);
+			cancelBtn.setButtonText("Cancel");
+			cancelBtn.buttonEl.addClass("llm-permission-deny");
+
+			const saveBtn = new ButtonComponent(btnRow);
+			saveBtn.setButtonText("Save");
+			saveBtn.buttonEl.addClass("llm-permission-allow", "mod-cta");
+
+			const cleanup = (
+				e: MouseEvent,
+				result: Array<{ scope: "global" | "project" | "assistant"; label: string }> | null
+			) => {
+				e.stopPropagation();
+				card.remove();
+				resolve(result);
+			};
+
+			cancelBtn.onClick((e) => cleanup(e, null));
+			saveBtn.onClick((e) => {
+				const selected = checkboxes
+					.filter((c) => c.cb.checked)
+					.map((c) => ({ scope: c.scope, label: c.label }));
+				cleanup(e, selected.length > 0 ? selected : null);
+			});
+
+			this.historyMessages.scroll(0, 9999);
+		});
+	}
+
+	/**
 	 * Run the agentic loop for the current prompt, handling tool calls and
 	 * permission prompts, then commit the final response to the message store.
 	 */
@@ -982,22 +1697,131 @@ export class ChatContainer {
 		params: ChatParams,
 		model: string,
 		modelType: string,
-		modelName: string
+		modelName: string,
+		allowedTools: string[] = []
 	): Promise<void> {
 		const settingType = getSettingType(this.viewType);
-		const permissionMode =
+		const configuredPermissionMode =
 			this.plugin.settings[settingType].agentSettings?.permissionMode ?? "ask";
+
+		// Tier 2 models (unknown/unreliable local models) must never auto-approve
+		// write tools — downgrade "auto-approve" to "ask" so vault writes always
+		// surface a confirmation dialog.
+		const modelTier = getToolTier(modelType, model);
+		const permissionMode = effectivePermissionMode(configuredPermissionMode, modelTier) as import("Types/types").PermissionMode;
 
 		// Capture the current assistant-message count to use as the turn index.
 		// Tool calls accumulated this turn will be associated with this index.
 		const turnIndex = this.getMessages().filter((m) => m.role === assistant).length;
 		this.pendingToolCalls = [];
 
+		const disabledTools = this.plugin.settings.toolSettings?.disabledTools ?? [];
+		const maxToolCalls = this.plugin.settings.toolSettings?.maxToolCalls ?? 10;
+
+		// Configure the agent registry: register dynamic tools before the loop runs.
+		const agentSetup = (registry: import("services/ObsidianToolRegistry").ObsidianToolRegistry) => {
+			// Obsidian Agent mode: register invoke_assistant
+			if (this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled && this.plugin.obsidianAgent) {
+				this.plugin.obsidianAgent.registerTools(registry);
+			}
+
+			// Memory: register save_memory whenever MemoryService is available
+			if (this.plugin.memoryService) {
+				const memSvc = this.plugin.memoryService;
+				registry.registerDynamicTool(
+					{
+						name: "save_memory",
+						displayName: "Save memory",
+						description:
+							"Persist a piece of information to the user's long-term memory store. " +
+							"Call this whenever the user says 'remember X', 'save this to memory', " +
+							"'keep a note of Y', or otherwise explicitly asks you to retain something " +
+							"across conversations. The memory is scoped automatically to the active " +
+							"project or assistant — you do not need to specify a path.",
+						parameters: {
+							type: "object",
+							properties: {
+								content: {
+									type: "string",
+									description: "The information to save as a single clear, self-contained sentence.",
+								},
+								type: {
+									type: "string",
+									description: "Memory type: 'fact' (default), 'preference', or 'context'.",
+									enum: ["fact", "preference", "context"],
+								},
+							},
+							required: ["content"],
+						},
+						risk: "write",
+					},
+					async (input: { content: string; type?: string }) => {
+						const { content, type = "fact" } = input;
+						// Build the list of available scopes at call time
+						const projId = this.plugin.settings.projectSettings?.activeProjectId;
+						const proj = projId ? this.plugin.projectManager?.getProject(projId) : null;
+						const asstId = this.plugin.settings.assistantSettings?.activeAssistantId;
+						const asst = asstId ? this.plugin.assistantManager?.getAssistant(asstId) : null;
+
+						type ScopeOption = { scope: "global" | "project" | "assistant"; label: string; tag: string; name?: string };
+						const availableScopes: ScopeOption[] = [];
+						// Use proj.id (folder slug) as the scope name — NOT proj.name (display name)
+						if (proj) availableScopes.push({ scope: "project", label: proj.name, tag: "project", name: proj.id });
+						// Vault assistants: asst.id is the folder slug
+						if (asst) availableScopes.push({ scope: "assistant", label: asst.name ?? asst.id, tag: "assistant", name: asst.id });
+						// Obsidian Agent mode counts as an implicit assistant scope
+						else if (this.isObsidianAgent) availableScopes.push({ scope: "assistant", label: "Obsidian Agent", tag: "agent", name: "Obsidian Agent" });
+						availableScopes.push({ scope: "global", label: "Global memory", tag: "global" });
+
+						// Show scope picker only when there is more than one option
+						let selectedScopes: Array<{ scope: "global" | "project" | "assistant"; label: string; name?: string }>;
+						if (availableScopes.length > 1) {
+							const picked = await this.showMemoryScopeUI(content, availableScopes);
+							if (!picked || picked.length === 0) {
+								return { success: true, result: "Memory save cancelled." };
+							}
+							// Map labels back to scope+name
+							selectedScopes = picked.map((p) => {
+								const opt = availableScopes.find((s) => s.scope === p.scope);
+								return { scope: p.scope, label: p.label, name: opt?.name };
+							});
+						} else {
+							// Only global — save directly, no UI
+							selectedScopes = [{ scope: "global", label: "global memory" }];
+						}
+
+						// Save to each selected scope
+						const results: string[] = [];
+						for (const { scope, label, name } of selectedScopes) {
+							try {
+								const filePath = await memSvc.saveDirectly(
+									content,
+									type as "fact" | "preference" | "context",
+									scope,
+									name
+								);
+								results.push(filePath ? `✓ ${label}` : `Already in memory (${label})`);
+							} catch (e: any) {
+								results.push(`✗ ${label}: ${e?.message ?? String(e)}`);
+							}
+						}
+						return { success: true, result: results.join("\n") };
+					}
+				);
+			}
+		};
+
 		const agentLoop = new AgentLoop(
 			this.plugin.app,
 			permissionMode,
 			this.showPermissionUI.bind(this),
 			this.plugin.vaultIndexer,
+			allowedTools.length > 0 ? allowedTools : undefined,
+			disabledTools,
+			maxToolCalls,
+			agentSetup,
+			this.plugin.settings.chatHistoryEnabled ? this.plugin.chatHistory : undefined,
+			this.plugin.searxngService,
 		);
 
 		const callbacks: AgentCallbacks = {
@@ -1027,11 +1851,25 @@ export class ChatContainer {
 					for (const p of paths) {
 						if (!this.pendingRagSources.includes(p)) this.pendingRagSources.push(p);
 					}
+				} else if (toolName === "web_search") {
+					// Parse **N. [Title](URL)** links from the formatted result block
+					const linkRegex = /\*\*\d+\.\s+\[([^\]]+)\]\((https?:\/\/[^)]+)\)\*\*/g;
+					let m: RegExpExecArray | null;
+					while ((m = linkRegex.exec(result)) !== null) {
+						const [, title, url] = m;
+						if (!this.pendingWebSources.find((s) => s.url === url)) {
+							this.pendingWebSources.push({ title, url });
+						}
+					}
 				} else if (toolName === "obsidian_read_note" && typeof input.path === "string") {
 					// The model explicitly read a note — that note is a source
 					if (!this.pendingRagSources.includes(input.path)) {
 						this.pendingRagSources.push(input.path);
 					}
+				} else if (toolName === "invoke_assistant" && typeof input.assistant_id === "string") {
+					// Track which assistant was routed to for the routing indicator
+					const assistant = this.plugin.assistantManager?.getAssistant(input.assistant_id);
+					this.agentRoutedAssistantThisTurn = assistant?.name ?? input.assistant_id;
 				}
 				// Record the tool call for chat file history
 				this.pendingToolCalls.push({ name: toolName, input, result });
@@ -1042,11 +1880,12 @@ export class ChatContainer {
 			await agentLoop.runAnthropic(
 				params,
 				this.plugin.settings.claudeAPIKey,
-				callbacks
+				callbacks,
+				this._abortController?.signal
 			);
 		} else {
 			const client = this.createOpenAIClient(modelType);
-			await agentLoop.runOpenAICompatible(params, client, callbacks);
+			await agentLoop.runOpenAICompatible(params, client, callbacks, this._abortController?.signal);
 		}
 
 		// Render final markdown
@@ -1061,8 +1900,13 @@ export class ChatContainer {
 			this.pendingToolCalls = [];
 		}
 
+		// Record which skill was active for this turn (if any)
+		if (this.activeSkillId) {
+			this.allSkillsByTurn.set(turnIndex, this.activeSkillId);
+		}
+
 		const messageContext = {
-			...(params as ChatParams),
+			...params,
 			messages: this.getMessages(),
 			modelName,
 		} as ChatHistoryItem;
@@ -1136,8 +1980,124 @@ export class ChatContainer {
 		}
 		const length = this.plugin.settings.promptHistory.length;
 		setHistoryIndex(this.plugin, this.viewType, length);
-		this.plugin.saveSettings();
+		void this.plugin.saveSettings();
 		this.prompt = "";
+	}
+
+	/**
+	 * Restore the active project from a loaded chat file path + frontmatter.
+	 *
+	 * Called after loading a conversation from history. Detection order:
+	 *   1. File path inside Projects/<id>/chats/ → use that project id
+	 *   2. meta.project name → match by name against known projects
+	 *   3. Neither → clear active project
+	 *
+	 * Always calls syncChips() so the chip strip reflects the result.
+	 */
+	restoreProjectFromChat(filePath: string, metaProjectName?: string): void {
+		const projectsFolder = this.plugin.projectsFolder;
+		let resolvedId: string | null = null;
+
+		// 1. Try path-based detection (most reliable — survives project renames)
+		if (filePath.startsWith(projectsFolder + "/")) {
+			const relative = filePath.slice(projectsFolder.length + 1);
+			const segments = relative.split("/");
+			// Expected: <projectId>/chats/<filename>.md
+			if (segments.length >= 3 && segments[1] === "chats") {
+				const candidateId = segments[0];
+				if (this.plugin.projectManager?.getProject(candidateId)) {
+					resolvedId = candidateId;
+				}
+			}
+		}
+
+		// 2. Fall back to name matching from frontmatter
+		if (!resolvedId && metaProjectName) {
+			const match = this.plugin.projectManager
+				?.getProjects()
+				.find((p) => p.name === metaProjectName);
+			if (match) resolvedId = match.id;
+		}
+
+		// Apply — only write settings if the value is actually changing
+		const currentId = this.plugin.settings.projectSettings?.activeProjectId ?? null;
+		if (currentId !== resolvedId) {
+			this.plugin.settings.projectSettings = {
+				...this.plugin.settings.projectSettings,
+				activeProjectId: resolvedId,
+			};
+			void this.plugin.saveSettings();
+		}
+
+		this.syncChips();
+	}
+
+	/**
+	 * Set (or clear) the active project, moving the current chat file to the
+	 * appropriate folder and patching its frontmatter at the same time.
+	 *
+	 * - projectId = string  → move file into Projects/<id>/chats/
+	 * - projectId = null    → move file back to the default chat history folder
+	 *
+	 * If no chat file exists yet (new chat not yet saved), only the settings
+	 * are updated; the first save will land in the right folder automatically.
+	 */
+	async setActiveProject(projectId: string | null): Promise<void> {
+		// Determine target folder and project display name
+		let targetFolder: string;
+		let projectName: string | undefined;
+
+		if (projectId) {
+			const project = this.plugin.projectManager?.getProject(projectId);
+			if (!project) {
+				console.warn(`[ChatContainer] setActiveProject: project not found: ${projectId}`);
+				return;
+			}
+			targetFolder = this.plugin.chatHistory.folderForProject(projectId);
+			projectName = project.name;
+		} else {
+			targetFolder = this.plugin.chatHistory.folder;
+			projectName = undefined;
+		}
+
+		// Move the existing file if there is one and the target differs
+		if (this.currentHistoryFilePath) {
+			const currentFile = this.plugin.app.vault.getFileByPath(this.currentHistoryFilePath);
+			if (currentFile) {
+				// Only move if the file isn't already in the target folder
+				const currentFolder = this.currentHistoryFilePath.substring(
+					0,
+					this.currentHistoryFilePath.lastIndexOf("/")
+				);
+				if (currentFolder !== targetFolder) {
+					try {
+						const newPath = await this.plugin.chatHistory.moveToFolder(
+							this.currentHistoryFilePath,
+							targetFolder,
+							projectName
+						);
+						this.currentHistoryFilePath = newPath;
+						setHistoryFilePath(this.plugin, this.viewType, newPath);
+					} catch (e) {
+						console.error("[ChatContainer] Failed to move chat file:", e);
+					}
+				} else {
+					// File is already in the right folder — just patch the frontmatter field
+					await this.plugin.chatHistory.updateProjectField(
+						this.currentHistoryFilePath,
+						projectName
+					);
+				}
+			}
+		}
+
+		// Persist setting and refresh chip strip
+		this.plugin.settings.projectSettings = {
+			...this.plugin.settings.projectSettings,
+			activeProjectId: projectId,
+		};
+		await this.plugin.saveSettings();
+		this.syncChips();
 	}
 
 	/** File-based save path — called when chatHistoryEnabled is true. */
@@ -1156,7 +2116,11 @@ export class ChatContainer {
 				messages,
 				params,
 				vaultContext,
-				this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined
+				this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined,
+				this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined,
+				undefined, // projectName — unchanged on update
+				undefined, // isAgent — unchanged on update
+				this.allModelsByTurn.size > 0 ? this.allModelsByTurn : undefined
 			);
 			return;
 		}
@@ -1183,13 +2147,29 @@ export class ChatContainer {
 			this.headerTitleCallback(title);
 		}
 
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
+		const activeProject = activeProjectId
+			? this.plugin.projectManager?.getProject(activeProjectId)
+			: null;
+
+		// New chats for an active project are saved directly into the project's
+		// chats sub-folder so they are co-located with the project definition.
+		const saveFolder = activeProject
+			? this.plugin.chatHistory.folderForProject(activeProjectId!)
+			: undefined;
+
 		const filePath = await this.plugin.chatHistory.save(
 			null,
 			title,
 			messages,
 			params,
 			vaultContext,
-			this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined
+			this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined,
+			this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined,
+			activeProject?.name,
+			this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled,
+			this.allModelsByTurn.size > 0 ? this.allModelsByTurn : undefined,
+			saveFolder
 		);
 
 		this.currentHistoryFilePath = filePath;
@@ -1295,15 +2275,36 @@ export class ChatContainer {
 
 	auto_height(elem: TextAreaComponent, parentElement: Element) {
 		const MAX_HEIGHT = 140; // ~5 lines before scrolling
-		// Collapse to 1px so scrollHeight accurately reflects content height
-		elem.inputEl.setAttribute("style", "height: 1px");
-		const contentHeight = elem.inputEl.scrollHeight;
+		const ta = elem.inputEl;
+		// Collapse height to 0 so scrollHeight accurately reflects content.
+		// Set properties individually to avoid wiping other inline styles.
+		// overflow:hidden must be set before reading scrollHeight so the
+		// browser doesn't add a scrollbar gutter that inflates the measurement.
+		ta.style.overflowY = "hidden";
+		ta.style.height = "0px";
+		const contentHeight = ta.scrollHeight;
 		if (contentHeight <= MAX_HEIGHT) {
-			elem.inputEl.setAttribute("style", `height: ${contentHeight}px; overflow-y: hidden`);
+			ta.style.height = `${contentHeight}px`;
+			ta.style.overflowY = "hidden";
 		} else {
-			elem.inputEl.setAttribute("style", `height: ${MAX_HEIGHT}px; overflow-y: auto`);
+			ta.style.height = `${MAX_HEIGHT}px`;
+			ta.style.overflowY = "auto";
 		}
 		parentElement.scrollTo(0, 9999);
+	}
+
+	/** Returns true if the user has configured at least one model provider. */
+	private hasAnyModelConfigured(): boolean {
+		const s = this.plugin.settings;
+		return !!(
+			s.openAIAPIKey?.trim() ||
+			s.claudeAPIKey?.trim() ||
+			s.claudeCodeOAuthToken?.trim() ||
+			s.geminiAPIKey?.trim() ||
+			s.mistralAPIKey?.trim() ||
+			(s.ollamaModels?.length ?? 0) > 0 ||
+			(s.lmStudioModels?.length ?? 0) > 0
+		);
 	}
 
 	displayNoChatView(parentElement: Element) {
@@ -1321,51 +2322,232 @@ export class ChatContainer {
 		const svgElement = svgDoc.documentElement;
 
 		llmGal.appendChild(svgElement);
+
+		// If no model is configured yet, show a setup nudge below the avatar.
+		if (!this.hasAnyModelConfigured()) {
+			const hint = (parentElement as HTMLElement).createDiv({ cls: "llm-setup-hint" });
+			hint.createEl("p", {
+				cls: "llm-setup-hint-text",
+				text: "Add a model to get started.",
+			});
+			const btn = hint.createEl("button", {
+				cls: "mod-cta llm-setup-hint-button",
+				text: "Open Settings",
+			});
+			btn.addEventListener("click", () => {
+				(this.plugin.app as any).setting.open();
+				(this.plugin.app as any).setting.openTabById(this.plugin.manifest.id);
+			});
+		}
 	}
 
-	/** Rebuild the chip strip from current state (active file + additional files). */
+	// ── Chat Details panel integration ───────────────────────────────────────
+
+	/**
+	 * Push the current live state (model/assistant, memories, context files) to
+	 * the ChatDetailsView if it is open. Called from syncChips(), syncModelDropdown(),
+	 * and after memory recall. Safe to call when the panel is closed (no-op).
+	 * Public so Widget.loadChatFile() can push after updating model settings.
+	 */
+	pushChatDetailsState() {
+		const settingType = getSettingType(this.viewType);
+		const contextSettings = this.plugin.settings[settingType].contextSettings;
+
+		// ── Model / assistant ──────────────────────────────────────────────
+		const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId ?? null;
+		const assistant = activeAssistantId
+			? (this.plugin.assistantManager?.getAssistant(activeAssistantId) ?? null)
+			: null;
+		const viewInfo = getViewInfo(this.plugin, this.viewType);
+		let modelLabel: string;
+		if (this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled) {
+			modelLabel = "Obsidian Agent";
+		} else {
+			modelLabel = assistant?.name ?? viewInfo.modelName ?? "";
+		}
+
+		// ── Project ────────────────────────────────────────────────────────
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId ?? null;
+		const project = activeProjectId
+			? (this.plugin.projectManager?.getProject(activeProjectId) ?? null)
+			: null;
+
+		// ── Context files ─────────────────────────────────────────────────
+		const contextFiles: { name: string; path: string }[] = [];
+		if (this.plugin.settings.enableFileContext) {
+			if (this.useActiveFileContext && this.activeFileForChip) {
+				contextFiles.push(this.activeFileForChip);
+			}
+			for (const filePath of contextSettings.selectedFiles) {
+				contextFiles.push({
+					name: filePath.split("/").pop() || filePath,
+					path: filePath,
+				});
+			}
+		}
+		// Pinned project notes are also context
+		if (project?.pinnedNotes) {
+			for (const notePath of project.pinnedNotes) {
+				const { displayName, file } = this.resolvePinnedNote(notePath);
+				const resolvedPath = file?.path ?? notePath;
+				if (!contextFiles.some((f) => f.path === resolvedPath)) {
+					contextFiles.push({ name: displayName, path: resolvedPath });
+				}
+			}
+		}
+
+		// ── Guidance files ────────────────────────────────────────────────
+		const guidanceFiles: { name: string; path: string; icon: string }[] = [];
+
+		// AGENTS.md — global instructions, always injected when configured
+		const agentsFilePath = this.plugin.settings.agentsFilePath?.trim();
+		if (agentsFilePath) {
+			const agentsAbstract = this.plugin.app.vault.getAbstractFileByPath(agentsFilePath);
+			if (agentsAbstract instanceof TFile) {
+				guidanceFiles.push({
+					name: agentsAbstract.basename,
+					path: agentsAbstract.path,
+					icon: "book-open",
+				});
+			}
+		}
+
+		// OBSIDIAN-AGENT.md — agent-specific guidance, injected only when agent is active
+		if (this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled) {
+			const agentGuidancePath = this.plugin.settings.obsidianAgentSettings.agentGuidanceFile?.trim();
+			if (agentGuidancePath) {
+				const agentGuidanceAbstract = this.plugin.app.vault.getAbstractFileByPath(agentGuidancePath);
+				if (agentGuidanceAbstract instanceof TFile) {
+					guidanceFiles.push({
+						name: agentGuidanceAbstract.basename,
+						path: agentGuidanceAbstract.path,
+						icon: "scroll-text",
+					});
+				}
+			}
+		}
+
+		const projectsFolder = this.plugin.projectsFolder ?? "";
+		const state = {
+			modelLabel,
+			isAssistant: !!assistant,
+			assistantId: assistant?.id ?? null,
+			projectName: project?.name ?? null,
+			activeProject: project
+				? {
+						id: project.id,
+						name: project.name,
+						filePath: project.filePath,
+						folderPath: `${projectsFolder}/${project.id}`,
+				  }
+				: null,
+			recalledMemories: [...this.lastRecalledMemories],
+			contextFiles,
+			guidanceFiles,
+		};
+
+		// Update the detached right-sidebar panel if one is open
+		const detailsView = this.plugin.getChatDetailsView?.();
+		detailsView?.updateState(state);
+
+		// Render into the inline widget sidebar (always, regardless of visibility —
+		// content stays current so it's ready the moment the user opens the panel)
+		if (this.detailsSidebarEl) {
+			renderChatDetailsInto(
+				this.detailsSidebarEl,
+				state,
+				this.plugin.app,
+				this.plugin.settings.memorySettings?.enabled ?? false
+			);
+		}
+	}
+
+	/** Rebuild the chip strip from current state (active file + additional files + pinned project notes). */
 	syncChips() {
+		// Always push details state first — this reads from settings/memory, not the DOM,
+		// so it works regardless of whether chipContainer is built yet (FAB, modal, etc.)
+		this.pushChatDetailsState();
+
 		if (!this.chipContainer) return;
 		const settingType = getSettingType(this.viewType);
 		const contextSettings = this.plugin.settings[settingType].contextSettings;
 
 		this.chipContainer.empty();
 
-		// When file context is disabled, show nothing
-		if (!this.plugin.settings.enableFileContext) {
-			this.chipContainer.style.display = "none";
-			return;
-		}
+		// Resolve active project pinned notes (always shown, regardless of file context toggle)
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
+		const activeProject = activeProjectId
+			? this.plugin.projectManager?.getProject(activeProjectId)
+			: null;
+		const pinnedNotes = activeProject?.pinnedNotes ?? [];
 
-		const hasActiveFile = this.useActiveFileContext && this.activeFileForChip;
-		const hasAdditional = contextSettings.selectedFiles.length > 0;
+		// File context chips require file context to be enabled
+		const hasActiveFile = this.plugin.settings.enableFileContext && this.useActiveFileContext && this.activeFileForChip;
+		const hasAdditional = this.plugin.settings.enableFileContext && contextSettings.selectedFiles.length > 0;
+		const hasPinned = pinnedNotes.length > 0;
+		const hasProject = !!activeProject;
 
-		if (!hasActiveFile && !hasAdditional) {
+		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject) {
 			this.chipContainer.style.display = "none";
 			return;
 		}
 
 		this.chipContainer.style.display = "flex";
 
-		if (hasActiveFile) {
-			this.buildChip(this.chipContainer, this.activeFileForChip!.name, () => {
-				this.useActiveFileContext = false;
-				this.activeFileForChip = null;
-				this.scanButton?.buttonEl.removeClass("is-active");
-				this.syncChips();
+		// Project chip — icon-only at rest, name revealed on hover
+		if (hasProject && activeProject) {
+			this.buildProjectChip(this.chipContainer, activeProject.name, () => {
+				this.setActiveProject(null);
 			});
 		}
 
-		for (const filePath of [...contextSettings.selectedFiles]) {
-			const fileName = filePath.split("/").pop() || filePath;
-			this.buildChip(this.chipContainer, fileName, () => {
-				contextSettings.selectedFiles = contextSettings.selectedFiles.filter(
-					(f) => f !== filePath
-				);
-				this.plugin.saveSettings();
-				this.syncChips();
-			});
+		// Pinned project notes
+		for (const notePath of pinnedNotes) {
+			const { displayName, file } = this.resolvePinnedNote(notePath);
+			this.buildPinnedChip(this.chipContainer, displayName, file);
 		}
+
+		// File context chips (only when enabled)
+		if (this.plugin.settings.enableFileContext) {
+			if (hasActiveFile) {
+				this.buildChip(this.chipContainer, this.activeFileForChip!.name, () => {
+					this.useActiveFileContext = false;
+					this.activeFileForChip = null;
+					this.scanButton?.buttonEl.removeClass("is-active");
+					this.syncChips();
+				});
+			}
+
+			for (const filePath of [...contextSettings.selectedFiles]) {
+				const fileName = filePath.split("/").pop() || filePath;
+				this.buildChip(this.chipContainer, fileName, () => {
+					contextSettings.selectedFiles = contextSettings.selectedFiles.filter(
+						(f) => f !== filePath
+					);
+					void this.plugin.saveSettings();
+					this.syncChips();
+				});
+			}
+		}
+	}
+
+	/**
+	 * Returns the active markdown file, but only when the active Obsidian leaf
+	 * is a real markdown/file view — not the LLM widget itself.
+	 *
+	 * `app.workspace.getActiveFile()` returns the last markdown file Obsidian
+	 * tracked even when a plugin view (our widget) is the current leaf, producing
+	 * a stale result. Checking the active leaf's view type prevents that.
+	 */
+	private getActiveMarkdownFile(): import("obsidian").TFile | null {
+		// Use getActiveViewOfType so we only return a file when a markdown editor
+		// is genuinely the active view. Checking activeLeaf?.getViewType() against
+		// TAB_VIEW_TYPE was insufficient: when the FAB popover has focus,
+		// workspace.activeLeaf is null, causing the TAB_VIEW_TYPE guard to miss
+		// and getActiveFile() to return the last-tracked markdown file even though
+		// no markdown view is active.
+		const markdownView = this.plugin.app.workspace.getActiveViewOfType(MarkdownView);
+		return markdownView?.file ?? null;
 	}
 
 	private buildChip(
@@ -1374,10 +2556,10 @@ export class ChatContainer {
 		onRemove: () => void
 	): HTMLElement {
 		const chip = container.createDiv({ cls: "llm-context-chip" });
-		const fileIcon = chip.createEl("span", { cls: "llm-context-chip-icon" });
+		const fileIcon = chip.createSpan({ cls: "llm-context-chip-icon" });
 		setIcon(fileIcon, "file-text");
-		chip.createEl("span", { text: name, cls: "llm-context-chip-name" });
-		const removeBtn = chip.createEl("span", {
+		chip.createSpan({ text: name, cls: "llm-context-chip-name" });
+		const removeBtn = chip.createSpan({
 			text: "×",
 			cls: "llm-context-chip-remove",
 		});
@@ -1386,6 +2568,82 @@ export class ChatContainer {
 			onRemove();
 		});
 		return chip;
+	}
+
+	/**
+	 * Build the project chip. Shows only the box icon at rest; the project name
+	 * (and remove button) are revealed on hover via a CSS max-width transition.
+	 */
+	private buildProjectChip(container: HTMLElement, name: string, onRemove: () => void): HTMLElement {
+		const chip = container.createDiv({ cls: "llm-context-chip llm-project-chip" });
+		const iconEl = chip.createSpan({ cls: "llm-context-chip-icon" });
+		setIcon(iconEl, "box");
+		chip.createSpan({ text: name, cls: "llm-context-chip-name llm-project-chip-name" });
+		const removeBtn = chip.createSpan({ text: "×", cls: "llm-context-chip-remove" });
+		removeBtn.addEventListener("click", (e) => {
+			e.stopPropagation();
+			onRemove();
+		});
+		return chip;
+	}
+
+	/** Build a non-removable pinned-note chip (for project pinned notes). */
+	private buildPinnedChip(container: HTMLElement, name: string, file: TFile | null): HTMLElement {
+		const chip = container.createDiv({ cls: "llm-context-chip llm-context-chip--pinned" });
+		const pinIcon = chip.createSpan({ cls: "llm-context-chip-icon" });
+		setIcon(pinIcon, "pin");
+		chip.createSpan({ text: name, cls: "llm-context-chip-name" });
+		if (file) {
+			chip.addClass("llm-context-chip--clickable");
+			chip.addEventListener("click", () => {
+				this.plugin.app.workspace.getLeaf(false).openFile(file);
+			});
+		}
+		return chip;
+	}
+
+	/**
+	 * Resolve a pinned note path (plain path or wikilink like [[Note Name]]) to
+	 * a display name (no brackets, no .md extension) and the TFile if found.
+	 */
+	private resolvePinnedNote(notePath: string): { displayName: string; file: TFile | null } {
+		// Strip surrounding quotes that YAML parsers may leave (e.g. "[[Note]]" → [[Note]])
+		notePath = notePath.replace(/^["']|["']$/g, "").trim();
+		const isWikilink = notePath.startsWith("[[") && notePath.endsWith("]]");
+		if (isWikilink) {
+			const linkText = notePath.slice(2, -2).split("|")[0].trim(); // handle [[Note|Alias]]
+			const file = this.plugin.app.metadataCache.getFirstLinkpathDest(linkText, "") ?? null;
+			return { displayName: linkText, file };
+		}
+		const file = this.plugin.app.vault.getAbstractFileByPath(notePath);
+		const displayName = notePath.split("/").pop()?.replace(/\.md$/i, "") || notePath;
+		return { displayName, file: file instanceof TFile ? file : null };
+	}
+
+	/**
+	 * Read each pinned note from the vault and return a formatted context block,
+	 * or null if there are no pinned notes or they are all unreadable.
+	 */
+	private async buildPinnedNotesContext(paths: string[]): Promise<string | null> {
+		if (!paths || paths.length === 0) return null;
+
+		const blocks: string[] = [];
+		for (const notePath of paths) {
+			try {
+				const { displayName, file } = this.resolvePinnedNote(notePath);
+				if (!file) {
+					console.warn(`[Projects] Pinned note not found: ${notePath}`);
+					continue;
+				}
+				const content = await this.plugin.app.vault.read(file);
+				blocks.push(`### ${displayName}\nPath: \`${file.path}\`\n\n${content}`);
+			} catch (e) {
+				console.warn(`[Projects] Failed to read pinned note ${notePath}:`, e);
+			}
+		}
+
+		if (blocks.length === 0) return null;
+		return `# Pinned Project Notes\n\n${blocks.join("\n\n---\n\n")}`;
 	}
 
 	async generateChatContainer(parentElement: Element, header: Header) {
@@ -1410,10 +2668,21 @@ export class ChatContainer {
 		this.chipContainer.addClass("llm-context-chip-container");
 		this.chipContainer.style.display = "none";
 
-		// Top section: textarea
+		// Input area (textarea only — skill prefix is inserted as inline text)
 		const inputSection = promptContainer.createDiv();
 		inputSection.addClass("llm-input-section");
-		const promptField = new TextAreaComponent(inputSection);
+
+		// Wrapper for the textarea + mirror overlay (accent-colored skill prefix).
+		const promptWrapper = inputSection.createDiv();
+		promptWrapper.addClass("llm-prompt-wrapper");
+
+		// Mirror div — overlays the textarea with styled text. pointer-events:none
+		// keeps it invisible to mouse/keyboard so the real textarea handles all input.
+		const mirrorDiv = promptWrapper.createDiv();
+		mirrorDiv.addClass("llm-input-mirror");
+		mirrorDiv.style.display = "none";
+
+		const promptField = new TextAreaComponent(promptWrapper);
 		promptField.inputEl.className = classNames[this.viewType]["text-area"];
 		promptField.inputEl.id = "chat-prompt-text-area";
 		promptField.inputEl.tabIndex = 0;
@@ -1421,22 +2690,191 @@ export class ChatContainer {
 			this.auto_height(promptField, parentElement);
 		});
 
+		// Slash command picker menu — mounted on document.body with position:fixed
+		// so it is never clipped by overflow:hidden/auto on any ancestor container.
+		// Each ChatContainer instance manages only its own menu via this.slashMenuEl,
+		// so other views' menus are not accidentally removed.
+		this.slashMenuEl?.remove();
+		this.slashMenuEl = document.body.createDiv({ cls: "llm-slash-menu" });
+		const slashMenu = this.slashMenuEl;
+		slashMenu.style.display = "none";
+		let slashMenuIndex = 0;
+		let slashMenuSkills: ParsedSkill[] = [];
+
+		// Position the menu just above the prompt container using fixed coords.
+		// Use requestAnimationFrame so the browser has laid out the menu content
+		// and offsetHeight is accurate before we compute the top position.
+		const positionSlashMenu = () => {
+			requestAnimationFrame(() => {
+				const rect = (promptContainer as HTMLElement).getBoundingClientRect();
+				const menuH = slashMenu.offsetHeight;
+				const gap = 6;
+				slashMenu.style.left = `${rect.left}px`;
+				slashMenu.style.top = `${rect.top - menuH - gap}px`;
+				slashMenu.style.bottom = "";
+			});
+		};
+
+		const repositionHandler = () => {
+			if (slashMenu.style.display !== "none") positionSlashMenu();
+		};
+		window.addEventListener("resize", repositionHandler);
+
+		// Clean up the body-mounted menu if the prompt container leaves the DOM.
+		const cleanupObserver = new MutationObserver(() => {
+			if (!document.contains(promptContainer)) {
+				slashMenu.remove();
+				window.removeEventListener("resize", repositionHandler);
+				cleanupObserver.disconnect();
+			}
+		});
+		cleanupObserver.observe(document.body, { childList: true, subtree: false });
+
+		const renderSlashMenu = (skills: ParsedSkill[]) => {
+			slashMenu.empty();
+			slashMenuSkills = skills;
+			slashMenuIndex = 0;
+			if (skills.length === 0) { slashMenu.style.display = "none"; return; }
+
+			// Header label
+			slashMenu.createDiv({ cls: "llm-slash-menu-header", text: "Skills" });
+
+			for (let i = 0; i < skills.length; i++) {
+				const skill = skills[i];
+				const item = slashMenu.createDiv({ cls: "llm-slash-menu-item" });
+				if (i === 0) item.addClass("llm-slash-menu-item-selected");
+
+				const iconEl = item.createSpan({ cls: "llm-slash-menu-item-icon" });
+				setIcon(iconEl, "scroll-text");
+
+				const textEl = item.createDiv({ cls: "llm-slash-menu-item-text" });
+
+				// Name + optional argument hint on the same line
+				const nameRow = textEl.createDiv({ cls: "llm-slash-menu-item-name-row" });
+				nameRow.createSpan({ cls: "llm-slash-menu-item-name", text: skill.name });
+				if (skill.argumentHint) {
+					nameRow.createSpan({
+						cls: "llm-slash-menu-item-hint",
+						text: " " + skill.argumentHint,
+					});
+				}
+
+				if (skill.description) {
+					textEl.createDiv({ cls: "llm-slash-menu-item-desc", text: skill.description });
+				}
+
+				// Edit button — opens the SKILL.md file in Obsidian
+				const editBtn = item.createSpan({ cls: "llm-slash-menu-item-edit" });
+				setIcon(editBtn, "pencil");
+				editBtn.setAttr("aria-label", "Edit skill");
+				editBtn.addEventListener("mousedown", (e: MouseEvent) => {
+					e.preventDefault();
+					e.stopPropagation();
+					hideSlashMenu();
+					const file = this.plugin.app.vault.getAbstractFileByPath(skill.filePath);
+					if (file instanceof TFile) {
+						this.plugin.app.workspace.getLeaf(false).openFile(file);
+					}
+				});
+
+				item.addEventListener("mousedown", (e: MouseEvent) => {
+					e.preventDefault(); // keep textarea focused
+					selectSkillFromMenu(skill);
+				});
+			}
+
+			slashMenu.style.display = "flex";
+			positionSlashMenu();
+		};
+
+		const hideSlashMenu = () => {
+			slashMenu.style.display = "none";
+			slashMenuSkills = [];
+			slashMenuIndex = 0;
+		};
+
+		const updateSlashMenuHighlight = () => {
+			const items = slashMenu.querySelectorAll<HTMLElement>(".llm-slash-menu-item");
+			items.forEach((el, i) => {
+				el.toggleClass("llm-slash-menu-item-selected", i === slashMenuIndex);
+				if (i === slashMenuIndex) el.scrollIntoView({ block: "nearest" });
+			});
+		};
+
+		const selectSkillFromMenu = (skill: ParsedSkill) => {
+			// Replace any typed slash prefix with "/skill-id " as inline text,
+			// preserving any content typed after the slash query.
+			const raw = promptField.getValue();
+			const after = raw.replace(/^\/[a-zA-Z0-9_-]*\s*/, "");
+			const newVal = `/${skill.id} ${after}`;
+			promptField.setValue(newVal);
+			this.prompt = newVal;
+			syncMirror(newVal);
+			// updateSendButton is defined later in this closure — safe to call at runtime
+			updateSendButton(newVal);
+			hideSlashMenu();
+			promptField.inputEl.focus();
+			// Place cursor right after the inserted "/skill-id " prefix
+			const cursorPos = skill.id.length + 2;
+			promptField.inputEl.setSelectionRange(cursorPos, cursorPos);
+		};
+
+		// Mirror overlay — renders the skill prefix in accent color.
+		// When active: mirror is shown, textarea text is made transparent so only
+		// the mirror is visible, but the real textarea still handles all input/focus.
+		const syncMirror = (value: string) => {
+			// Match a leading "/skill-id " (slash + alphanumeric/dash/underscore + space)
+			const match = value.match(/^(\/[a-zA-Z0-9_-]+ )([\s\S]*)$/);
+			if (match) {
+				const prefix = match[1];
+				const rest = match[2];
+				mirrorDiv.empty();
+				const prefixSpan = mirrorDiv.createSpan({ cls: "llm-skill-prefix" });
+				prefixSpan.textContent = prefix;
+				const restSpan = mirrorDiv.createSpan({ cls: "llm-mirror-rest" });
+				restSpan.textContent = rest;
+				// Trailing sentinel keeps last-line height correct when rest ends in \n
+				mirrorDiv.createSpan().textContent = "​";
+				mirrorDiv.style.display = "";
+				promptField.inputEl.addClass("llm-input-with-mirror");
+				// Keep mirror scroll in sync
+				mirrorDiv.scrollTop = promptField.inputEl.scrollTop;
+			} else {
+				mirrorDiv.style.display = "none";
+				promptField.inputEl.removeClass("llm-input-with-mirror");
+			}
+		};
+
+		// Sync mirror scroll whenever the textarea scrolls
+		promptField.inputEl.addEventListener("scroll", () => {
+			if (mirrorDiv.style.display !== "none") {
+				mirrorDiv.scrollTop = promptField.inputEl.scrollTop;
+			}
+		});
+
 		// Bottom toolbar: model selector (left) + send button (right)
 		const toolbarSection = promptContainer.createDiv();
 		toolbarSection.addClass("llm-input-toolbar");
 
-		// Model dropdown
+		// Combined model + assistant dropdown
 		const settingType = getSettingType(this.viewType);
 		const viewSettings = this.plugin.settings[settingType];
 		this.modelDropdown = new DropdownComponent(toolbarSection);
 		const modelDropdown = this.modelDropdown;
 		modelDropdown.selectEl.addClass("llm-model-select");
+
+		// ── Models optgroup ───────────────────────────────────────────────────
+		const modelsGroup = document.createElement("optgroup");
+		modelsGroup.label = "Models";
 		const { openAIAPIKey, claudeAPIKey, geminiAPIKey, mistralAPIKey } = this.plugin.settings;
 		for (const modelDisplayName of Object.keys(models)) {
 			const type = models[modelDisplayName].type;
 			// Local providers: always show
 			if (type === ollama || type === lmStudio) {
-				modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+				const opt = document.createElement("option");
+				opt.value = models[modelDisplayName].model;
+				opt.text = modelDisplayName;
+				modelsGroup.appendChild(opt);
 				continue;
 			}
 			// GPT4All: only show if the model file exists locally
@@ -1444,7 +2882,10 @@ export class ChatContainer {
 				const gpt4AllPath = getGpt4AllPath(this.plugin);
 				const fullPath = `${gpt4AllPath}/${models[modelDisplayName].model}`;
 				if (this.plugin.fileSystem.existsSync(fullPath)) {
-					modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+					const opt = document.createElement("option");
+					opt.value = models[modelDisplayName].model;
+					opt.text = modelDisplayName;
+					modelsGroup.appendChild(opt);
 				}
 				continue;
 			}
@@ -1453,19 +2894,156 @@ export class ChatContainer {
 			if ((type === claude || type === claudeCode) && !claudeAPIKey) continue;
 			if (type === gemini && !geminiAPIKey) continue;
 			if (type === mistral && !mistralAPIKey) continue;
-			modelDropdown.addOption(models[modelDisplayName].model, modelDisplayName);
+			const opt = document.createElement("option");
+			opt.value = models[modelDisplayName].model;
+			opt.text = modelDisplayName;
+			modelsGroup.appendChild(opt);
 		}
-		modelDropdown.setValue(viewSettings.model);
+		modelDropdown.selectEl.appendChild(modelsGroup);
+
+		// ── Assistants optgroup ──────────────────────────────────────────────
+		// Includes the built-in "Obsidian Agent" entry (pinned at top) when enabled.
+		const buildAssistantsGroup = (): HTMLOptGroupElement => {
+			const group = document.createElement("optgroup");
+			group.label = "Assistants";
+			// Built-in agent entry — pinned first
+			if (this.plugin.settings.obsidianAgentSettings?.enabled) {
+				const agentOpt = document.createElement("option");
+				agentOpt.value = "agent:obsidian";
+				agentOpt.text = "Obsidian Agent";
+				group.appendChild(agentOpt);
+			}
+			const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
+			for (const assistant of assistants) {
+				const opt = document.createElement("option");
+				opt.value = `assistant:${assistant.id}`;
+				opt.text = assistant.name;
+				group.appendChild(opt);
+			}
+			return group;
+		};
+		const agentEnabled = this.plugin.settings.obsidianAgentSettings?.enabled;
+		const userAssistants = this.plugin.assistantManager?.getAssistants() ?? [];
+		this.assistantsOptGroup = buildAssistantsGroup();
+		if (agentEnabled || userAssistants.length > 0) {
+			modelDropdown.selectEl.appendChild(this.assistantsOptGroup);
+		}
+
+		// Set initial value — agent mode takes highest priority, then active assistant, then model
+		const initAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
+		if (this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled) {
+			modelDropdown.selectEl.value = "agent:obsidian";
+			// Apply the agent's default model on init if one is configured and not
+			// already active. This covers FAB/StatusBar popover creation where
+			// isObsidianAgent is set before generateChatContainer runs, so the
+			// onChange("agent:obsidian") branch never fires.
+			const agentDefaultModel = this.plugin.settings.obsidianAgentSettings?.defaultModel;
+			if (agentDefaultModel && modelNames[agentDefaultModel] && viewSettings.model !== agentDefaultModel) {
+				const name = modelNames[agentDefaultModel];
+				viewSettings.model = agentDefaultModel;
+				viewSettings.modelName = name;
+				viewSettings.modelType = models[name].type;
+				viewSettings.endpointURL = models[name].url;
+				viewSettings.modelEndpoint = models[name].endpoint;
+				void this.plugin.saveSettings();
+			}
+		} else if (initAssistantId) {
+			modelDropdown.selectEl.value = `assistant:${initAssistantId}`;
+		} else {
+			modelDropdown.selectEl.value = viewSettings.model;
+		}
+		// Resize after layout so computed font styles are available.
+		window.requestAnimationFrame(() => this.resizeModelDropdown());
+
+		// Single unified onChange — handles assistant selection, plain model
+		// selection, AND vault-search visibility in one place so there is never
+		// a second .onChange() call that could silently replace this one.
+		let syncVaultSearchVisibility: ((modelType: string) => void) | null = null;
+
 		modelDropdown.onChange((change) => {
-			const modelName = modelNames[change];
-			if (!modelName || !models[modelName]) return;
-			viewSettings.model = change;
-			viewSettings.modelName = modelName;
-			viewSettings.modelType = models[modelName].type;
-			viewSettings.endpointURL = models[modelName].url;
-			viewSettings.modelEndpoint = models[modelName].endpoint;
-			this.plugin.saveSettings();
-			header.setHeader(modelName);
+			if (change === "agent:obsidian") {
+				// ── Obsidian Agent selected ───────────────────────────────────
+				this.isObsidianAgent = true;
+				// Clear any active assistant
+				if (this.plugin.settings.assistantSettings?.activeAssistantId) {
+					this.plugin.settings.assistantSettings = {
+						...this.plugin.settings.assistantSettings,
+						activeAssistantId: null,
+					};
+				}
+				// Apply the agent's default model if one is configured
+				const agentDefaultModel = this.plugin.settings.obsidianAgentSettings?.defaultModel;
+				if (agentDefaultModel && modelNames[agentDefaultModel]) {
+					const name = modelNames[agentDefaultModel];
+					viewSettings.model = agentDefaultModel;
+					viewSettings.modelName = name;
+					viewSettings.modelType = models[name].type;
+					viewSettings.endpointURL = models[name].url;
+					viewSettings.modelEndpoint = models[name].endpoint;
+					syncVaultSearchVisibility?.(models[name].type);
+				}
+				void this.plugin.saveSettings();
+				// Start a fresh conversation in agent mode
+				header.setTitle("");
+				header.showTitle();
+				this.newChat();
+				this.resetMessages();
+				setHistoryIndex(this.plugin, this.viewType);
+				this.plugin.settings.currentIndex = -1;
+				void this.plugin.saveSettings();
+			} else if (change.startsWith("assistant:")) {
+				// ── Assistant selected ────────────────────────────────────────
+				this.isObsidianAgent = false;
+				const assistantId = change.slice("assistant:".length);
+				const assistant = this.plugin.assistantManager?.getAssistant(assistantId);
+				if (!assistant) return;
+
+				this.plugin.settings.assistantSettings = {
+					...this.plugin.settings.assistantSettings,
+					activeAssistantId: assistantId,
+				};
+
+				// Auto-switch to the assistant's preferred model if one is configured
+				if (assistant.preferredModel && modelNames[assistant.preferredModel]) {
+					const preferredName = modelNames[assistant.preferredModel];
+					viewSettings.model = assistant.preferredModel;
+					viewSettings.modelName = preferredName;
+					viewSettings.modelType = models[preferredName].type;
+					viewSettings.endpointURL = models[preferredName].url;
+					viewSettings.modelEndpoint = models[preferredName].endpoint;
+					syncVaultSearchVisibility?.(models[preferredName].type);
+				}
+
+				void this.plugin.saveSettings();
+				// Start a fresh conversation under the new assistant
+				header.setTitle("");
+				header.showTitle();
+				this.newChat();
+				this.resetMessages();
+				setHistoryIndex(this.plugin, this.viewType);
+				this.plugin.settings.currentIndex = -1;
+				void this.plugin.saveSettings();
+			} else {
+				// ── Plain model selected — clear active assistant + agent mode ─
+				this.isObsidianAgent = false;
+				if (this.plugin.settings.assistantSettings?.activeAssistantId) {
+					this.plugin.settings.assistantSettings = {
+						...this.plugin.settings.assistantSettings,
+						activeAssistantId: null,
+					};
+				}
+				const modelName = modelNames[change];
+				if (!modelName || !models[modelName]) return;
+				viewSettings.model = change;
+				viewSettings.modelName = modelName;
+				viewSettings.modelType = models[modelName].type;
+				viewSettings.endpointURL = models[modelName].url;
+				viewSettings.modelEndpoint = models[modelName].endpoint;
+				syncVaultSearchVisibility?.(models[modelName].type);
+				void this.plugin.saveSettings();
+				header.setHeader(modelName);
+			}
+			this.resizeModelDropdown();
 		});
 
 		// Right-side group: scan button (FAB/Modal only) + send button
@@ -1476,24 +3054,115 @@ export class ChatContainer {
 		this.addFilesButton = new ButtonComponent(toolbarRight);
 		const addFilesButton = this.addFilesButton;
 		addFilesButton.setIcon("plus");
-		addFilesButton.setTooltip("Add files as context");
+		addFilesButton.setTooltip("Add context");
 		addFilesButton.buttonEl.addClass("llm-scan-button");
 
-		addFilesButton.onClick(() => {
+		addFilesButton.onClick((evt: MouseEvent) => {
 			const settingType = getSettingType(this.viewType);
 			const contextSettings = this.plugin.settings[settingType].contextSettings;
+			// Only show skills that the user has explicitly enabled in Settings → Skills
+			const enabledSkillsMap = this.plugin.settings.skillsSettings?.enabledSkills ?? {};
+			const skills = (this.plugin.skillRegistry?.getSkills() ?? []).filter(
+				(s) => !!enabledSkillsMap[s.id]
+			);
 
-			new FileSelector(
-				this.plugin.app,
-				this.plugin,
-				this.viewType,
-				contextSettings.selectedFiles,
-				(files: string[]) => {
-					contextSettings.selectedFiles = files;
-					this.plugin.saveSettings();
-					this.syncChips();
+			const menu = new Menu();
+
+			menu.addItem((item) => {
+				item.setTitle("Add file as context")
+					.setIcon("file-plus-2")
+					.onClick(() => {
+						new FileSelector(
+							this.plugin.app,
+							this.plugin,
+							this.viewType,
+							contextSettings.selectedFiles,
+							(files: string[]) => {
+								contextSettings.selectedFiles = files;
+								void this.plugin.saveSettings();
+								this.syncChips();
+							}
+						).open();
+					});
+			});
+
+			// Memory save shortcut — only when memory is enabled
+			if (this.plugin.settings.memorySettings?.enabled && this.plugin.memoryService) {
+				menu.addItem((item) => {
+					item.setTitle("Save a memory")
+						.setIcon("brain-circuit")
+						.onClick(() => {
+							const newVal = "/remember ";
+							promptField.setValue(newVal);
+							this.prompt = newVal;
+							syncMirror(newVal);
+							updateSendButton(newVal);
+							promptField.inputEl.focus();
+							promptField.inputEl.setSelectionRange(newVal.length, newVal.length);
+						});
+				});
+			}
+
+			// "Add to project" — only available for new chats (no messages yet).
+			// For started chats this option lives in the header more-options menu.
+			if (this.getMessages().length === 0) {
+				const projects = this.plugin.projectManager?.getProjects() ?? [];
+				if (projects.length > 0) {
+					menu.addItem((item) => {
+						item.setTitle("Add to project").setIcon("box");
+						const submenu = (item as any).setSubmenu() as Menu;
+						const activeId = this.plugin.settings.projectSettings?.activeProjectId;
+
+						submenu.addItem((si) => {
+							si.setTitle("No project")
+								.setIcon("x-circle")
+								.setChecked(!activeId)
+								.onClick(() => this.setActiveProject(null));
+						});
+
+						submenu.addSeparator();
+
+						for (const project of projects) {
+							submenu.addItem((si) => {
+								si.setTitle(project.name)
+									.setIcon("box")
+									.setChecked(project.id === activeId)
+									.onClick(() => this.setActiveProject(project.id));
+							});
+						}
+					});
 				}
-			).open();
+			}
+
+			if (skills.length > 0) {
+				menu.addItem((item) => {
+					item.setTitle("Add a skill")
+						.setIcon("scroll-text");
+					// setSubmenu() is available at runtime in Obsidian 1.4+ but not
+					// reflected in the TypeScript types — cast to any to access it.
+					const submenu = (item as any).setSubmenu() as Menu;
+					for (const skill of skills) {
+						submenu.addItem((si) => {
+							si.setTitle(skill.name)
+								.setIcon("scroll-text")
+								.onClick(() => {
+									const raw = promptField.getValue();
+									const after = raw.replace(/^\/[a-zA-Z0-9_-]*\s*/, "");
+									const newVal = `/${skill.id} ${after}`;
+									promptField.setValue(newVal);
+									this.prompt = newVal;
+									syncMirror(newVal);
+									updateSendButton(newVal);
+									promptField.inputEl.focus();
+									const cursorPos = skill.id.length + 2;
+									promptField.inputEl.setSelectionRange(cursorPos, cursorPos);
+								});
+						});
+					}
+				});
+			}
+
+			menu.showAtMouseEvent(evt);
 		});
 
 		// Scan / use-file-as-context button (FAB and Modal only — not widget)
@@ -1529,11 +3198,11 @@ export class ChatContainer {
 		if (this.plugin.settings.ragSettings?.enabled && this.plugin.vaultIndexer) {
 			const vaultSearchButton = new ButtonComponent(toolbarRight);
 			vaultSearchButton.setIcon("search");
-			vaultSearchButton.setTooltip("Search vault (RAG)");
+			vaultSearchButton.setTooltip("Search vault");
 			vaultSearchButton.buttonEl.addClass("llm-scan-button");
 
-			// Hide/show based on whether the selected model supports agent mode
-			const syncVaultSearchVisibility = (modelType: string) => {
+			// Wire the shared visibility function — the main onChange above will call it.
+			syncVaultSearchVisibility = (modelType: string) => {
 				const hidden = this.supportsAgentMode(modelType);
 				vaultSearchButton.buttonEl.toggleClass("llm-hidden", hidden);
 				// If we just hid it, also deactivate the toggle so it doesn't
@@ -1551,18 +3220,37 @@ export class ChatContainer {
 				this.useVaultSearch = !this.useVaultSearch;
 				vaultSearchButton.buttonEl.toggleClass("is-active", this.useVaultSearch);
 			});
-
-			// Re-evaluate whenever the user switches models
-			modelDropdown.onChange((change) => {
-				const modelName = modelNames[change];
-				if (modelName && models[modelName]) {
-					syncVaultSearchVisibility(models[modelName].type);
-				}
-			});
 		}
 
 		// Sync file-context button visibility based on the current setting
 		this.syncFileContextButtons();
+
+		// ── Mic button (voice input — Feature 1) ────────────────────────────
+		// Shown only when Whisper is enabled. Visibility is refreshed whenever
+		// settings change via syncMicButton() called from the settings modal.
+		if (this.plugin.settings.whisperSettings?.enabled) {
+			this.micButton = new ButtonComponent(toolbarRight);
+			this.micButton.setIcon("mic");
+			this.micButton.setTooltip("Record voice message");
+			this.micButton.buttonEl.addClass("llm-scan-button", "llm-mic-button");
+
+			this.micButton.onClick(async () => {
+				try {
+					if (this.micState === "idle") {
+						await this.startRecording(promptField);
+					} else if (this.micState === "recording") {
+						this.stopRecording();
+					}
+					// "transcribing" state: button is disabled — click is a no-op
+				} catch (err) {
+					new Notice(
+						`Mic error: ${err instanceof Error ? err.message : String(err)}`,
+						7000,
+					);
+					console.error("[LLM Plugin] Mic button error:", err);
+				}
+			});
+		}
 
 		// Send button
 		const sendButton = new ButtonComponent(toolbarRight);
@@ -1575,20 +3263,50 @@ export class ChatContainer {
 
 		promptField.setPlaceholder("Send a message...");
 
-		// Helper to sync send button enabled/disabled state with input content
 		const updateSendButton = (value: string) => {
+			// Skip while a generation is in flight — the button is in stop mode
+			// and must not be disabled or hidden by an empty-input check.
+			if (this._abortController) return;
 			const isEmpty = value.trim().length === 0;
 			sendButton.setDisabled(isEmpty);
 			sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
+			// When Whisper is enabled and mic is idle, swap visibility with send button
+			if (this.micButton && this.micState === "idle") {
+				this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
+				sendButton.buttonEl.style.display     = isEmpty ? "none" : "";
+			}
 		};
 
-		// Disable send button initially (empty input)
+		// Set initial state (empty input on load)
 		updateSendButton("");
 
 		promptField.onChange((change: string) => {
 			this.prompt = change;
-			promptField.setValue(change);
 			updateSendButton(change);
+		});
+
+		// Slash command menu — use a direct input listener so it fires on every
+		// keystroke without going through Obsidian's onChange abstraction layer.
+		promptField.inputEl.addEventListener("input", () => {
+			const value = promptField.inputEl.value;
+			// Only show the picker while the user is actively typing a /command
+			// (no trailing space or extra text — those mean a skill was already selected).
+			const slashMatch = value.match(/^\/([a-zA-Z0-9_-]*)$/);
+			if (slashMatch) {
+				const query = slashMatch[1].toLowerCase();
+				const allSkills = this.plugin.skillRegistry?.getSkills() ?? [];
+				const filtered = query
+					? allSkills.filter(
+						(s) =>
+							s.id.toLowerCase().startsWith(query) ||
+							s.name.toLowerCase().startsWith(query)
+					  )
+					: allSkills;
+				renderSlashMenu(filtered);
+			} else {
+				hideSlashMenu();
+			}
+			syncMirror(value);
 		});
 
 		const clearPromptField = () => {
@@ -1597,32 +3315,108 @@ export class ChatContainer {
 			// read it after clearPromptField fires. historyPush (success) and
 			// the catch block (error) both clear this.prompt when the call ends.
 			promptField.setValue("");
+			syncMirror("");
 			updateSendButton("");
 		};
 
 		promptField.inputEl.addEventListener("keydown", (event) => {
+			// Handle slash menu keyboard navigation first
+			if (slashMenu.style.display !== "none") {
+				if (event.key === "ArrowDown") {
+					event.preventDefault();
+					slashMenuIndex = Math.min(slashMenuIndex + 1, slashMenuSkills.length - 1);
+					updateSlashMenuHighlight();
+					return;
+				}
+				if (event.key === "ArrowUp") {
+					event.preventDefault();
+					slashMenuIndex = Math.max(slashMenuIndex - 1, 0);
+					updateSlashMenuHighlight();
+					return;
+				}
+				if (event.key === "Tab" || event.key === "Enter") {
+					event.preventDefault();
+					if (slashMenuSkills[slashMenuIndex]) {
+						selectSkillFromMenu(slashMenuSkills[slashMenuIndex]);
+					}
+					return; // Tab/Enter selects skill; Enter does NOT send
+				}
+				if (event.key === "Escape") {
+					event.preventDefault();
+					hideSlashMenu();
+					return;
+				}
+			}
+
 			if (sendButton.disabled === true) return;
 
-			if (event.code == "Enter") {
+			if (event.code === "Enter") {
 				event.preventDefault();
-				this.handleGenerateClick(header, sendButton);
+				if (this._abortController) {
+					this._abortController.abort();
+					return;
+				}
+				void this.handleGenerateClick(header, sendButton);
 				clearPromptField();
 			}
 		});
 		sendButton.onClick(() => {
-			this.handleGenerateClick(header, sendButton);
+			if (this._abortController) {
+				this._abortController.abort();
+				return;
+			}
+			void this.handleGenerateClick(header, sendButton);
 			clearPromptField();
 		});
+
+		// Expose a send trigger so voice auto-send can fire without holding references
+		// to header/sendButton (which are local to this closure).
+		this._triggerSend = () => {
+			void this.handleGenerateClick(header, sendButton);
+			clearPromptField();
+		};
 
 		// Auto-populate the active file chip when "Include active file" is enabled in settings.
 		// useActiveFileContext is otherwise only set when the scan button is clicked manually,
 		// so without this block the chip never appears on load even when the setting is on.
-		if (this.plugin.settings[settingType].contextSettings.includeActiveFile) {
-			const activeFile = this.plugin.app.workspace.getActiveFile();
+		// Skip for the widget view type (sidebar and tab) — those are standalone chat interfaces,
+		// not popups anchored to a note, so auto-including a neighboring file is misleading.
+		if (
+			this.viewType !== "widget" &&
+			this.plugin.settings[settingType].contextSettings.includeActiveFile
+		) {
+			const activeFile = this.getActiveMarkdownFile();
 			if (activeFile) {
 				this.useActiveFileContext = true;
 				this.activeFileForChip = { name: activeFile.name, path: activeFile.path };
 				this.scanButton?.buttonEl.addClass("is-active");
+			}
+		}
+
+		// Copy textarea metrics to the mirror once the browser has laid out the element,
+		// so the mirror text renders pixel-for-pixel on top of the textarea text.
+		requestAnimationFrame(() => {
+			const cs = getComputedStyle(promptField.inputEl);
+			mirrorDiv.style.paddingTop = cs.paddingTop;
+			mirrorDiv.style.paddingRight = cs.paddingRight;
+			mirrorDiv.style.paddingBottom = cs.paddingBottom;
+			mirrorDiv.style.paddingLeft = cs.paddingLeft;
+			mirrorDiv.style.fontSize = cs.fontSize;
+			mirrorDiv.style.fontFamily = cs.fontFamily;
+			mirrorDiv.style.lineHeight = cs.lineHeight;
+			mirrorDiv.style.letterSpacing = cs.letterSpacing;
+			mirrorDiv.style.wordSpacing = cs.wordSpacing;
+		});
+
+		// Clear any stale project association from a previous session when opening with no active chat.
+		// restoreProjectFromChat() will re-set the correct project when a file is subsequently loaded.
+		if (!this.currentHistoryFilePath && this.getMessages().length === 0) {
+			if (this.plugin.settings.projectSettings?.activeProjectId) {
+				this.plugin.settings.projectSettings = {
+					...this.plugin.settings.projectSettings,
+					activeProjectId: null,
+				};
+				void this.plugin.saveSettings();
 			}
 		}
 
@@ -1640,7 +3434,7 @@ export class ChatContainer {
 			// will find the same registry store and stay in sync.
 			if (!historyItem.id) {
 				historyItem.id = crypto.randomUUID();
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 			}
 
 			// Get or create the store for this conversation in the registry.
@@ -1677,13 +3471,15 @@ export class ChatContainer {
 	setDiv(streaming: boolean) {
 		const parent = this.historyMessages.createDiv();
 		parent.addClass("llm-flex");
-		const assistant = parent.createEl("div", { cls: "llm-assistant-logo" });
-		assistant.appendChild(assistantLogo());
+		if (this.plugin.settings.showAssistantLogo && !(this.isObsidianAgent && this.plugin.settings.showAgentBrandIcon)) {
+			const assistant = parent.createDiv({ cls: "llm-assistant-logo" });
+			assistant.appendChild(assistantLogo());
+		}
 
 		this.loadingDivContainer = parent.createDiv();
 		this.streamingDiv = this.loadingDivContainer.createDiv();
 
-		const buttonsContainer = this.loadingDivContainer.createEl("div", {
+		const buttonsContainer = this.loadingDivContainer.createDiv({
 			cls: "llm-assistant-buttons llm-hide",
 		});
 		const copyToClipboardButton = new ButtonComponent(buttonsContainer);
@@ -1700,9 +3496,9 @@ export class ChatContainer {
 		if (streaming) {
 			this.streamingDiv.empty();
 		} else {
-			const dots = this.streamingDiv.createEl("span");
+			const dots = this.streamingDiv.createSpan();
 			for (let i = 0; i < 3; i++) {
-				const dot = dots.createEl("span", { cls: "streaming-dot" });
+				const dot = dots.createSpan({ cls: "streaming-dot" });
 				dot.textContent = ".";
 			}
 		}
@@ -1721,22 +3517,22 @@ export class ChatContainer {
 
 		refreshButton.onClick(async () => {
 			new Notice("Regenerating response...");
-			this.regenerateOutput();
+			await this.regenerateOutput();
 		});
 	}
 
 	showThinkingAnimation() {
 		this.streamingDiv.empty();
-		const thinkingContainer = this.streamingDiv.createEl("div", {
+		const thinkingContainer = this.streamingDiv.createDiv({
 			cls: "llm-thinking-animation"
 		});
-		thinkingContainer.createEl("span", {
+		thinkingContainer.createSpan({
 			cls: "llm-thinking-text",
 			text: "Thinking"
 		});
-		const dots = thinkingContainer.createEl("span", { cls: "llm-thinking-dots" });
+		const dots = thinkingContainer.createSpan({ cls: "llm-thinking-dots" });
 		for (let i = 0; i < 3; i++) {
-			const dot = dots.createEl("span", { cls: "streaming-dot" });
+			const dot = dots.createSpan({ cls: "streaming-dot" });
 			dot.textContent = ".";
 		}
 		this.historyMessages.scroll(0, 9999);
@@ -1756,6 +3552,12 @@ export class ChatContainer {
 	 *
 	 * Skips patterns already inside [[wikilinks]], markdown links (url), or
 	 * URLs (containing ://).
+	 *
+	 * NOTE: spaces are intentionally excluded from the filename character class.
+	 * Allowing spaces causes the regex to greedily capture preceding words —
+	 * e.g. "in LLM Plugin.md" → [[in LLM Plugin.md]] instead of [[LLM Plugin.md]].
+	 * Models should output spaced filenames as [[wikilinks]] directly; tool
+	 * results already do this via the wikilink format.
 	 */
 	private linkifyMdRefs(text: string): string {
 		// LLMs (especially smaller models) often wrap wiki-links in backticks:
@@ -1767,8 +3569,10 @@ export class ChatContainer {
 		// (catches [[already]], (url), and http://path/file.md).
 		// Negative lookahead:  don't match if followed by ] or )
 		// (catches the closing half of existing syntax).
+		// No spaces in the character class — prevents "in Foo Bar.md" from being
+		// captured as a single match starting at "in".
 		return text.replace(
-			/(?<![\[(/])(\b[\w][\w ./-]*?\.md\b)(?![)\]])/g,
+			/(?<![[(/])(\b[\w][\w./-]*?\.md\b)(?![)\]])/g,
 			"[[$1]]"
 		);
 	}
@@ -1786,12 +3590,12 @@ export class ChatContainer {
 			this.linkifyMdRefs(content),
 			container,
 			sourcePath,
-			this.plugin
+			this
 		);
 		// Hide inline copy-code buttons (we have our own copy action).
 		container
 			.querySelectorAll<HTMLElement>(".copy-code-button")
-			.forEach((btn) => btn.setAttribute("style", "display: none"));
+			.forEach((btn) => btn.hide());
 		// Wire up internal links (wikilinks rendered as .internal-link) so
 		// clicking them opens the note in Obsidian.
 		container
@@ -1810,13 +3614,121 @@ export class ChatContainer {
 					);
 				});
 			});
+		// Some LLMs (especially smaller models) wrap wiki-links in backticks,
+		// which survive as <code>[[file.md]]</code> even after linkifyMdRefs
+		// strips the backticks — because MarkdownRenderer re-parses the markdown
+		// and may re-wrap them as code spans in certain list contexts.
+		// This post-processor converts any remaining [[...]] text in the rendered
+		// DOM into real clickable internal links, regardless of their wrapper.
+		this.linkifyRenderedWikilinks(container, sourcePath);
+	}
+
+	/**
+	 * Walk the rendered DOM and replace any literal [[target]] text that
+	 * MarkdownRenderer left un-linked with a real <a class="internal-link">.
+	 *
+	 * Handles two cases:
+	 *  1. <code>[[file.md]]</code>  — replaces the whole <code> element.
+	 *  2. Text nodes containing [[...]] — splits and inserts link elements.
+	 *
+	 * Skips <pre> blocks (fenced code) so genuine code examples are untouched.
+	 */
+	private linkifyRenderedWikilinks(container: HTMLElement, sourcePath: string): void {
+		const WIKI_RE = /\[\[([^\]]+)\]\]/g;
+
+		const makeLink = (target: string): HTMLAnchorElement => {
+			const a = document.createElement("a");
+			a.className = "internal-link";
+			a.setAttribute("data-href", target);
+			a.setAttribute("href", target);
+			a.textContent = target;
+			a.addEventListener("click", (e: MouseEvent) => {
+				e.preventDefault();
+				this.plugin.app.workspace.openLinkText(
+					target,
+					sourcePath,
+					e.ctrlKey || e.metaKey
+				);
+			});
+			return a;
+		};
+
+		// Case 1: <code> elements whose entire text is a [[...]] link.
+		// Replace the <code> element with the link so we also remove the
+		// code styling that makes the reference look like a code snippet.
+		container.querySelectorAll<HTMLElement>("code").forEach((codeEl) => {
+			if (codeEl.closest("pre")) return; // skip fenced code blocks
+			const text = codeEl.textContent ?? "";
+			const match = text.match(/^\[\[([^\]]+)\]\]$/);
+			if (match) {
+				codeEl.replaceWith(makeLink(match[1]));
+			}
+		});
+
+		// Case 2: plain text nodes that still contain [[...]] patterns.
+		// (These can appear when the model outputs [[file]] without backticks
+		// but MarkdownRenderer left them as literal text for any reason.)
+		const walker = document.createTreeWalker(
+			container,
+			NodeFilter.SHOW_TEXT,
+			{
+				acceptNode(node) {
+					// Skip text inside <pre> (fenced code blocks)
+					if ((node.parentElement as HTMLElement)?.closest("pre")) {
+						return NodeFilter.FILTER_REJECT;
+					}
+					// Skip text already inside an <a> (already a link)
+					if ((node.parentElement as HTMLElement)?.closest("a")) {
+						return NodeFilter.FILTER_REJECT;
+					}
+					return NodeFilter.FILTER_ACCEPT;
+				},
+			}
+		);
+
+		const textNodes: Text[] = [];
+		let n: Node | null;
+		while ((n = walker.nextNode())) {
+			if (WIKI_RE.test(n.textContent ?? "")) {
+				textNodes.push(n as Text);
+			}
+			WIKI_RE.lastIndex = 0; // reset stateful regex after test()
+		}
+
+		for (const textNode of textNodes) {
+			const parent = textNode.parentNode;
+			if (!parent) continue;
+
+			const text = textNode.textContent ?? "";
+			const fragment = document.createDocumentFragment();
+			let lastIndex = 0;
+			let m: RegExpExecArray | null;
+			WIKI_RE.lastIndex = 0;
+
+			while ((m = WIKI_RE.exec(text)) !== null) {
+				if (m.index > lastIndex) {
+					fragment.appendChild(document.createTextNode(text.slice(lastIndex, m.index)));
+				}
+				fragment.appendChild(makeLink(m[1]));
+				lastIndex = m.index + m[0].length;
+			}
+
+			if (lastIndex < text.length) {
+				fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+			}
+
+			parent.replaceChild(fragment, textNode);
+		}
 	}
 
 	private async createMessage(
 		content: string,
 		index: number,
-		finalMessage: Boolean,
-		assistant: Boolean = false
+		finalMessage: boolean,
+		assistant: boolean = false,
+		toolCalls?: ToolCallRecord[],
+		skillId?: string,
+		modelLabel?: string
 	): Promise<void> {
 		// Outer wrapper carries the alignment class so CSS selectors like
 		// .llm-message-wrapper.llm-flex-start (bubble background) fire correctly.
@@ -1832,22 +3744,46 @@ export class ChatContainer {
 		if (assistant) {
 			// Logo sits to the left of the content as a sibling inside the container
 			imLikeMessageContainer.addClass("llm-flex");
-			const logoEl = imLikeMessageContainer.createEl("div", { cls: "llm-assistant-logo" });
-			logoEl.appendChild(assistantLogo());
+			if (this.plugin.settings.showAssistantLogo && !(this.isObsidianAgent && this.plugin.settings.showAgentBrandIcon)) {
+				const logoEl = imLikeMessageContainer.createDiv({ cls: "llm-assistant-logo" });
+				logoEl.appendChild(assistantLogo());
+			}
 
 			const contentWrap = imLikeMessageContainer.createDiv();
 			contentWrap.addClass("llm-flex-column");
+
+			// Skill indicator panel — shown when a skill was active for this turn
+			if (skillId) {
+				const skillName =
+					this.plugin.skillRegistry?.getSkill(skillId)?.name ?? skillId;
+				this.appendSkillPanel(contentWrap, skillName);
+			}
+
+			// Collapsible tool call panel — shown when the agent used tools this turn
+			if (toolCalls?.length) {
+				this.appendToolCallsPanel(contentWrap, toolCalls);
+			}
+
 			const imLikeMessage = contentWrap.createDiv();
 			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
 			await this.renderMarkdown(content, imLikeMessage);
+
+			// Model/assistant attribution badge — shown below message content
+			const _settingType = getSettingType(this.viewType);
+			const _showModelLabel = this.plugin.settings[_settingType].contextSettings.showModelLabel ?? true;
+			if (modelLabel && _showModelLabel) {
+				this.appendModelPanel(contentWrap, modelLabel);
+			}
 		} else {
 			const imLikeMessage = imLikeMessageContainer.createDiv();
 			imLikeMessage.addClass("im-like-message", classNames[this.viewType]["chat-message"]);
 			await this.renderMarkdown(content, imLikeMessage);
 		}
 
-		// Actions bar — revealed on hover of messageWrapper via CSS
+		// Actions bar — revealed on hover of messageWrapper via CSS.
+		// Always visible (no hover required) for the last assistant message.
 		const actionsBar = messageWrapper.createDiv({ cls: "llm-message-actions" });
+		if (finalMessage && assistant) actionsBar.addClass("llm-actions-visible");
 
 		const copyBtn = new ButtonComponent(actionsBar);
 		copyBtn.setIcon("files");
@@ -1865,13 +3801,22 @@ export class ChatContainer {
 			refreshBtn.buttonEl.addClass("clickable-icon", "llm-refresh-output");
 			refreshBtn.onClick(async () => {
 				new Notice("Regenerating response...");
-				this.regenerateOutput();
+				await this.regenerateOutput();
 			});
+		}
+
+		// Obsidian Agent brand icon — shown at the end of the last assistant
+		// message when running in agent mode, mirroring how Claude shows its logo.
+		if (finalMessage && assistant && this.isObsidianAgent && this.plugin.settings.showAgentBrandIcon) {
+			const brandEl = messageWrapper.createDiv({ cls: "llm-obsidian-agent-brand" });
+			const iconEl = brandEl.createSpan({ cls: "llm-obsidian-agent-brand-icon" });
+			setIcon(iconEl, "stone");
 		}
 	}
 
 	async generateIMLikeMessages(messages: Message[], gen?: number) {
 		let finalMessage = false;
+		let assistantIdx = 0;
 		for (let index = 0; index < messages.length; index++) {
 			// Abort if a newer render has been kicked off since this one started.
 			// Each await inside createMessage (e.g. renderMarkdown) is a yield
@@ -1882,7 +3827,11 @@ export class ChatContainer {
 			const { role, content } = messages[index];
 			if (index === messages.length - 1) finalMessage = true;
 			if (role === "assistant") {
-				await this.createMessage(content, index, finalMessage, true);
+				const toolCalls = this.allToolCallsByTurn.get(assistantIdx);
+				const skillId = this.allSkillsByTurn.get(assistantIdx);
+				const modelLabel = this.allModelsByTurn.get(assistantIdx);
+				await this.createMessage(content, index, finalMessage, true, toolCalls, skillId, modelLabel);
+				assistantIdx++;
 			} else {
 				await this.createMessage(content, index, finalMessage);
 			}
@@ -1944,7 +3893,7 @@ export class ChatContainer {
 			if (hasConversation) return;
 
 			// Context is on — update to the currently active file.
-			const activeFile = this.plugin.app.workspace.getActiveFile();
+			const activeFile = this.getActiveMarkdownFile();
 			if (activeFile) {
 				this.activeFileForChip = { name: activeFile.name, path: activeFile.path };
 			} else {
@@ -1954,11 +3903,12 @@ export class ChatContainer {
 				this.scanButton?.buttonEl.removeClass("is-active");
 			}
 			this.syncChips();
-		} else if (includeActiveFile && !this.activeFileForChip && !hasConversation) {
+		} else if (includeActiveFile && !this.activeFileForChip && !hasConversation && this.viewType !== "widget") {
 			// Context was never activated because no file was open at build
 			// time. Try again now that the popover is being shown — but only
 			// if the conversation hasn't started yet.
-			const activeFile = this.plugin.app.workspace.getActiveFile();
+			// Skip for widget view (sidebar/tab) — auto-include doesn't apply there.
+			const activeFile = this.getActiveMarkdownFile();
 			if (activeFile) {
 				this.useActiveFileContext = true;
 				this.activeFileForChip = { name: activeFile.name, path: activeFile.path };
@@ -1986,9 +3936,85 @@ export class ChatContainer {
 	 */
 	syncModelDropdown() {
 		if (!this.modelDropdown) return;
-		const settingType = getSettingType(this.viewType);
-		this.modelDropdown.setValue(this.plugin.settings[settingType].model);
+		const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
+		if (this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled) {
+			this.modelDropdown.selectEl.value = "agent:obsidian";
+		} else if (activeAssistantId) {
+			this.modelDropdown.selectEl.value = `assistant:${activeAssistantId}`;
+		} else {
+			const settingType = getSettingType(this.viewType);
+			this.modelDropdown.setValue(this.plugin.settings[settingType].model);
+		}
+		this.resizeModelDropdown();
 		this.syncFileContextButtons();
+		// Push updated model/assistant name to Chat Details panel
+		this.pushChatDetailsState();
+	}
+
+	/**
+	 * Shrinks the model/assistant <select> to exactly fit the selected option's
+	 * text plus the custom chevron, so there is no dead space between label and arrow.
+	 */
+	private resizeModelDropdown(): void {
+		if (!this.modelDropdown) return;
+		const select = this.modelDropdown.selectEl;
+		const selected = select.options[select.selectedIndex];
+		if (!selected) return;
+
+		// Measure the rendered text width using a temporary off-screen span.
+		const ruler = document.createElement("span");
+		ruler.style.cssText =
+			"visibility:hidden;position:absolute;white-space:nowrap;pointer-events:none;";
+		ruler.style.font = window.getComputedStyle(select).font;
+		ruler.textContent = selected.text;
+		document.body.appendChild(ruler);
+		const textWidth = ruler.getBoundingClientRect().width;
+		document.body.removeChild(ruler);
+
+		// Left pad (~4px) + text + right pad + chevron room (~22px) = ~26px total.
+		// Add a small buffer so the text never clips.
+		const PADDING = 30;
+		select.style.width = `${Math.ceil(textWidth + PADDING)}px`;
+	}
+
+	/**
+	 * Rebuild the assistants optgroup inside the model dropdown to reflect
+	 * the current list of assistants (called after hot-reload of ASSISTANT.md files).
+	 */
+	syncAssistantDropdownOptions() {
+		if (!this.modelDropdown || !this.assistantsOptGroup) return;
+		const select = this.modelDropdown.selectEl;
+
+		// Remove old group
+		if (this.assistantsOptGroup.parentNode === select) {
+			select.removeChild(this.assistantsOptGroup);
+		}
+
+		// Rebuild — includes Obsidian Agent entry at top when enabled
+		const group = document.createElement("optgroup");
+		group.label = "Assistants";
+		const agentEnabled = this.plugin.settings.obsidianAgentSettings?.enabled;
+		if (agentEnabled) {
+			const agentOpt = document.createElement("option");
+			agentOpt.value = "agent:obsidian";
+			agentOpt.text = "Obsidian Agent";
+			group.appendChild(agentOpt);
+		}
+		const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
+		for (const assistant of assistants) {
+			const opt = document.createElement("option");
+			opt.value = `assistant:${assistant.id}`;
+			opt.text = assistant.name;
+			group.appendChild(opt);
+		}
+		this.assistantsOptGroup = group;
+
+		if (agentEnabled || assistants.length > 0) {
+			select.appendChild(this.assistantsOptGroup);
+		}
+
+		// Re-sync selected value in case the active assistant/agent changed
+		this.syncModelDropdown();
 	}
 
 	/** Show or hide the file-context buttons based on the enableFileContext setting. */
@@ -1996,6 +4022,276 @@ export class ChatContainer {
 		const enabled = this.plugin.settings.enableFileContext;
 		this.addFilesButton?.buttonEl.toggleClass("llm-hidden", !enabled);
 		this.scanButton?.buttonEl.toggleClass("llm-hidden", !enabled);
+	}
+
+	// ── Voice recording (Feature 1) ────────────────────────────────────────
+
+	/** Transition the mic button to a new visual state. */
+	private setMicState(state: "idle" | "recording" | "transcribing") {
+		this.micState = state;
+		if (!this.micButton) return;
+		const el = this.micButton.buttonEl;
+		el.removeClass("llm-mic-recording", "llm-mic-transcribing");
+		this.micButton.setDisabled(false);
+		if (state === "idle") {
+			this.micButton.setIcon("mic");
+			this.micButton.setTooltip("Record voice message");
+			// Mic returns to idle — re-evaluate visibility based on current input content
+			// (the updateSendButton closure is not in scope here, so we drive it directly)
+			this.syncMicSendVisibility();
+		} else if (state === "recording") {
+			this.micButton.setIcon("square");
+			this.micButton.setTooltip("Stop recording");
+			el.addClass("llm-mic-recording");
+			// While recording or transcribing, always show the mic button (it acts as stop/status)
+			// and keep the send button hidden so the layout doesn't jump
+		} else {
+			this.micButton.setIcon("loader");
+			this.micButton.setTooltip("Transcribing…");
+			el.addClass("llm-mic-transcribing");
+			this.micButton.setDisabled(true);
+		}
+	}
+
+	/**
+	 * Sync mic button visibility when returning to idle state.
+	 * The send button's display is handled by updateSendButton (in scope during build);
+	 * here we only need to show/hide the mic button based on whether the prompt is empty.
+	 */
+	syncMicSendVisibility(): void {
+		if (!this.micButton || !this.plugin.settings.whisperSettings?.enabled) return;
+		const isEmpty = (this.prompt ?? "").trim().length === 0;
+		this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
+		// Send button: opposite of mic — reach it as the next DOM sibling
+		const sendEl = this.micButton.buttonEl.nextElementSibling as HTMLElement | null;
+		if (sendEl) sendEl.style.display = isEmpty ? "none" : "";
+	}
+
+	/**
+	 * Show or hide the mic button based on the current whisperSettings.enabled value.
+	 * Called by the plugin after toggling the Transcription feature on or off, so that
+	 * open chat containers reflect the new state without needing a reload.
+	 *
+	 * - Disabled: hide mic button, ensure send button is always visible.
+	 * - Enabled:  restore the normal empty-input mic / non-empty send swap.
+	 */
+	syncMicButton(): void {
+		if (!this.micButton) return;
+		const enabled = this.plugin.settings.whisperSettings?.enabled ?? false;
+		const sendEl = this.micButton.buttonEl.nextElementSibling as HTMLElement | null;
+		if (!enabled) {
+			// Hide the mic; make the send button unconditionally visible
+			this.micButton.buttonEl.style.display = "none";
+			if (sendEl) sendEl.style.display = "";
+		} else {
+			// Restore normal visibility logic based on prompt content
+			const isEmpty = (this.prompt ?? "").trim().length === 0;
+			this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
+			if (sendEl) sendEl.style.display = isEmpty ? "none" : "";
+		}
+	}
+
+	/**
+	 * Request microphone access and start recording.
+	 * `promptField` is passed so the transcript can be inserted on completion.
+	 */
+	private async startRecording(promptField: import("obsidian").TextAreaComponent): Promise<void> {
+		let stream: MediaStream;
+		// Check API availability first (not all Electron contexts expose this)
+		if (!navigator.mediaDevices?.getUserMedia) {
+			new Notice(
+				"Microphone API not available. Try restarting Obsidian or checking system permissions.",
+				6000,
+			);
+			return;
+		}
+
+		// On macOS, Electron requires an explicit permission request via systemPreferences
+		// before getUserMedia will trigger the system dialog. Without this the call
+		// silently fails or never shows the OS permission prompt.
+		try {
+			const electron = require("electron");
+			const sp = electron?.remote?.systemPreferences ?? electron?.systemPreferences;
+			if (sp?.askForMediaAccess) {
+				const granted = await sp.askForMediaAccess("microphone");
+				if (!granted) {
+					new Notice(
+						"Microphone access denied. Open System Settings → Privacy & Security → Microphone and enable Obsidian.",
+						8000,
+					);
+					return;
+				}
+			}
+		} catch {
+			// systemPreferences not available (Linux/Windows) — continue to getUserMedia
+		}
+
+		try {
+			stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+		} catch (err: any) {
+			const msg =
+				err?.name === "NotAllowedError"
+					? "Microphone access denied. Open System Settings → Privacy & Security → Microphone and enable Obsidian."
+					: err?.name === "NotFoundError"
+					? "No microphone found. Please connect one and try again."
+					: `Microphone error: ${err?.name} — ${err?.message ?? err}`;
+			new Notice(msg, 7000);
+			console.error("[LLM Plugin] getUserMedia failed:", err);
+			return;
+		}
+
+		// Confirm recording has started
+		const recordingNotice = new Notice("🎙 Recording… click the button again to stop.", 0);
+
+		this.audioChunks = [];
+
+		// Pick the best available MIME type for this browser/Electron version
+		const preferredMime =
+			["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"]
+				.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
+
+		this.mediaRecorder = new MediaRecorder(stream, preferredMime ? { mimeType: preferredMime } : {});
+
+		this.mediaRecorder.ondataavailable = (e: BlobEvent) => {
+			if (e.data.size > 0) this.audioChunks.push(e.data);
+		};
+
+		this.mediaRecorder.onstop = async () => {
+			// Stop all microphone tracks so the OS recording indicator goes away
+			stream.getTracks().forEach((t) => t.stop());
+			recordingNotice.hide();
+
+			this.setMicState("transcribing");
+			try {
+				await this.handleTranscription(promptField);
+			} catch (err) {
+				// Unexpected error — show a notice so it's not silent
+				new Notice(
+					`Transcription error: ${err instanceof Error ? err.message : String(err)}`,
+					5000,
+				);
+			} finally {
+				// Always return the button to idle — no matter what happened
+				this.setMicState("idle");
+			}
+		};
+
+		this.mediaRecorder.start();
+		this.setMicState("recording");
+	}
+
+	/** Stop an active recording — triggers `onstop` which runs the transcription. */
+	private stopRecording(): void {
+		if (this.mediaRecorder && this.mediaRecorder.state === "recording") {
+			this.mediaRecorder.stop();
+		}
+	}
+
+	/** Send accumulated audio chunks to WhisperService and insert/send the transcript. */
+	private async handleTranscription(promptField: import("obsidian").TextAreaComponent): Promise<void> {
+		if (!this.plugin.whisperService) {
+			this.plugin.initWhisperService();
+		}
+		if (!this.plugin.whisperService) {
+			new Notice("Whisper is not configured. Enable it in Settings → Transcription.");
+			return;
+		}
+
+		const mimeType = this.mediaRecorder?.mimeType ?? "audio/webm";
+		const audioBlob = new Blob(this.audioChunks, { type: mimeType });
+		this.audioChunks = [];
+
+		let transcript: string;
+		try {
+			const result = await this.plugin.whisperService.transcribeBlob(audioBlob, mimeType);
+			transcript = result.transcript.trim();
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : String(err);
+			new Notice(`Transcription failed: ${msg}`, 5000);
+			return;
+		}
+
+		if (!transcript) {
+			new Notice("No speech detected.");
+			return;
+		}
+
+		const ws = this.plugin.settings.whisperSettings;
+
+		/**
+		 * Fire a synthetic `input` event after programmatically setting the textarea
+		 * value. Obsidian's TextAreaComponent.onChange listens to this event, so
+		 * without it the send button stays disabled and this.prompt isn't updated.
+		 */
+		const fireInputEvent = () => {
+			promptField.inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+		};
+
+		if (ws.autoSend && this._triggerSend) {
+			// Inject transcript directly as a user message and send
+			this.prompt = transcript;
+			promptField.setValue(transcript);
+			fireInputEvent();
+			this._triggerSend();
+		} else {
+			// Append to whatever the user already typed (don't overwrite)
+			const existing = promptField.getValue();
+			const newVal   = existing ? `${existing} ${transcript}` : transcript;
+			promptField.setValue(newVal);
+			fireInputEvent(); // updates send-button state + this.prompt via onChange
+			promptField.inputEl.focus();
+			// Scroll textarea to end
+			promptField.inputEl.setSelectionRange(newVal.length, newVal.length);
+		}
+
+		new Notice("✓ Transcript ready", 2000);
+	}
+
+	/**
+	 * Append a skill indicator row above the response, showing which skill
+	 * was active when this assistant message was generated.
+	 */
+	private appendSkillPanel(container: HTMLElement, skillName: string): void {
+		const panel = container.createDiv({ cls: "llm-skill-panel" });
+		const iconEl = panel.createSpan({ cls: "llm-skill-panel-icon" });
+		setIcon(iconEl, "scroll-text");
+		panel.createSpan({ cls: "llm-skill-panel-label", text: skillName });
+	}
+
+	/** Append a small attribution badge below the message showing which model/assistant answered. */
+	private appendModelPanel(container: HTMLElement, label: string): void {
+		const panel = container.createDiv({ cls: "llm-model-panel" });
+		const iconEl = panel.createSpan({ cls: "llm-model-panel-icon" });
+		setIcon(iconEl, "cpu");
+		panel.createSpan({ cls: "llm-model-panel-label", text: label });
+	}
+
+	/**
+	 * Append a collapsible tool-call disclosure panel above the response,
+	 * showing which tools the agent invoked during this turn.
+	 */
+	private appendToolCallsPanel(container: HTMLElement, toolCalls: ToolCallRecord[]): void {
+		const count = toolCalls.length;
+		const details = container.createEl("details", { cls: "llm-tool-calls" });
+
+		const summary = details.createEl("summary", { cls: "llm-tool-calls-summary" });
+		const iconEl = summary.createSpan({ cls: "llm-tool-calls-icon" });
+		setIcon(iconEl, "wrench");
+		summary.createSpan({
+			cls: "llm-tool-calls-label",
+			text: count === 1 ? "1 tool call" : `${count} tool calls`,
+		});
+		const chevronEl = summary.createSpan({ cls: "llm-tool-calls-chevron" });
+		setIcon(chevronEl, "chevron-down");
+
+		const body = details.createDiv({ cls: "llm-tool-calls-body" });
+		for (const tc of toolCalls) {
+			const item = body.createDiv({ cls: "llm-tool-call-item" });
+			item.createSpan({ cls: "llm-tool-call-name", text: tc.name });
+			const inputStr = JSON.stringify(tc.input);
+			const truncated = inputStr.length > 300 ? inputStr.slice(0, 297) + "…" : inputStr;
+			item.createEl("code", { cls: "llm-tool-call-input", text: truncated });
+		}
 	}
 
 	/**
@@ -2021,11 +4317,209 @@ export class ChatContainer {
 		}
 	}
 
+	/**
+	 * Append a collapsible "Web Sources" panel listing the URLs returned by
+	 * the web_search tool during this response.
+	 */
+	private appendWebSourcesPanel(container: HTMLElement, sources: { title: string; url: string }[]): void {
+		const details = container.createEl("details", { cls: "llm-web-sources" });
+		const summary = details.createEl("summary", { cls: "llm-web-sources-summary" });
+		setIcon(summary.createSpan({ cls: "llm-web-sources-icon" }), "globe");
+		summary.createSpan({ text: `${sources.length} web source${sources.length !== 1 ? "s" : ""}` });
+
+		const list = details.createEl("ul", { cls: "llm-web-sources-list" });
+		for (const { title, url } of sources) {
+			const item = list.createEl("li");
+			const link = item.createEl("a", {
+				cls: "llm-web-source-link",
+				text: title || url,
+				href: url,
+			});
+			link.setAttribute("target", "_blank");
+			link.setAttribute("rel", "noopener noreferrer");
+		}
+	}
+
+	// ── Memory helpers ────────────────────────────────────────────────────────
+
+	/**
+	 * Append a small indicator to the assistant message container showing that
+	 * recalled memories were injected for this generation.
+	 */
+	private appendMemoryIndicator(container: HTMLElement): void {
+		const panel = container.createDiv({ cls: "llm-memory-panel" });
+		const iconEl = panel.createSpan({ cls: "llm-memory-panel-icon" });
+		setIcon(iconEl, "brain");
+		panel.createSpan({ cls: "llm-memory-panel-label", text: "Memory recalled" });
+	}
+
+	/**
+	 * Append a small indicator showing which assistant was active for this generation.
+	 */
+	private appendAssistantIndicator(container: HTMLElement, assistantName: string): void {
+		const panel = container.createDiv({ cls: "llm-assistant-panel" });
+		const iconEl = panel.createSpan({ cls: "llm-assistant-panel-icon" });
+		setIcon(iconEl, "bot");
+		panel.createSpan({ cls: "llm-assistant-panel-label", text: assistantName });
+	}
+
+	/**
+	 * Append a small routing indicator showing which assistant the Obsidian Agent
+	 * delegated to via the invoke_assistant tool.
+	 */
+	private appendAgentRoutingIndicator(container: HTMLElement, assistantName: string): void {
+		const panel = container.createDiv({ cls: "llm-agent-routing-panel" });
+		const iconEl = panel.createSpan({ cls: "llm-agent-routing-panel-icon" });
+		setIcon(iconEl, "waypoints");
+		panel.createSpan({ cls: "llm-agent-routing-panel-label", text: `Routed to ${assistantName}` });
+	}
+
+	private appendTokenUsage(container: HTMLElement, inputTokens: number, outputTokens: number): void {
+		const panel = container.createDiv({ cls: "llm-token-usage" });
+		const iconEl = panel.createSpan({ cls: "llm-token-usage-icon" });
+		setIcon(iconEl, "zap");
+		const fmt = (n: number) => n.toLocaleString();
+		panel.createSpan({ text: `↑ ${fmt(inputTokens)}  ↓ ${fmt(outputTokens)} tokens` });
+	}
+
+	/**
+	 * Build a callModel wrapper for the active provider, used by MemoryService
+	 * to run the extraction prompt.
+	 */
+	private buildMemoryCallModel(): ((system: string, user: string) => Promise<string>) | null {
+		const { model, modelType } = getViewInfo(this.plugin, this.viewType);
+
+		if (modelType === claude) {
+			return async (system: string, user: string) => {
+				const client = new Anthropic({
+					apiKey: this.plugin.settings.claudeAPIKey,
+					dangerouslyAllowBrowser: true,
+				});
+				const resp = await client.messages.create({
+					model,
+					max_tokens: 1024,
+					system,
+					messages: [{ role: "user", content: user }],
+				});
+				const block = resp.content[0];
+				return block.type === "text" ? block.text : "";
+			};
+		}
+
+		if (modelType === gemini) {
+			return async (system: string, user: string) => {
+				const client = new GoogleGenAI({ apiKey: this.plugin.settings.geminiAPIKey });
+				const resp = await client.models.generateContent({
+					model,
+					contents: [{ role: "user", parts: [{ text: user }] }],
+					config: { systemInstruction: system },
+				});
+				return resp.text?.trim() ?? "";
+			};
+		}
+
+		// OpenAI-compatible (openAI, mistral, ollama, lmStudio)
+		if (
+			modelType === openAI ||
+			modelType === mistral ||
+			modelType === ollama ||
+			modelType === lmStudio
+		) {
+			return async (system: string, user: string) => {
+				const client = this.createOpenAIClient(modelType);
+				const resp = await client.chat.completions.create({
+					model,
+					max_tokens: 1024,
+					temperature: 0.3,
+					messages: [
+						{ role: "system", content: system },
+						{ role: "user", content: user },
+					],
+				});
+				return resp.choices[0]?.message?.content?.trim() ?? "";
+			};
+		}
+
+		return null;
+	}
+
+	/**
+	 * Run memory extraction from the current conversation and write to vault.
+	 * Called manually (extract button) or automatically at end-of-chat.
+	 */
+	async extractMemories(): Promise<void> {
+		const messages = this.getMessages();
+		if (messages.length === 0) {
+			new Notice("No conversation to extract memories from.");
+			return;
+		}
+		if (!this.plugin.memoryService) {
+			new Notice("Memory is not enabled. Enable it in Settings → Memory.");
+			return;
+		}
+		const callModel = this.buildMemoryCallModel();
+		if (!callModel) {
+			new Notice("Memory extraction is not supported for the current provider.");
+			return;
+		}
+		new Notice("Extracting memories…");
+
+		// Determine the extraction scope:
+		// - If a project is active: write to the project's memories folder
+		// - Else if an assistant is active: write to the assistant's memories folder
+		// - Otherwise: write to global memories folder
+		const activeProjectId = this.plugin.settings.projectSettings?.activeProjectId;
+		const activeProject = activeProjectId
+			? this.plugin.projectManager?.getProject(activeProjectId)
+			: null;
+		const activeAssistantId = this.plugin.settings.assistantSettings?.activeAssistantId;
+		const activeAssistant = activeAssistantId
+			? this.plugin.assistantManager?.getAssistant(activeAssistantId)
+			: null;
+
+		const scope = activeProject ? "project"
+			: activeAssistant ? "assistant"
+			: "global";
+		// MemoryService uses the id (slug) as the folder name for assistants, display name for projects
+		const scopeName = activeProject?.name ?? activeAssistant?.id;
+
+		try {
+			await this.plugin.memoryService.extractAndSave(
+				messages,
+				scope,
+				scopeName,
+				callModel,
+			);
+		} catch (e) {
+			console.error("[Memory] Extraction failed:", e);
+			new Notice("Memory extraction failed — see console for details.");
+		}
+	}
+
 	newChat() {
+		// Auto-extract memories at end-of-chat if the feature and trigger are configured
+		const memSettings = this.plugin.settings.memorySettings;
+		if (
+			this.useMemory &&
+			memSettings?.enabled &&
+			memSettings.extractionTrigger === "end-of-chat" &&
+			this.plugin.memoryService &&
+			this.getMessages().length > 0
+		) {
+			// Fire-and-forget — don't block the UI
+			this.extractMemories().catch((e) =>
+				console.error("[Memory] End-of-chat extraction failed:", e)
+			);
+		}
+
 		this.historyMessages.empty();
 		this.claudeCodeSessionId = null;
 		this.pendingToolCalls = [];
+		this.pendingWebSources = [];
 		this.allToolCallsByTurn = new Map();
+		this.allSkillsByTurn = new Map();
+		this.allModelsByTurn = new Map();
+		this.lastTokenUsage = null;
 		this.displayNoChatView(this.historyMessages);
 
 		// Reset active file chip state, then re-evaluate from the current setting.
@@ -2036,10 +4530,11 @@ export class ChatContainer {
 
 		const settingType = getSettingType(this.viewType);
 		if (
+			this.viewType !== "widget" &&
 			this.plugin.settings.enableFileContext &&
 			this.plugin.settings[settingType].contextSettings.includeActiveFile
 		) {
-			const activeFile = this.plugin.app.workspace.getActiveFile();
+			const activeFile = this.getActiveMarkdownFile();
 			if (activeFile) {
 				this.useActiveFileContext = true;
 				this.activeFileForChip = { name: activeFile.name, path: activeFile.path };
@@ -2047,7 +4542,23 @@ export class ChatContainer {
 			}
 		}
 
-		this.syncChips();
+		// A new chat has no project association — clear so the chip strip
+		// doesn't carry over a project from the previously loaded conversation.
+		if (this.plugin.settings.projectSettings?.activeProjectId) {
+			this.plugin.settings.projectSettings = {
+				...this.plugin.settings.projectSettings,
+				activeProjectId: null,
+			};
+			void this.plugin.saveSettings();
+		}
+
+		// Clear per-chat state for Chat Details panel
+		this.lastRecalledMemories = [];
+
+		this.syncChips(); // also calls pushChatDetailsState()
+
+		// Memory recall is always active when the feature is enabled.
+		this.useMemory = !!this.plugin.settings.memorySettings?.enabled;
 	}
 }
 

@@ -1,140 +1,152 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository — an Obsidian plugin providing LLM chat interfaces for OpenAI, Anthropic Claude, Google Gemini, Mistral, and local Ollama / LM Studio / GPT4All.
 
 ## Build Commands
 
 ```bash
-npm run dev      # Start development with watch mode (esbuild watches for changes)
-npm run build    # Production build (TypeScript type-check + esbuild bundle)
-npm run version  # Bump version in manifest.json and versions.json
+npm run dev      # watch mode (esbuild)
+npm run build    # production build (tsc type-check + esbuild bundle)
+npm run version  # bump manifest.json and versions.json
 ```
 
-Output is bundled to `main.js` in the root directory.
+Output bundles to `main.js` in the root. esbuild targets CommonJS/ES2018; `obsidian`, `electron`, `@codemirror/*`, and Node builtins are external; SVGs load inline. TypeScript uses strict null checks, baseUrl `src`.
 
 ## Architecture Overview
 
-This is an Obsidian plugin that provides LLM chat interfaces with support for OpenAI, Anthropic Claude, Google Gemini, Mistral AI, local Ollama, local LM Studio, and local GPT4All.
+### Entry point
 
-### Entry Point and Plugin Lifecycle
+`src/main.ts` — `LLMPlugin` class: initializes platform abstractions (Desktop/Mobile in `src/services/`), loads settings (`loadData`/`saveData`), registers commands/views, initializes MessageStore, History, and FAB.
 
-`src/main.ts` contains the `LLMPlugin` class which:
-1. Initializes platform abstractions (Desktop vs Mobile)
-2. Loads settings from Obsidian's data store
-3. Registers commands and views
-4. Initializes MessageStore, History, Assistants, and FAB components
+### View architecture (four UIs, shared components)
 
-### View Architecture (Four UI Implementations)
+- **Modal** — `src/Plugin/Modal/ChatModal2.ts`
+- **Widget** (tab view) — `src/Plugin/Widget/Widget.ts`
+- **FAB** — `src/Plugin/FAB/FAB.ts`
+- **StatusBarButton** — `src/Plugin/StatusBar/StatusBarButton.ts` — "Ask AI" popover; uses `viewType: "floating-action-button"` and shares `fabSettings` with the FAB. The popover is built once on `generate()`, so call `chatContainer.syncModelDropdown()` whenever it is shown.
 
-The plugin provides four ways to access the chat interface, all using the same underlying components:
+All compose shared components from `src/Plugin/Components/`: `Header.ts` (tab nav), `ChatContainer.ts` (messages, input, API calls), `HistoryContainer.ts`, `SettingsContainer.ts`.
 
-- **Modal** (`src/Plugin/Modal/ChatModal2.ts`) - Popup dialog
-- **Widget** (`src/Plugin/Widget/Widget.ts`) - Sidebar tab view
-- **FAB** (`src/Plugin/FAB/FAB.ts`) - Floating Action Button with expandable chat
-- **StatusBarButton** (`src/Plugin/StatusBar/StatusBarButton.ts`) - "Ask AI" button in the status bar that opens a popover chat. Uses `viewType: "floating-action-button"` and shares `fabSettings` with the FAB. Its popover is built once on `generate()` (not per-open), so call `chatContainer.syncModelDropdown()` whenever the popover is shown to keep the model dropdown in sync with settings.
+### Multiple chat widget tabs
 
-Each view composes these shared components from `src/Plugin/Components/`:
-- `Header.ts` - Tab navigation (Chat/History/Settings/Assistants)
-- `ChatContainer.ts` - Message display, input handling, API calls
-- `HistoryContainer.ts` - Chat history list
-- `SettingsContainer.ts` - Model/parameter configuration
-- `AssistantsContainer.ts` - OpenAI assistants selection
+Multiple `WidgetView` instances can be open at once, each owning its own `ChatContainer` + `MessageStore` + chat file path (fully isolated conversations).
 
-### State Management
+- `new-chat-widget` command always creates a fresh tab; `open-LLM-widget-tab` and the ribbon icon use focus-or-open-one-tab.
+- `LLMPlugin.lastFocusedWidgetLeaf` is updated on `active-leaf-change`; `openChatFileInWidget()` / `activateTab()` prefer it so "open chat file" lands in the last-used widget.
+- `ChatsSidebar.onOpenFile` callback: `WidgetView.onOpen()` sets it to `this.loadChatFile` so sidebar rows load into *that* widget. The standalone `ChatsView` still routes via `plugin.openChatFileInWidget()`.
+- **Known limitation:** all widget tabs share `plugin.settings.widgetSettings`; model changes don't push reactively to other tabs' dropdowns. v2: per-view `ViewSettings` clone.
 
-- **MessageStore** (`src/Plugin/Components/MessageStore.ts`) - Pub/sub pattern for in-memory message state; synchronizes all views
-- **Settings** (in `main.ts`) - Persisted configuration via Obsidian's `loadData`/`saveData`
-- **HistoryHandler** (`src/History/HistoryHandler.ts`) - Manages chat history (max 10 conversations)
-- **AssistantHandler** (`src/Assistants/AssistantHandler.ts`) - OpenAI assistants state
+### State management
 
-#### Scan-button context locking (`activeFileForChip`)
+- **MessageStore** (`src/Plugin/Components/MessageStore.ts`) — pub/sub message state; synchronizes views. `setMessages` stores a shallow copy (`[...messages]`) so later `addMessage` pushes can't mutate the caller's array (notably legacy `promptHistory[n].messages`).
+- **HistoryHandler** (`src/History/HistoryHandler.ts`) — legacy in-settings history; superseded by file-based `ChatHistory` when `chatHistoryEnabled: true` (the default).
 
-`ChatContainer.activeFileForChip` is `{ name: string; path: string } | null`. When the user activates the scan button, the file's **path** is stored at that moment and held for the life of the conversation. Two invariants must be preserved:
+### Message flow
 
-1. **Send time reads the stored path, not `getActiveFile()`** — the `useActiveFileContext` block in `handleGenerateClick` resolves the file via `activeFileForChip.path` (falling back to `getActiveFile()` only when no chip is set). Do not revert this to a bare `getActiveFile()` call, or switching tabs mid-task will silently swap the injected context.
-2. **`refreshActiveFileChip()` is a no-op mid-conversation** — it guards on `this.getMessages().length > 0` and returns early, so opening the popover on a different note doesn't re-point the chip. The chip only auto-updates when the chat is empty (before the first send) or after `newChat()` resets state.
+Input → `handleGenerateClick()` → message added to MessageStore (notifies subscribers) → provider API call → streaming UI updates → saved to History.
 
-### Message Flow
+**Context injection order** (top → bottom): recalled memories → project instructions → assistant system prompt → skill instructions → vault/file context.
 
-1. User input in `ChatContainer` triggers `handleGenerateClick()`
-2. Message added to MessageStore, which notifies all subscribers
-3. API call made based on selected provider (OpenAI/Claude/Gemini/Mistral/Ollama/LM Studio/GPT4All)
-4. Streaming response updates UI in real-time
-5. Conversation saved to History
+#### Render generation guard (`renderGeneration`) — do not remove
 
-#### Render generation guard (`renderGeneration`)
+`updateMessages` re-renders the full list via `resetChat()` + async `generateIMLikeMessages()`. A stale async render can append into a container already cleared by a newer render (duplicated/out-of-order messages). `ChatContainer.renderGeneration` counter prevents this: `updateMessages` increments it and passes it down; the render function bails whenever `gen !== this.renderGeneration`. The race only shows up on rapid successive sends — easy to miss in manual testing. Never remove this guard or make `generateIMLikeMessages` synchronous without understanding it.
 
-`updateMessages` (the MessageStore subscriber) re-renders the full message list by calling `resetChat()` then `generateIMLikeMessages()`. Because `generateIMLikeMessages` is async (it `await`s `renderMarkdown` inside each `createMessage` call), a stale render can continue appending DOM nodes into a container that has already been cleared by a newer render, producing duplicated or out-of-order messages.
+### Stop button / generation abort
 
-To prevent this, `ChatContainer` maintains a `renderGeneration` counter. `updateMessages` increments it and passes the new value to `generateIMLikeMessages`. The render function checks `gen !== this.renderGeneration` before each message and before the final scroll — if it no longer holds the latest generation it returns immediately.
+`ChatContainer._abortController: AbortController | null` is non-null while a generation is in-flight.
 
-**Do not remove this guard or make `generateIMLikeMessages` synchronous without understanding this invariant.** The race is subtle: it only manifests when the user sends a second message quickly (or when the store is updated programmatically in quick succession), so it is easy to miss in manual testing.
+- `enterStopMode(sendButton)` creates the controller and swaps send → red `square` stop icon (`.llm-stop-mode`); `exitStopMode(sendButton)` clears and restores. Called by `handleGenerateClick` at every entry/exit point (including `/remember` early return and pure-prompt skill path).
+- Send button onClick and Enter keydown both check `_abortController` first — if set, they `.abort()` instead of starting a new generation.
+- Provider streaming `for await` loops check `signal.aborted` and break; the Anthropic non-agent path also wires `signal.addEventListener("abort", () => stream.abort())`.
+- `AgentLoop.runAnthropic` / `runOpenAICompatible` accept an optional `signal?: AbortSignal` 4th param; `runAgentMode` passes the controller's signal.
+- `handleGenerateClick`'s catch treats `error.name === "AbortError"` as a graceful stop: partial `previewText` is rendered and saved to history.
 
-#### `MessageStore.setMessages` copies the input array
+### Scan-button context locking (`activeFileForChip`)
 
-`setMessages` stores a shallow copy (`[...messages]`) rather than the direct reference. This prevents subsequent `addMessage` pushes from mutating the caller's array — notably `promptHistory[n].messages` in the legacy array-based history path.
+`ChatContainer.activeFileForChip: { name, path } | null` stores the file path when the scan button is activated and holds it for the conversation. Two invariants:
 
-### Platform Abstraction
+1. **Send time reads the stored path, not `getActiveFile()`** — the `useActiveFileContext` block resolves via `activeFileForChip.path` (falls back to `getActiveFile()` only when no chip). Don't revert to a bare `getActiveFile()` call or tab-switching mid-task silently swaps context.
+2. **`refreshActiveFileChip()` is a no-op mid-conversation** — guards on `getMessages().length > 0`. The chip only auto-updates when the chat is empty or after `newChat()`.
 
-`src/services/` provides abstractions for cross-platform compatibility:
-- `FileSystem.ts` - Desktop/Mobile file operations
-- `OperatingSystem.ts` - Desktop/Mobile OS detection
+### API integration
 
-### API Integration
+- `openai` SDK — OpenAI chat/images; also Mistral (`https://api.mistral.ai/v1`), Ollama (`http://localhost:11434/v1`, models via `/api/tags`), LM Studio (`http://localhost:1234/v1`, models via `/v1/models`, placeholder key `"lm-studio"`).
+- `@anthropic-ai/sdk` — Claude + Claude Code (agent SDK).
+- `@google/generative-ai` — Gemini.
+- GPT4All — local server on port 4891.
 
-Provider SDKs used:
-- `openai` - Chat, images (gpt-image-1), assistants
-- `@anthropic-ai/sdk` - Claude models + Claude Code (agent SDK)
-- `@google/generative-ai` - Gemini models
-- Mistral — uses `openai` SDK with custom baseURL (`https://api.mistral.ai/v1`)
-- Ollama — uses `openai` SDK with custom baseURL (default `http://localhost:11434/v1`); models discovered dynamically via `/api/tags`
-- LM Studio — uses `openai` SDK with custom baseURL (default `http://localhost:1234/v1`); models discovered dynamically via `/v1/models`; no real API key required (uses `"lm-studio"` as placeholder)
-- GPT4All connects to local server on port 4891
+## Feature Systems — details in `.claude/rules/`
 
-### RAG / Vault Search
+Each feature has a path-scoped rules file under `.claude/rules/` that loads automatically when its source files are read. **Working on a feature's integration points elsewhere (e.g. its hooks in `ChatContainer.ts` or `main.ts`)? Read the rule file directly first.**
 
-The plugin supports semantic search over the user's vault via three classes in `src/RAG/`:
+| Feature | Core code | Rule file |
+|---------|-----------|-----------|
+| RAG / Vault Search — embeddings, hybrid search, agent tools | `src/RAG/` | `rag-vault-search.md` |
+| Chat file format — tool-call & skill callouts in saved chats | `src/services/ChatHistory.ts` | `chat-file-format.md` |
+| Skills — vault-native `SKILL.md`, slash commands | `src/Skills/` | `skills.md` |
+| Memory — cross-session memories, `/remember`, recall | `src/Memory/` | `memory.md` |
+| Projects — workspaces, pinned notes, chat co-location | `src/Projects/` | `projects.md` |
+| Assistants — vault-native `ASSISTANT.md` personas | `src/Assistants/` | `assistants.md` |
+| Obsidian Agent — primary agent, guidance files, `invoke_assistant` | `src/Plugin/ObsidianAgent/` | `obsidian-agent.md` |
+| Web Search — SearXNG `web_search` tool, sources panel | `src/WebSearch/` | `web-search.md` |
+| Whisper — voice input + file transcription, Python sidecar | `src/Whisper/` | `whisper.md` |
+| Chats Panel — `ChatsView` + `ChatsSidebar`, row menu | `src/Plugin/ChatsView/` | `chats-panel.md` |
+| Chat Details Panel — live context sidebar | `src/Plugin/ChatDetailsView/` | `chat-details.md` |
+| Feature gates — `featureSettings` toggles in settings modal | `src/Settings/` | `feature-gates.md` |
 
-- **`VectorStore.ts`** — Persists embeddings as a flat JSON file (path passed via constructor). Provides cosine similarity search and incremental updates (skips files whose `mtime` hasn't changed). `save()` ensures the parent directory exists before writing — always use `vault.adapter.mkdir()` guard before any `adapter.write()` to a plugin-relative path, as the directory may not exist on fresh installs.
-- **`EmbeddingService.ts`** — Provider-agnostic embedding generation. Supports OpenAI (`text-embedding-3-small`), Gemini (`text-embedding-004`), Ollama, and LM Studio (all via the OpenAI-compatible `/v1/embeddings` endpoint). LM Studio calls must pass `encoding_format: "float"` explicitly. Reuses API keys/hosts already stored in plugin settings.
-- **`VaultIndexer.ts`** — Orchestrates indexing (chunking by paragraph, ~1500 chars per chunk with file path + heading prefix) and exposes `semanticSearch(query, topK)` which returns a formatted markdown context block. Calls `EmbeddingService.checkOllamaModel()` before indexing to surface a clear pull-command error if the Ollama model isn't available.
+Shared conventions across features: Skills/Projects/Assistants/Memories folders all derive from `rootVaultFolder` (default `"AI"`); managers (`SkillRegistry`, `ProjectManager`, `AssistantManager`) follow the same discovery/parsing/hot-reload pattern and have `reinit*()` methods called on `rootVaultFolder` change; all settings sub-objects are deep-merged in `loadSettings()`.
 
-**How it integrates:**
-- `LLMPlugin.vaultIndexer` is the singleton instance; call `plugin.initVaultIndexer()` after any RAG setting change.
-- `LLMPlugin` registers `vault.on('modify')`, `vault.on('delete')`, and `vault.on('rename')` events to keep the index incrementally up-to-date. Modify events are debounced (2 s) to avoid hammering the embedding API during rapid autosaves.
-- `ObsidianToolRegistry` receives the `VaultIndexer` and exposes a `search_vault_semantic` tool (`risk: "safe"`). Tool-capable models (Claude, GPT-4, Gemini, Ollama, Mistral) call this autonomously via `AgentLoop`.
-- `AgentLoop` fires `AgentCallbacks.onToolResult(toolName, input, result)` after each successful tool execution — `ChatContainer` uses this to (a) capture `search_vault_semantic` results and populate the cited sources panel, and (b) record the call in `pendingToolCalls` for inclusion in the saved chat file.
-- `ChatContainer` has a `useVaultSearch` toggle (toolbar button, visible when RAG is enabled) that pre-fills `pendingContextString` with top-k results — useful as a fallback or for models where the user wants guaranteed vault context. After generation, a collapsible "Sources" panel (`<details class="llm-rag-sources">`) is appended listing the contributing files as clickable links.
-- Search uses **hybrid scoring**: 70% cosine similarity + 30% BM25 keyword score. BM25 IDF is computed at search time across the in-memory corpus. The `VectorStore.hybridSearch()` method handles both; `VectorStore.search()` delegates to it with full vector weight for pure semantic use.
-- RAG settings live under `plugin.settings.ragSettings` (`RAGSettings` type in `types.ts`) and are configured in `LLMSettingsModal` under the "Vault Search" tab.
+## Known Pitfalls
 
-#### Tool call recording in chat files
+### `view.addAction()` survives hot-reloads — always scrub before adding
 
-`ChatContainer` tracks tool calls via two instance vars: `pendingToolCalls: ToolCallRecord[]` (accumulates during the current agent turn) and `allToolCallsByTurn: Map<number, ToolCallRecord[]>` (keyed by 0-based assistant-message index). At the start of `runAgentMode` the current assistant-message count is captured as `turnIndex`; `onToolResult` pushes to `pendingToolCalls`; after the turn completes the pending calls are committed to `allToolCallsByTurn.set(turnIndex, ...)`. Both vars are reset in `newChat()`.
+`addAction()` appends to a persistent DOM element that survives plugin hot-reloads, while any "already added?" tracking variable resets on every load — so naive re-adding duplicates the button. Before calling `addAction()` for any button with a custom class, query the view's container for that class and `.remove()` any existing element, then `addAction()` and `btn.addClass(...)`. The custom class is load-bearing — never skip it.
 
-`ChatHistory.save()` accepts an optional `toolCallsByTurn` map. When present, `messagesToMarkdown` injects a collapsible `> [!tool-use]-` callout immediately after each `## Assistant` heading. `markdownToMessages` strips these callouts before returning message content so they never pollute re-submitted conversation context.
+### FAB settings indexing
 
-### Key Files
+Always use `getSettingType("floating-action-button") as "fabSettings"` for a typed `LLMPluginSettings` key — never the raw string as an index (TS7053).
 
-- `src/Types/types.ts` - TypeScript interfaces (ChatParams, ImageParams, RAGSettings, etc.)
-- `src/utils/constants.ts` - Provider/model/endpoint constants (includes `images`, `chat`, `messages`, `assistant`, `claudeCodeEndpoint`, etc.)
-- `src/utils/models.ts` - Model configuration definitions
-- `src/utils/utils.ts` - API validation and helper functions
+### `MarkdownRenderer.render` — use `this`, not `this.plugin`
 
-### Constants Convention
+`ChatContainer extends Component`. Pass `this` as the 5th `Component` argument to `MarkdownRenderer.render()`, never `this.plugin` — the plugin's lifecycle is the whole session, so rendered children never get cleaned up and Obsidian's automated review flags it. `ChatContainer` calls `this.load()` in its constructor and `this.unload()` in `destroy()`.
 
-All endpoint type strings live in `src/utils/constants.ts` and must be imported as constants rather than compared against raw string literals. The full set of endpoint constants is: `chat`, `messages`, `images`, `claudeCodeEndpoint`. Provider type constants are: `openAI`, `claude`, `claudeCode`, `gemini`, `mistral`, `ollama`, `lmStudio`, `GPT4All`.
+### Slash menu scoping
 
-### CSS / Styling Convention
+`ChatContainer.slashMenuEl` (floating menu on `document.body`, `position: fixed`) is an instance variable so each container removes only its own menu. Do NOT `document.querySelectorAll(".llm-slash-menu").forEach(el => el.remove())` — that destroys other views' menus. Cleaned up in `destroy()`.
 
-- Always use Obsidian CSS variables (`--size-4-2`, `--font-ui-small`, `--text-muted`, `--interactive-accent`, etc.) instead of hardcoded px/em/color values.
-- Use `--icon-xs` / `--icon-s` for icon sizes rather than raw pixel values.
-- Component-specific styles belong in `styles.css` as named classes — never use inline `element.style.*` assignments in TypeScript (use `.addClass()` with a CSS class instead).
-- `FileSelector.ts` uses the `.llm-file-selector-*` family of classes defined in `styles.css`.
+## Obsidian Core Styling — Use Native Before Custom
 
-## Build Configuration
+Always prefer Obsidian's built-in components and CSS classes; native gets theming, accessibility, and hover/focus states for free.
 
-- **esbuild** bundles to CommonJS format targeting ES2018
-- External dependencies: `obsidian`, `electron`, `@codemirror/*`, Node builtins
-- SVG files loaded inline via esbuild loader
-- TypeScript configured with strict null checks, baseUrl `src`
+| Need | Use |
+|------|-----|
+| Search box | `SearchComponent` (`search-input-container`) |
+| Icon-only button | `ExtraButtonComponent` (`clickable-icon`) |
+| Standard button | `ButtonComponent` |
+| Sidebar toolbar | `nav-header`, `nav-buttons-container`, `nav-action-button` |
+| Scrollable sidebar list | `nav-files-container` |
+| List rows | `tree-item` > `tree-item-self` > `tree-item-icon` + `tree-item-inner` + `tree-item-flair-outer` |
+| Right-side flair | `tree-item-flair-outer` > `tree-item-flair` |
+| Pill / badge | `.tag` |
+| Empty state | `pane-empty` |
+
+When custom CSS is unavoidable:
+- Always use Obsidian CSS variables (`--text-muted`, `--interactive-accent`, `--font-ui-small`, `--icon-s`, `--size-4-2`, …) — never hardcoded colours/px/font sizes. Use `--icon-xs`/`--icon-s` for icons.
+- Custom classes go in `styles.css` with the `llm-` prefix. Never inline `element.style.*` in TypeScript — use `.addClass()` with a named class.
+- Writing hover/focus/active states for a list row? Stop — use `tree-item-self`, which already has them.
+
+## Key Files
+
+- `src/Plugin/ObsidianAgent/ObsidianAgent.ts` — system prompt builder, `registerTools()`, `invoke_assistant`
+- `src/WebSearch/SearxngService.ts` — SearXNG wrapper, `SearxngHttpError`, `formatResults()`
+- `src/Assistants/AssistantManager.ts` / `src/Projects/ProjectManager.ts` — discovery, parsing, hot-reload, create/delete
+- `src/Memory/MemoryService.ts` — memory extraction, dedup, recall, persistence
+- `src/services/AgentLoop.ts` / `src/services/ObsidianToolRegistry.ts` — agent tool loop and tool definitions
+- `src/Types/types.ts` — TypeScript interfaces (ChatParams, ImageParams, RAGSettings, MemorySettings, ProjectSettings, AssistantSettings, ObsidianAgentSettings, …)
+- `src/utils/constants.ts` — provider/model/endpoint constants
+- `src/utils/models.ts` — model configuration definitions
+- `src/utils/utils.ts` — API validation and helpers
+
+## Constants Convention
+
+All endpoint type strings live in `src/utils/constants.ts` and must be imported as constants — never compared against raw string literals. Endpoint constants: `chat`, `messages`, `images`, `claudeCodeEndpoint`. Provider constants: `openAI`, `claude`, `claudeCode`, `gemini`, `mistral`, `ollama`, `lmStudio`, `GPT4All`.

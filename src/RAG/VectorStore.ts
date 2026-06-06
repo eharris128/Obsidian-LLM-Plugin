@@ -21,6 +21,7 @@ const INDEX_VERSION = 1;
 export class VectorStore {
 	private entries: Map<string, VectorEntry> = new Map();
 	private dirty = false;
+	private loaded = false;
 
 	constructor(private app: App, private indexPath: string) {}
 
@@ -33,6 +34,7 @@ export class VectorStore {
 			if (parsed.version !== INDEX_VERSION) {
 				console.warn("[RAG] Index version mismatch — rebuilding");
 				this.entries.clear();
+				this.loaded = true;
 				return;
 			}
 			this.entries.clear();
@@ -43,6 +45,15 @@ export class VectorStore {
 			// File doesn't exist yet — start fresh
 			this.entries.clear();
 		}
+		this.loaded = true;
+	}
+
+	/**
+	 * Ensure the on-disk index has been loaded into memory before mutating.
+	 * Safe to call multiple times — subsequent calls are no-ops.
+	 */
+	async ensureLoaded(): Promise<void> {
+		if (!this.loaded) await this.load();
 	}
 
 	async save(): Promise<void> {

@@ -43,7 +43,7 @@ export class HistoryContainer {
 		// Append the SVG element
 		llmGal.appendChild(svgElement);
 
-		const cta = llmGal.createEl("div", {
+		const cta = llmGal.createDiv({
 			attr: {
 				class: "empty-history-cta llm-font-size-medium llm-justify-content-center",
 			},
@@ -58,13 +58,13 @@ export class HistoryContainer {
 
 		createChatButton.onClick(() => {
 			parentElement.hide();
-			const activeHistoryButton = document.querySelector(
+			const activeHistoryButton = activeDocument.querySelector(
 				".chat-history.is-active"
 			);
 			activeHistoryButton?.classList.remove("is-active");
 
 			const prefix = this.getChatContainerClassPrefix();
-			const chatContainer = document.querySelector(
+			const chatContainer = activeDocument.querySelector(
 				`[class*="${prefix}-chat-container"]`
 			) as HTMLElement;
 
@@ -134,7 +134,6 @@ export class HistoryContainer {
 			this.plugin.settings.currentIndex = index;
 			const modelName =
 				this.plugin.settings.promptHistory[index].modelName;
-			const model = this.plugin.settings.promptHistory[index].model;
 			this.plugin.settings[settingType].modelName = modelName;
 			this.plugin.settings[settingType].model =
 				models[modelName].model;
@@ -144,7 +143,7 @@ export class HistoryContainer {
 				models[modelName].endpoint;
 			this.plugin.settings[settingType].endpointURL =
 				models[modelName].url;
-			this.plugin.saveSettings();
+			void this.plugin.saveSettings();
 			Header.setHeader(modelName);
 			Header.resetHistoryButton();
 			// Sync the FAB header title with the loaded conversation's first message.
@@ -209,7 +208,7 @@ export class HistoryContainer {
 			item.addEventListener("click", () => {
 				this.plugin.settings[settingType].historyIndex = index;
 				this.historyIndex = index;
-				this.plugin.saveSettings();
+				void this.plugin.saveSettings();
 			});
 
 			item.addEventListener("mouseenter", () => {
@@ -244,10 +243,10 @@ export class HistoryContainer {
 				new ConfirmDeleteModal(this.plugin.app, () => {
 					this.resetHistory(parentElement);
 					let updatedHistory = this.plugin.settings.promptHistory.filter(
-						(item, idx) => idx !== index
+						(_item, idx) => idx !== index
 					);
 					this.plugin.settings.promptHistory = updatedHistory;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 					this.generateHistoryContainer(
 						parentElement,
 						this.plugin.settings.promptHistory,
@@ -260,7 +259,7 @@ export class HistoryContainer {
 					Header.setHeader(this.modelName);
 					this.plugin.settings[settingType].historyIndex =
 						DEFAULT_SETTINGS[settingType].historyIndex;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				}).open();
 			});
 
@@ -279,7 +278,7 @@ export class HistoryContainer {
 				if (item.textContent) {
 					this.plugin.settings.promptHistory[index].prompt =
 						item.textContent;
-					this.plugin.saveSettings();
+					void this.plugin.saveSettings();
 				} else {
 					new Notice("Prompt length must be greater than 0");
 					return;
@@ -364,8 +363,13 @@ export class HistoryContainer {
 			const loadConversation = () => {
 				this.plugin.chatHistory
 					.load(file.path)
-					.then(({ meta, messages }) => {
+					.then(({ meta, messages, toolCallsByTurn, skillsByTurn, modelsByTurn }) => {
 						chat.resetChat();
+
+						// Restore tool call, skill, and model metadata so panels render correctly
+						chat.setToolCallsByTurn(toolCallsByTurn);
+						chat.setSkillsByTurn(skillsByTurn);
+						chat.setModelsByTurn(modelsByTurn);
 
 						// Restore messages into the store
 						chat.messageStore.setMessages(messages);
@@ -385,10 +389,18 @@ export class HistoryContainer {
 							this.plugin.settings[settingType].endpointURL = m.url;
 						}
 
+						// Restore agent mode from the saved chat so the dropdown reflects
+						// the model/assistant used in this conversation (not the current default).
+						chat.isObsidianAgent = !!meta.agent;
+
 						// Store the file path so historyPush can update the file.
 						// Also sync the ChatContainer's in-memory reference.
 						setHistoryFilePath(this.plugin, this.viewType, file.path);
 						chat.currentHistoryFilePath = file.path;
+
+						// Restore (or clear) the active project based on where this
+						// file lives and what its frontmatter declares.
+						chat.restoreProjectFromChat(file.path, meta.project);
 
 						header.setHeader(
 							this.plugin.settings[settingType].modelName
@@ -396,6 +408,13 @@ export class HistoryContainer {
 						header.resetHistoryButton();
 						header.setTitle(meta.title ?? displayTitle);
 						header.showTitle();
+
+						// Sync the model dropdown to reflect the restored settings/agent mode.
+						chat.syncModelDropdown();
+
+						// Final push so the Chat Details panel reflects the fully-resolved
+						// model + project state for this conversation.
+						chat.pushChatDetailsState();
 					})
 					.catch((e) => {
 						console.error("[HistoryContainer] Failed to load chat file:", e);

@@ -14,6 +14,8 @@ import { ChatParams, PermissionMode } from "Types/types";
 import { ObsidianToolRegistry } from "services/ObsidianToolRegistry";
 import { toAnthropicTools, toOpenAITools } from "services/ToolAdapters";
 import { VaultIndexer } from "RAG/VaultIndexer";
+import { ChatHistory } from "services/ChatHistory";
+import { SearxngService } from "WebSearch/SearxngService";
 
 /** Called by ChatContainer to render the approval card and await the user's choice. */
 export type ShowPermissionUI = (
@@ -35,14 +37,44 @@ export interface AgentCallbacks {
 
 export class AgentLoop {
 	private registry: ObsidianToolRegistry;
+	/**
+	 * When set, only tools whose names appear in this list are exposed to the
+	 * model. An empty array means "all tools allowed" (no restriction).
+	 */
+	private allowedTools: string[];
+	/** Tools that are permanently disabled in Settings → Tools and never offered to the model. */
+	private disabledTools: string[];
+	/** Maximum tool-call/execute cycles per agent turn before the loop stops. */
+	private maxToolCalls: number;
 
 	constructor(
 		private app: App,
 		private permissionMode: PermissionMode,
 		private showPermissionUI: ShowPermissionUI,
 		vaultIndexer?: VaultIndexer | null,
+		allowedTools?: string[],
+		disabledTools?: string[],
+		maxToolCalls?: number,
+		/** Optional callback to configure the registry before the loop runs (e.g. register dynamic tools). */
+		extraSetup?: (registry: ObsidianToolRegistry) => void,
+		chatHistory?: ChatHistory,
+		searxngService?: SearxngService | null,
 	) {
-		this.registry = new ObsidianToolRegistry(app, vaultIndexer ?? undefined);
+		this.registry = new ObsidianToolRegistry(app, vaultIndexer ?? undefined, chatHistory, searxngService);
+		extraSetup?.(this.registry);
+		this.allowedTools = allowedTools ?? [];
+		this.disabledTools = disabledTools ?? [];
+		this.maxToolCalls = maxToolCalls ?? 10;
+	}
+
+	/** Return registry tools, filtered by allowedTools (skill restriction) and disabledTools (settings). */
+	private getFilteredTools(): ReturnType<ObsidianToolRegistry["getTools"]> {
+		const all = this.registry.getTools();
+		return all.filter((t) => {
+			if (this.disabledTools.includes(t.name)) return false;
+			if (this.allowedTools.length > 0 && !this.allowedTools.includes(t.name)) return false;
+			return true;
+		});
 	}
 
 	// ---------------------------------------------------------------------------
@@ -77,10 +109,11 @@ export class AgentLoop {
 	async runAnthropic(
 		params: ChatParams,
 		apiKey: string,
-		callbacks: AgentCallbacks
+		callbacks: AgentCallbacks,
+		signal?: AbortSignal
 	): Promise<string> {
 		const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-		const tools = toAnthropicTools(this.registry.getTools());
+		const tools = toAnthropicTools(this.getFilteredTools());
 
 		type ClaudeMsg = { role: "user" | "assistant"; content: any };
 		const messages: ClaudeMsg[] = params.messages
@@ -91,8 +124,10 @@ export class AgentLoop {
 		let fullText = "";
 		let firstCall = true;
 		const toolSummaries: string[] = [];
+		let toolCallCount = 0;
 
 		while (true) {
+			if (signal?.aborted) break;
 			if (!firstCall) callbacks.onThinking();
 			firstCall = false;
 
@@ -115,6 +150,7 @@ export class AgentLoop {
 			let seenFirstChunk = false;
 
 			for await (const event of stream) {
+				if (signal?.aborted) break;
 				if (event.type === "content_block_start") {
 					const cb = event.content_block;
 					if (cb.type === "text") {
@@ -161,6 +197,14 @@ export class AgentLoop {
 			}
 
 			if (stopReason !== "tool_use") break;
+			if (toolCallCount >= this.maxToolCalls) {
+				// Synthesize a stop notice so the user knows why the agent halted.
+				if (fullText === "") {
+					fullText = `Agent stopped after reaching the maximum of ${this.maxToolCalls} tool call(s). You can raise this limit in Settings → Tools.`;
+					callbacks.onChunk(fullText);
+				}
+				break;
+			}
 
 			// Execute tool calls and collect results
 			const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -184,6 +228,7 @@ export class AgentLoop {
 
 			messages.push({ role: "assistant", content: assistantContent });
 			messages.push({ role: "user", content: toolResults });
+			toolCallCount++;
 		}
 
 		// If the model never produced any text (e.g. it only called tools and
@@ -204,13 +249,14 @@ export class AgentLoop {
 	async runOpenAICompatible(
 		params: ChatParams,
 		client: OpenAI,
-		callbacks: AgentCallbacks
+		callbacks: AgentCallbacks,
+		signal?: AbortSignal
 	): Promise<string> {
-		const tools = toOpenAITools(this.registry.getTools());
+		const tools = toOpenAITools(this.getFilteredTools());
 
 		const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] =
 			params.messages.map((m) => ({
-				role: m.role as "user" | "assistant" | "system",
+				role: m.role,
 				content: m.content,
 			}));
 
@@ -218,8 +264,10 @@ export class AgentLoop {
 		let fullText = "";
 		let firstCall = true;
 		const toolSummaries: string[] = [];
+		let toolCallCount = 0;
 
 		while (true) {
+			if (signal?.aborted) break;
 			if (!firstCall) callbacks.onThinking();
 			firstCall = false;
 
@@ -244,6 +292,7 @@ export class AgentLoop {
 			let finishReason: string | null = null;
 
 			for await (const chunk of stream) {
+				if (signal?.aborted) break;
 				const choice = chunk.choices[0];
 				if (!choice) continue;
 
@@ -274,6 +323,13 @@ export class AgentLoop {
 
 			const toolCalls = Object.values(toolCallsAcc);
 			if (finishReason !== "tool_calls" || toolCalls.length === 0) break;
+			if (toolCallCount >= this.maxToolCalls) {
+				if (fullText === "") {
+					fullText = `Agent stopped after reaching the maximum of ${this.maxToolCalls} tool call(s). You can raise this limit in Settings → Tools.`;
+					callbacks.onChunk(fullText);
+				}
+				break;
+			}
 
 			// Build the assistant message (required before tool result messages)
 			const assistantMsg: OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam = {
@@ -307,6 +363,7 @@ export class AgentLoop {
 
 			messages.push(assistantMsg);
 			messages.push(...toolResults);
+			toolCallCount++;
 		}
 
 		// If the model never produced any text (e.g. it only called tools and

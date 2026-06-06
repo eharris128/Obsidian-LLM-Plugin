@@ -1,6 +1,6 @@
 import { Notice } from "obsidian";
 
-export function settingsErrorHandling(params:any) {
+export function settingsErrorHandling(params: Record<string, unknown>) {
     const settings = Object.keys(params)
     const errors: string[] = []
     settings.map((setting) => {
@@ -13,9 +13,9 @@ export function settingsErrorHandling(params:any) {
     return errors
 }
 
-export function errorMessages(error: Error, params: any) {
+export function errorMessages(error: Error, params?: object) {
     if(error.message === "Incorrect Settings") {
-        settingsErrorHandling(params).forEach(wrongSetting => {
+        settingsErrorHandling((params ?? {}) as Record<string, unknown>).forEach(wrongSetting => {
             new Notice(wrongSetting)
         })
     }
@@ -29,6 +29,16 @@ export function errorMessages(error: Error, params: any) {
         new Notice("You must have an API key to access OpenAI models")
     }
 
+    // New-style API key errors thrown by ChatContainer before making any API call.
+    // The message already contains actionable text so we surface it directly.
+    if (
+        error.message.includes("API key configured") ||
+        error.message.includes("No Mistral API key") ||
+        error.message.includes("No Claude Code OAuth token")
+    ) {
+        new Notice(error.message, 8000);
+    }
+
     if(error.message === "GPT4All streaming") {
         new Notice("GPT4All is already working on another request. Please wait until that request is done to submit another prompt.")
     }
@@ -37,7 +47,7 @@ export function errorMessages(error: Error, params: any) {
         new Notice("Claude Code requires a one-time download of the runtime SDK (~69 MB). Please ensure npm is installed and you have an internet connection, then try again.")
     }
 
-    if ((error as any).status === 429 || error.message.includes("Rate limit exceeded")) {
+    if ((error as { status?: number }).status === 429 || error.message.includes("Rate limit exceeded")) {
         new Notice(error.message, 8000);
     }
 }

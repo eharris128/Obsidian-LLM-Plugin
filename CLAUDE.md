@@ -1,786 +1,328 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code when working in this repository — an Obsidian plugin providing LLM chat interfaces for OpenAI, Anthropic Claude, Google Gemini, Mistral, and local Ollama / LM Studio / GPT4All.
 
-## Multiple Chat Widget Tabs
+## Build Commands
 
-Multiple `WidgetView` instances can be open simultaneously (one per Obsidian tab/leaf). Each instance owns its own `ChatContainer` with a fully independent `MessageStore`, conversation history, and chat file path, so conversations are completely isolated.
+```bash
+npm run dev      # watch mode (esbuild)
+npm run build    # production build (tsc type-check + esbuild bundle)
+npm run version  # bump manifest.json and versions.json
+```
 
-**"New chat widget" command** (`new-chat-widget`) always creates a fresh tab — use this to open additional widgets. The existing "Open chat in tab" command (`open-LLM-widget-tab`) and the ribbon icon still use the focus-or-open-one-tab pattern.
+Output bundles to `main.js` in the root. esbuild targets CommonJS/ES2018; `obsidian`, `electron`, `@codemirror/*`, and Node builtins are external; SVGs load inline. TypeScript uses strict null checks, baseUrl `src`.
 
-**Focus tracking:** `LLMPlugin.lastFocusedWidgetLeaf: WorkspaceLeaf | null` is updated whenever a widget leaf becomes the active leaf (via `active-leaf-change`). `openChatFileInWidget()`, `activateTab()`, and related routing functions prefer this leaf so "open chat file" actions land in the widget the user was just using, not always in the first widget.
+## Architecture Overview
 
-**Inline chats sidebar routing:** `ChatsSidebar` has an optional `onOpenFile?: (path: string) => Promise<void>` callback. `WidgetView.onOpen()` sets it to `this.loadChatFile` so clicking a row in the sidebar loads the chat into *that* widget rather than going through the plugin router. The standalone `ChatsView` (right-sidebar panel) still calls `plugin.openChatFileInWidget()` which uses the focus-based routing.
+### Entry point
 
-**Known limitation:** All widget tabs share `plugin.settings.widgetSettings` as their settings object. Model selection changes in one tab are reflected in `widgetSettings` but don't push reactively to other tabs' dropdowns. For v2, give each `WidgetView` its own `ViewSettings` clone (see notes below in Known Pitfalls).
+`src/main.ts` — `LLMPlugin` class: initializes platform abstractions (Desktop/Mobile in `src/services/`), loads settings (`loadData`/`saveData`), registers commands/views, initializes MessageStore, History, Assistants, and FAB.
 
----
+### View architecture (four UIs, shared components)
 
-## Stop Button / Generation Abort
+- **Modal** — `src/Plugin/Modal/ChatModal2.ts`
+- **Widget** (tab view) — `src/Plugin/Widget/Widget.ts`
+- **FAB** — `src/Plugin/FAB/FAB.ts`
+- **StatusBarButton** — `src/Plugin/StatusBar/StatusBarButton.ts` — "Ask AI" popover; uses `viewType: "floating-action-button"` and shares `fabSettings` with the FAB. The popover is built once on `generate()`, so call `chatContainer.syncModelDropdown()` whenever it is shown.
 
-`ChatContainer` has a `private _abortController: AbortController | null` instance variable. It is non-null while a generation is in-flight.
+All compose shared components from `src/Plugin/Components/`: `Header.ts` (tab nav), `ChatContainer.ts` (messages, input, API calls), `HistoryContainer.ts`, `SettingsContainer.ts`, `AssistantsContainer.ts` (OpenAI assistants).
 
-- **`enterStopMode(sendButton)`** — creates the AbortController, swaps the send button to a red `square` stop icon.
-- **`exitStopMode(sendButton)`** — clears the controller and restores the send button's normal appearance and disabled state.
-- These are called by `handleGenerateClick` at every entry/exit point (including the `/remember` early return and pure-prompt skill path).
-- The send button's `onClick` and the Enter `keydown` handler both check `this._abortController` first — if set, they call `.abort()` instead of starting a new generation.
-- Each provider's streaming `for await` loop checks `this._abortController?.signal.aborted` at the top and `break`s early.
-- The Anthropic non-agent path uses `signal.addEventListener("abort", () => stream.abort())` so the SDK stream is torn down immediately; any error thrown is caught and treated as a graceful stop.
-- `AgentLoop.runAnthropic` and `runOpenAICompatible` accept an optional `signal?: AbortSignal` 4th parameter; `runAgentMode` passes `this._abortController?.signal`.
-- Abort is caught in `handleGenerateClick`'s catch block (`error.name === "AbortError"`) — partial `previewText` is rendered and saved to history rather than showing an error.
-- CSS class `.llm-stop-mode` on `button.llm-send-button` renders the button red (`--color-red`).
+### Multiple chat widget tabs
 
----
+Multiple `WidgetView` instances can be open at once, each owning its own `ChatContainer` + `MessageStore` + chat file path (fully isolated conversations).
+
+- `new-chat-widget` command always creates a fresh tab; `open-LLM-widget-tab` and the ribbon icon use focus-or-open-one-tab.
+- `LLMPlugin.lastFocusedWidgetLeaf` is updated on `active-leaf-change`; `openChatFileInWidget()` / `activateTab()` prefer it so "open chat file" lands in the last-used widget.
+- `ChatsSidebar.onOpenFile` callback: `WidgetView.onOpen()` sets it to `this.loadChatFile` so sidebar rows load into *that* widget. The standalone `ChatsView` still routes via `plugin.openChatFileInWidget()`.
+- **Known limitation:** all widget tabs share `plugin.settings.widgetSettings`; model changes don't push reactively to other tabs' dropdowns. v2: per-view `ViewSettings` clone.
+
+### State management
+
+- **MessageStore** (`src/Plugin/Components/MessageStore.ts`) — pub/sub message state; synchronizes views. `setMessages` stores a shallow copy (`[...messages]`) so later `addMessage` pushes can't mutate the caller's array (notably legacy `promptHistory[n].messages`).
+- **HistoryHandler** (`src/History/HistoryHandler.ts`) — legacy in-settings history; superseded by file-based `ChatHistory` when `chatHistoryEnabled: true` (the default).
+- **AssistantHandler** (`src/Assistants/AssistantHandler.ts`) — OpenAI assistants state.
+
+### Message flow
+
+Input → `handleGenerateClick()` → message added to MessageStore (notifies subscribers) → provider API call → streaming UI updates → saved to History.
+
+#### Render generation guard (`renderGeneration`) — do not remove
+
+`updateMessages` re-renders the full list via `resetChat()` + async `generateIMLikeMessages()`. A stale async render can append into a container already cleared by a newer render (duplicated/out-of-order messages). `ChatContainer.renderGeneration` counter prevents this: `updateMessages` increments it and passes it down; the render function bails whenever `gen !== this.renderGeneration`. The race only shows up on rapid successive sends — easy to miss in manual testing. Never remove this guard or make `generateIMLikeMessages` synchronous without understanding it.
+
+### Stop button / generation abort
+
+`ChatContainer._abortController: AbortController | null` is non-null while a generation is in-flight.
+
+- `enterStopMode(sendButton)` creates the controller and swaps send → red `square` stop icon (`.llm-stop-mode`); `exitStopMode(sendButton)` clears and restores. Called by `handleGenerateClick` at every entry/exit point (including `/remember` early return and pure-prompt skill path).
+- Send button onClick and Enter keydown both check `_abortController` first — if set, they `.abort()` instead of starting a new generation.
+- Provider streaming `for await` loops check `signal.aborted` and break; the Anthropic non-agent path also wires `signal.addEventListener("abort", () => stream.abort())`.
+- `AgentLoop.runAnthropic` / `runOpenAICompatible` accept an optional `signal?: AbortSignal` 4th param; `runAgentMode` passes the controller's signal.
+- `handleGenerateClick`'s catch treats `error.name === "AbortError"` as a graceful stop: partial `previewText` is rendered and saved to history.
+
+### Scan-button context locking (`activeFileForChip`)
+
+`ChatContainer.activeFileForChip: { name, path } | null` stores the file path when the scan button is activated and holds it for the conversation. Two invariants:
+
+1. **Send time reads the stored path, not `getActiveFile()`** — the `useActiveFileContext` block resolves via `activeFileForChip.path` (falls back to `getActiveFile()` only when no chip). Don't revert to a bare `getActiveFile()` call or tab-switching mid-task silently swaps context.
+2. **`refreshActiveFileChip()` is a no-op mid-conversation** — guards on `getMessages().length > 0`. The chip only auto-updates when the chat is empty or after `newChat()`.
+
+### API integration
+
+- `openai` SDK — OpenAI chat/images/assistants; also Mistral (`https://api.mistral.ai/v1`), Ollama (`http://localhost:11434/v1`, models via `/api/tags`), LM Studio (`http://localhost:1234/v1`, models via `/v1/models`, placeholder key `"lm-studio"`).
+- `@anthropic-ai/sdk` — Claude + Claude Code (agent SDK).
+- `@google/generative-ai` — Gemini.
+- GPT4All — local server on port 4891.
 
 ## Known Pitfalls
 
 ### `view.addAction()` survives hot-reloads — always scrub before adding
 
-`view.addAction()` appends a button to a **persistent** DOM element inside the MarkdownView header. That DOM survives plugin hot-reloads. Any Map or variable used to track "have we already added this button?" is scoped to the plugin instance and starts empty on every load.
+`addAction()` appends to a persistent DOM element that survives plugin hot-reloads, while any "already added?" tracking variable resets on every load — so naive re-adding duplicates the button. Before calling `addAction()` for any button with a custom class, query the view's container for that class and `.remove()` any existing element, then `addAction()` and `btn.addClass(...)`. The custom class is load-bearing — never skip it.
 
-**Consequence:** if you call `addAction()` on hot-reload without checking the DOM first, a second button appears alongside the orphaned one from the previous load.
+### Chat-row three-dot context menu — shared helper
 
-**Rule:** Before calling `view.addAction()` for any button with a custom class, query the view's container for that class and remove any existing element first:
+`src/Plugin/Components/ChatRowMenuHelper.ts` exports `attachChatRowMenu(itemSelf, flairOuter, file, plugin, onRefresh)` and `RenameModal`, used by both `ChatsView` and `ChatsSidebar`. Call it once per row right after creating `flairOuter`; it appends a hover-revealed `.llm-chats-row-menu-btn`.
 
-```ts
-const stale = (view.containerEl as HTMLElement | undefined)
-    ?.querySelector?.(".your-custom-class") as HTMLElement | null;
-stale?.remove();
-const btn = view.addAction("icon", "Tooltip", handler);
-btn.addClass("your-custom-class");
-```
+"Open in" dispatch methods on `LLMPlugin`: `openChatFileInWidget(path)`, `openChatFileInSidebar(path)`, `openChatFileInFAB(path)` (→ `fab.openAtHistoryFile`), `openChatFileInPopover(path)` (→ `statusBarButton.openAtHistoryFile`). `FAB.openAtHistoryFile()` relies on private DOM refs assigned in `generateFAB()` and cleared in `removeFab()`.
 
-This also means the custom class is load-bearing — never skip `btn.addClass(...)` after `addAction()`.
-
----
-
-### Chat-row three-dot context menu — shared helper pattern
-
-`ChatsView` and `ChatsSidebar` both render chat-list rows. The per-row context menu (rename, delete, move to project, open in …) lives in a single shared module:
-
-- **`src/Plugin/Components/ChatRowMenuHelper.ts`** — exports `attachChatRowMenu(itemSelf, flairOuter, file, plugin, onRefresh)` and `RenameModal`.
-
-Call `attachChatRowMenu` once per row immediately after creating `flairOuter`. It appends an `.llm-chats-row-menu-btn` icon button into the flair area. The button is hidden by default and revealed on row-hover via CSS.
-
-**"Open in" dispatch methods on LLMPlugin:**
-- `openChatFileInWidget(path)` — existing; opens in a tab
-- `openChatFileInSidebar(path)` — opens in the right sidebar
-- `openChatFileInFAB(path)` — delegates to `this.fab.openAtHistoryFile(path)`
-- `openChatFileInPopover(path)` — delegates to `this.statusBarButton.openAtHistoryFile(path)`
-
-`FAB.openAtHistoryFile()` stores the needed DOM refs (`fabHeader`, `fabChatContainerDiv`, `fabChatHistoryContainer`, `fabViewArea`) as private instance vars assigned inside `generateFAB()` and cleared in `removeFab()`.
-
-**Settings indexing in FAB:** FAB always uses `getSettingType("floating-action-button") as "fabSettings"` to get a typed key for `LLMPluginSettings` — never use the raw `"floating-action-button"` string as an index (TS7053).
-
----
-
-## Build Commands
-
-```bash
-npm run dev      # Start development with watch mode (esbuild watches for changes)
-npm run build    # Production build (TypeScript type-check + esbuild bundle)
-npm run version  # Bump version in manifest.json and versions.json
-```
-
-Output is bundled to `main.js` in the root directory.
-
-### CSS / Styling Convention (repeated below — see full entry near bottom)
-
-## Obsidian Core Styling — Use Native Before Custom
-
-**Always prefer Obsidian's built-in components and CSS classes over custom implementations.** Custom CSS is harder to maintain and will look out of place when the user changes themes. Native components get theming, accessibility, and hover/focus states for free.
-
-### Prefer native Obsidian components
-
-| Need | Use instead of rolling your own |
-|------|----------------------------------|
-| Search box | `SearchComponent` → renders `search-input-container` with icon + clear button |
-| Icon-only button | `ExtraButtonComponent` → renders `clickable-icon` |
-| Standard button | `ButtonComponent` → renders correctly styled `<button>` |
-
-### Prefer native CSS classes
-
-| UI element | Native class(es) |
-|-----------|-----------------|
-| Sidebar toolbar | `nav-header`, `nav-buttons-container`, `nav-action-button` |
-| Scrollable sidebar list | `nav-files-container` |
-| List rows | `tree-item` > `tree-item-self` > `tree-item-icon` + `tree-item-inner` + `tree-item-flair-outer` |
-| Row title text | `tree-item-inner-text` |
-| Right-side flair (counts, dates) | `tree-item-flair-outer` > `tree-item-flair` |
-| Pill / badge | `.tag` |
-| Empty state | `pane-empty` |
-| Clickable icon button | `clickable-icon` |
-
-### When writing custom CSS
-
-- Always use Obsidian CSS variables (`--text-muted`, `--interactive-accent`, `--font-ui-small`, `--icon-s`, etc.) — never hardcoded colours, px sizes, or font sizes.
-- Custom classes belong in `styles.css` with the `llm-` prefix. Never use inline `element.style.*` in TypeScript — use `.addClass()` with a named CSS class.
-- If you find yourself writing hover, focus, or active states for a list row, stop — you should be using `tree-item-self` which already has them.
-
-## Feature Gates (`featureSettings`)
-
-All advanced feature tabs are hidden from the settings sidebar by default. `LLMPluginSettings.featureSettings` (type `FeatureSettings` in `types.ts`) holds a boolean per feature, all defaulting to `false`. The "Features" section in the General settings tab is the user-facing entry point.
-
-Gated nav items and their corresponding `featureSettings` key:
-- `obsidian-agent` → `obsidianAgent` (also syncs `obsidianAgentSettings.enabled`)
-- `transcription` → `transcription` (also syncs `whisperSettings.enabled`)
-- `projects` → `projects`
-- `assistants` → `assistants`
-- `memory` → `memory` (also syncs `memorySettings.enabled`)
-- `embeddings` → `vaultSearch` (also syncs `ragSettings.enabled`)
-
-When a feature is toggled on/off, `LLMSettingsModal.rebuildSidebar()` is called so the sidebar updates immediately. If the user disables a feature while on that tab, it auto-navigates back to General.
-
-To add a new gated nav item: add `featureGate: "keyName"` to its entry in `navSections`, add the key to `FeatureSettings`, and add a `FeatureDef` entry in `renderGeneral()`.
-
-## Obsidian Review Compliance
+**FAB settings indexing:** always use `getSettingType("floating-action-button") as "fabSettings"` for a typed `LLMPluginSettings` key — never the raw string as an index (TS7053).
 
 ### `MarkdownRenderer.render` — use `this`, not `this.plugin`
 
-`ChatContainer extends Component`. Always pass `this` (the `ChatContainer` instance) as the 5th `Component` argument to `MarkdownRenderer.render()`. Never pass `this.plugin`. The plugin instance lives for the entire Obsidian session, so passing it prevents cleanup of rendered markdown children and triggers Obsidian's automated review warning: *"Avoid using the main plugin instance as a component. Its lifecycle is too long, which can cause memory leaks."*
+`ChatContainer extends Component`. Pass `this` as the 5th `Component` argument to `MarkdownRenderer.render()`, never `this.plugin` — the plugin's lifecycle is the whole session, so rendered children never get cleaned up and Obsidian's automated review flags it. `ChatContainer` calls `this.load()` in its constructor and `this.unload()` in `destroy()`.
 
-`ChatContainer` calls `this.load()` in its constructor and `this.unload()` in `destroy()`, so rendered content is properly cleaned up when the view closes.
+### Slash menu scoping
 
-## Architecture Overview
+`ChatContainer.slashMenuEl` (floating menu on `document.body`, `position: fixed`) is an instance variable so each container removes only its own menu. Do NOT `document.querySelectorAll(".llm-slash-menu").forEach(el => el.remove())` — that destroys other views' menus. Cleaned up in `destroy()`.
 
-This is an Obsidian plugin that provides LLM chat interfaces with support for OpenAI, Anthropic Claude, Google Gemini, Mistral AI, local Ollama, local LM Studio, and local GPT4All.
+## Obsidian Core Styling — Use Native Before Custom
 
-### Entry Point and Plugin Lifecycle
+Always prefer Obsidian's built-in components and CSS classes; native gets theming, accessibility, and hover/focus states for free.
 
-`src/main.ts` contains the `LLMPlugin` class which:
-1. Initializes platform abstractions (Desktop vs Mobile)
-2. Loads settings from Obsidian's data store
-3. Registers commands and views
-4. Initializes MessageStore, History, Assistants, and FAB components
+| Need | Use |
+|------|-----|
+| Search box | `SearchComponent` (`search-input-container`) |
+| Icon-only button | `ExtraButtonComponent` (`clickable-icon`) |
+| Standard button | `ButtonComponent` |
+| Sidebar toolbar | `nav-header`, `nav-buttons-container`, `nav-action-button` |
+| Scrollable sidebar list | `nav-files-container` |
+| List rows | `tree-item` > `tree-item-self` > `tree-item-icon` + `tree-item-inner` + `tree-item-flair-outer` |
+| Right-side flair | `tree-item-flair-outer` > `tree-item-flair` |
+| Pill / badge | `.tag` |
+| Empty state | `pane-empty` |
 
-### View Architecture (Four UI Implementations)
+When custom CSS is unavoidable:
+- Always use Obsidian CSS variables (`--text-muted`, `--interactive-accent`, `--font-ui-small`, `--icon-s`, `--size-4-2`, …) — never hardcoded colours/px/font sizes. Use `--icon-xs`/`--icon-s` for icons.
+- Custom classes go in `styles.css` with the `llm-` prefix. Never inline `element.style.*` in TypeScript — use `.addClass()` with a named class.
+- Writing hover/focus/active states for a list row? Stop — use `tree-item-self`, which already has them.
 
-The plugin provides four ways to access the chat interface, all using the same underlying components:
+## Feature Gates (`featureSettings`)
 
-- **Modal** (`src/Plugin/Modal/ChatModal2.ts`) - Popup dialog
-- **Widget** (`src/Plugin/Widget/Widget.ts`) - Sidebar tab view
-- **FAB** (`src/Plugin/FAB/FAB.ts`) - Floating Action Button with expandable chat
-- **StatusBarButton** (`src/Plugin/StatusBar/StatusBarButton.ts`) - "Ask AI" button in the status bar that opens a popover chat. Uses `viewType: "floating-action-button"` and shares `fabSettings` with the FAB. Its popover is built once on `generate()` (not per-open), so call `chatContainer.syncModelDropdown()` whenever the popover is shown to keep the model dropdown in sync with settings.
+Advanced settings tabs are hidden by default. `LLMPluginSettings.featureSettings` (`FeatureSettings` in `types.ts`) holds a boolean per feature (all default `false`); the "Features" section in General settings is the entry point.
 
-Each view composes these shared components from `src/Plugin/Components/`:
-- `Header.ts` - Tab navigation (Chat/History/Settings/Assistants)
-- `ChatContainer.ts` - Message display, input handling, API calls
-- `HistoryContainer.ts` - Chat history list
-- `SettingsContainer.ts` - Model/parameter configuration
-- `AssistantsContainer.ts` - OpenAI assistants selection
+Gated nav items → keys: `obsidian-agent` → `obsidianAgent` (syncs `obsidianAgentSettings.enabled`), `transcription` → `transcription` (syncs `whisperSettings.enabled`), `projects` → `projects`, `assistants` → `assistants`, `memory` → `memory` (syncs `memorySettings.enabled`), `embeddings` → `vaultSearch` (syncs `ragSettings.enabled`).
 
-### Chats Panel (`ChatsView` + `ChatsSidebar`)
+Toggling calls `LLMSettingsModal.rebuildSidebar()`; disabling the current tab navigates back to General. New gated item: add `featureGate: "keyName"` to its `navSections` entry, add the key to `FeatureSettings`, add a `FeatureDef` in `renderGeneral()`.
 
-Two implementations of the chats list exist — both show the same data and use the same Obsidian DOM patterns:
+## Chats Panel (`ChatsView` + `ChatsSidebar`)
 
-1. **`src/Plugin/ChatsView/ChatsView.ts`** — standalone `ItemView` sidebar leaf (view type `CHATS_VIEW_TYPE = "llm-chats-view"`). Registered in `main.ts`; opened via the `open-chats-panel` command ("Open Chats panel"). `plugin.activateChatsPanel()` opens it in the right sidebar.
+Two implementations of the same chats list:
 
-2. **`src/Plugin/Components/ChatsSidebar.ts`** — `Component` subclass that renders the identical chats list into any container element. Used by `WidgetView` to embed a **toggleable left-side chats panel** directly inside the widget body. Toggled by the `messages-square` button in `Header.ts` (widget view only). `render(el)` populates the container; `destroy()` calls `this.unload()` to clean up vault event listeners. The widget body order is: `llm-widget-chats-sidebar` (left) → `llm-widget-main` → `llm-widget-details-sidebar` (right).
+1. **`src/Plugin/ChatsView/ChatsView.ts`** — standalone `ItemView` (view type `CHATS_VIEW_TYPE = "llm-chats-view"`); `open-chats-panel` command / `plugin.activateChatsPanel()` opens it in the right sidebar.
+2. **`src/Plugin/Components/ChatsSidebar.ts`** — `Component` rendering the same list into any container; used by `WidgetView` as a toggleable left panel (toggled by the `messages-square` button in `Header.ts`, widget only). Widget body order: `llm-widget-chats-sidebar` → `llm-widget-main` → `llm-widget-details-sidebar`.
 
-Key design points (shared):
-- Calls `plugin.chatHistory.list()` on open and refreshes automatically via vault `create/modify/delete/rename` events.
-- Displays title (frontmatter), relative timestamp, project badge, and agent badge per row.
-- Inline search box filters by title and project name.
-- Clicking a row calls `plugin.openChatFileInWidget(filePath)` — opens (or focuses) the chat widget and loads that conversation.
-- A "new chat" icon button calls `plugin.activateTab()`.
-- CSS classes use the `.llm-chats-*` prefix; all values use Obsidian CSS variables.
+Shared behavior: `plugin.chatHistory.list()` on open, auto-refresh via vault events, title/timestamp/project/agent badges per row, inline search, row click opens the chat in the widget, "new chat" button calls `plugin.activateTab()`. Uses native nav/tree-item/`.tag`/`pane-empty` DOM patterns; CSS prefix `.llm-chats-*`.
 
-Native Obsidian DOM/component patterns used (keeps the panel visually consistent with Obsidian's own sidebar panels):
-- `SearchComponent` → renders `search-input-container` with icon + clear button
-- `ExtraButtonComponent` → renders `clickable-icon` / `nav-action-button` for the toolbar
-- `nav-header` / `nav-buttons-container` → toolbar chrome
-- `nav-files-container` → scrollable list area
-- `tree-item` / `tree-item-self` / `tree-item-inner` / `tree-item-flair` → row structure (mirrors file-explorer)
-- `.tag` → project and agent pill badges
-- `pane-empty` → empty-state message
+## Chat Details Panel (`ChatDetailsView`)
 
-### Chat Details Panel (`ChatDetailsView`)
+`src/Plugin/ChatDetailsView/ChatDetailsView.ts` — right-sidebar `ItemView` (`CHAT_DETAILS_VIEW_TYPE = "llm-chat-details-view"`) showing live context: model/assistant, recalled memories, context files, guidance files.
 
-`src/Plugin/ChatDetailsView/ChatDetailsView.ts` — a right-sidebar `ItemView` (view type `CHAT_DETAILS_VIEW_TYPE = "llm-chat-details-view"`) that shows live context for the active chat: the current model/assistant, recalled memories, and attached context files.
+- **State is pushed in** by `ChatContainer.pushChatDetailsState()` — the view holds no domain logic. Push points: `syncChips()`, `syncModelDropdown()`, after memory recall, `newChat()` (clears state).
+- `plugin.getChatDetailsView()` returns the open instance or `null`; `plugin.activateChatDetailsPanel()` opens it (`open-chat-details-panel` command).
+- `ChatDetailsState`: `modelLabel`, `isAssistant`, `assistantId`, `projectName`, `activeProject: { id, name, filePath, folderPath } | null`, `recalledMemories: string[]`, `contextFiles`, `guidanceFiles: { name, path, icon }[]`.
+- `activeProject` powers an "Active Project" section: PROJECT.md row (opens in leaf) + folder row (revealed via `internalPlugins.file-explorer.revealInFolder`).
+- Recalled memories are parsed from the `# Recalled Memories` block returned by `MemoryService.recall()` (lines starting `"- "`).
+- `detailsBodyEl` (not `contentEl`) is the scrollable render target. CSS prefix `.llm-chat-details-*`.
 
-Key design points:
-- **State is pushed in** by `ChatContainer.pushChatDetailsState()` — the view holds no domain logic; it just renders whatever it receives.
-- Push points: `syncChips()` (file/project changes), `syncModelDropdown()` (model/assistant switch), after memory recall in `handleGenerateClick`, and `newChat()` (clears state + resets `lastRecalledMemories`).
-- `plugin.getChatDetailsView()` returns the open view instance (or `null` if closed) — used by `pushChatDetailsState()`.
-- `plugin.activateChatDetailsPanel()` opens the panel in the right sidebar; registered as the `open-chat-details-panel` command ("Open Chat Details panel").
-- `ChatDetailsState` interface has: `modelLabel`, `isAssistant`, `assistantId`, `projectName`, `activeProject: { id, name, filePath, folderPath } | null`, `recalledMemories: string[]`, `contextFiles: { name, path }[]`, `guidanceFiles: { name, path, icon }[]`.
-- `activeProject` powers a dedicated "Active Project" section in the panel with two clickable rows: PROJECT.md (opens in a leaf) and the project folder (revealed in the file explorer via `internalPlugins.file-explorer.revealInFolder`).
-- Recalled memories are parsed from the `# Recalled Memories` block returned by `MemoryService.recall()` (lines starting with `"- "`).
-- CSS classes use the `.llm-chat-details-*` prefix.
-- `detailsBodyEl` (not `contentEl`) is the scrollable render target — `ItemView` already owns `contentEl`.
+## Whisper Transcription
 
-### State Management
+Two speech-to-text features behind `whisperSettings.enabled`:
 
-- **MessageStore** (`src/Plugin/Components/MessageStore.ts`) - Pub/sub pattern for in-memory message state; synchronizes all views
-- **Settings** (in `main.ts`) - Persisted configuration via Obsidian's `loadData`/`saveData`
-- **HistoryHandler** (`src/History/HistoryHandler.ts`) - Manages legacy in-settings chat history (unbounded; superseded by file-based `ChatHistory` when `chatHistoryEnabled: true`, which is now the default)
-- **AssistantHandler** (`src/Assistants/AssistantHandler.ts`) - OpenAI assistants state
+- **Voice input** — mic button in the chat toolbar (idle/recording/transcribing); `MediaRecorder` audio → `WhisperService`; transcript inserted into input (or auto-sent when `autoSend`).
+- **File transcription → note** — "Transcribe audio file" command; Electron `remote.dialog` picker → Node `fs` read → `WhisperService` → markdown note in `outputFolder`.
 
-#### Scan-button context locking (`activeFileForChip`)
+Backends (both in `src/Whisper/WhisperService.ts`): `"openai"` (`/audio/transcriptions`, whisper-1, uses `openAIAPIKey`) and `"sidecar"` (local Python `whisper-server.py`, faster-whisper; uses browser `fetch`+`FormData` — not `requestUrl`, sidecar needs multipart).
 
-`ChatContainer.activeFileForChip` is `{ name: string; path: string } | null`. When the user activates the scan button, the file's **path** is stored at that moment and held for the life of the conversation. Two invariants must be preserved:
+Key files: `WhisperService.ts`, `SidecarManager.ts` (detects python3/pip3, installs deps, starts/stops the sidecar; always instantiated as `plugin.sidecarManager`, `isServerOwned` true only when we spawned it), `TranscribeCommand.ts`, `TranscribeUtils.ts`, root-level `whisper-server.py` (FastAPI; `POST /transcribe`, `GET /health`).
 
-1. **Send time reads the stored path, not `getActiveFile()`** — the `useActiveFileContext` block in `handleGenerateClick` resolves the file via `activeFileForChip.path` (falling back to `getActiveFile()` only when no chip is set). Do not revert this to a bare `getActiveFile()` call, or switching tabs mid-task will silently swap the injected context.
-2. **`refreshActiveFileChip()` is a no-op mid-conversation** — it guards on `this.getMessages().length > 0` and returns early, so opening the popover on a different note doesn't re-point the chip. The chip only auto-updates when the chat is empty (before the first send) or after `newChat()` resets state.
+Integration: `LLMPlugin.whisperService` is null when disabled — call `plugin.initWhisperService()` after toggling. `ChatContainer._triggerSend` closure (wired in `generateChatContainer`) lets voice auto-send fire the full send action. `ChatContainer.micButton` only exists when Whisper was enabled at container build time (CSS states `llm-mic-recording`, `llm-mic-transcribing`). `whisperSettings` is deep-merged in `loadSettings()`.
 
-### Message Flow
+**Electron note:** `require("electron")` is cast as `any` — `@types/electron` is not installed; do not add a typed import.
 
-1. User input in `ChatContainer` triggers `handleGenerateClick()`
-2. Message added to MessageStore, which notifies all subscribers
-3. API call made based on selected provider (OpenAI/Claude/Gemini/Mistral/Ollama/LM Studio/GPT4All)
-4. Streaming response updates UI in real-time
-5. Conversation saved to History
+## RAG / Vault Search
 
-#### Render generation guard (`renderGeneration`)
+Three classes in `src/RAG/`:
 
-`updateMessages` (the MessageStore subscriber) re-renders the full message list by calling `resetChat()` then `generateIMLikeMessages()`. Because `generateIMLikeMessages` is async (it `await`s `renderMarkdown` inside each `createMessage` call), a stale render can continue appending DOM nodes into a container that has already been cleared by a newer render, producing duplicated or out-of-order messages.
+- **`VectorStore.ts`** — embeddings in a flat JSON file; cosine search + incremental updates (mtime skip). `save()` mkdir-guards the parent dir (always `vault.adapter.mkdir()` before `adapter.write()` to plugin-relative paths). **Always call `store.ensureLoaded()` before `upsert()`/`save()` outside `indexVault()`** — otherwise a partial in-memory state overwrites the full on-disk index (`VaultIndexer.indexFile()` does this).
+- **`EmbeddingService.ts`** — provider-agnostic embeddings: OpenAI (`text-embedding-3-small`), Gemini (`text-embedding-004`), Ollama, LM Studio (OpenAI-compatible `/v1/embeddings`; LM Studio requires explicit `encoding_format: "float"`). Reuses existing keys/hosts from settings.
+- **`VaultIndexer.ts`** — chunked indexing (~1500 chars/paragraph chunk with path + heading prefix); `semanticSearch(query, topK)` returns a markdown context block. Calls `EmbeddingService.checkOllamaModel()` before indexing to surface a pull-command error.
 
-To prevent this, `ChatContainer` maintains a `renderGeneration` counter. `updateMessages` increments it and passes the new value to `generateIMLikeMessages`. The render function checks `gen !== this.renderGeneration` before each message and before the final scroll — if it no longer holds the latest generation it returns immediately.
+Integration:
+- `LLMPlugin.vaultIndexer` singleton; call `plugin.initVaultIndexer()` after RAG setting changes. Vault `modify` (debounced 2 s) / `delete` / `rename` events keep the index current.
+- `ObsidianToolRegistry` exposes `search_vault_semantic` (`risk: "safe"`) to tool-capable models via `AgentLoop`.
+- Targeted write tools (prefer over `obsidian_modify_note` for partial edits): `obsidian_insert_after_heading` (errors if heading missing) and `obsidian_patch_note` (exact find/replace; errors if absent or non-unique — model should widen `old_string`).
+- `AgentLoop` fires `AgentCallbacks.onToolResult(toolName, input, result)` after each successful tool execution — `ChatContainer` uses it for the cited-sources panel and `pendingToolCalls` recording.
+- `ChatContainer.useVaultSearch` toggle pre-fills `pendingContextString` with top-k results (manual fallback for models with weak tool-calling). After generation a collapsible Sources panel (`<details class="llm-rag-sources">`) lists contributing files.
+- **Hybrid scoring**: 70% cosine + 30% BM25 (IDF computed at search time). `VectorStore.hybridSearch()` does both; `search()` delegates with full vector weight.
+- Settings: `plugin.settings.ragSettings` (`RAGSettings`), configured in LLMSettingsModal → Vault Search.
 
-**Do not remove this guard or make `generateIMLikeMessages` synchronous without understanding this invariant.** The race is subtle: it only manifests when the user sends a second message quickly (or when the store is updated programmatically in quick succession), so it is easy to miss in manual testing.
+### Tool call recording in chat files
 
-#### `MessageStore.setMessages` copies the input array
+`ChatContainer` tracks `pendingToolCalls: ToolCallRecord[]` (current agent turn) and `allToolCallsByTurn: Map<number, ToolCallRecord[]>` (keyed by 0-based assistant-message index, captured as `turnIndex` at `runAgentMode` start; committed after the turn). Both reset in `newChat()`. `ChatHistory.save()` takes an optional `toolCallsByTurn`; `messagesToMarkdown` writes a `> [!tool-use]-` callout after each `## Assistant` heading, and `markdownToMessages` strips these so they never pollute re-submitted context.
 
-`setMessages` stores a shallow copy (`[...messages]`) rather than the direct reference. This prevents subsequent `addMessage` pushes from mutating the caller's array — notably `promptHistory[n].messages` in the legacy array-based history path.
+## Skills System
 
-### Platform Abstraction
+Vault-native skills: each skill is a folder under `plugin.skillsFolder` (getter: `<rootVaultFolder>/Skills`) containing `SKILL.md`.
 
-`src/services/` provides abstractions for cross-platform compatibility:
-- `FileSystem.ts` - Desktop/Mobile file operations
-- `OperatingSystem.ts` - Desktop/Mobile OS detection
+**Built-in skills** (`src/Skills/BuiltinSkills.ts`, `BUILTIN_SKILLS`): `obsidian-markdown` (from kepano/obsidian-skills, MIT), `obsidian-bases`, `json-canvas`. Seeded non-destructively on first run and on `reinitSkillRegistry`. New built-in = new `BuiltinSkillDef` entry; `id` becomes folder name and skill id.
 
-### API Integration
+**SKILL.md frontmatter**: `name`, `description`, `allowed-tools` (restricts ObsidianToolRegistry tools; empty = all), `disable-model-invocation` (true → instruction body rendered directly as the reply, no API call), `argument-hint` (grayed-out hint in the slash picker). Body = instructions injected as system context. `{{args}}` in the body is replaced with text typed after the slash prefix (slash-invoked skills only).
 
-Provider SDKs used:
-- `openai` - Chat, images (gpt-image-1), assistants
-- `@anthropic-ai/sdk` - Claude models + Claude Code (agent SDK)
-- `@google/generative-ai` - Gemini models
-- Mistral — uses `openai` SDK with custom baseURL (`https://api.mistral.ai/v1`)
-- Ollama — uses `openai` SDK with custom baseURL (default `http://localhost:11434/v1`); models discovered dynamically via `/api/tags`
-- LM Studio — uses `openai` SDK with custom baseURL (default `http://localhost:1234/v1`); models discovered dynamically via `/v1/models`; no real API key required (uses `"lm-studio"` as placeholder)
-- GPT4All connects to local server on port 4891
+**Key files**: `src/Skills/SkillRegistry.ts` (discovery/parsing, hot-reload on vault events), `src/Plugin/Components/SkillsContainer.ts` (per-skill toggles), `src/Settings/LLMSettingsModal.ts` (Skills nav item).
 
-### Whisper Transcription
+**Invocation** (three ways):
+1. Slash command `/skill-id` — floating picker shows while input matches `^\/[a-zA-Z0-9_-]*$`; prefix parsed in `handleGenerateClick` and stripped before the API call.
+2. `+` button menu → "Add a skill" submenu → inserts `/skill-id ` into the textarea.
+3. Global enable in Settings → Skills — instructions injected into every message; `allowed-tools` unioned.
 
-The plugin supports two speech-to-text features gated behind `plugin.settings.whisperSettings.enabled`:
+Slash picker items show icon | name + hint | description | edit pencil (pencil uses `stopPropagation()` on mousedown; opens SKILL.md via `getLeaf(false).openFile`).
 
-- **Feature 1 — Voice input**: A mic button in the chat input toolbar. Three states: idle / recording / transcribing. Uses the browser `MediaRecorder` API; audio is sent to `WhisperService` on stop. Transcript is inserted into the input field (or auto-sent if `autoSend` is true).
-- **Feature 2 — File transcription → note**: Command palette entry "Transcribe audio file". Opens the system file picker via Electron's `remote.dialog`, reads the selected file with Node.js `fs`, posts it to `WhisperService`, and writes a markdown note to the configured `outputFolder`.
+**Skill display**: chat UI shows a `llm-skill-panel` banner above the assistant message; saved files get a `> [!tip]- Skill: <id>` callout after `## Assistant` (stripped on load). Data flow: `ChatContainer.allSkillsByTurn: Map<number, string>` (cleared in `newChat()`); `setSkillsByTurn(map)` restores on file load (called in `Widget.ts`, `HistoryContainer.ts`, `StatusBarButton.ts`); `ChatHistory.save()` takes optional `skillsByTurn` (7th arg); `load()` returns it on `LoadedChat`.
 
-**Two backends — both implemented in `src/Whisper/WhisperService.ts`:**
-- `"openai"`: OpenAI `/audio/transcriptions` endpoint (whisper-1, `verbose_json`). Uses the existing `openAIAPIKey`. Audio leaves the machine.
-- `"sidecar"`: Local Python `whisper-server.py` (faster-whisper). Uses browser `fetch` with `FormData` (not `requestUrl` — sidecar needs multipart). Fully private.
+**Icon convention**: all skills UI uses the `scroll-text` lucide icon. The Skills tab was removed from the chat header — selection is via slash command or `+` button.
 
-**Key files:**
-- `src/Whisper/WhisperService.ts` — service class; `transcribeBlob()`, `transcribeFilePath()`, `checkHealth()`, `buildNoteContent()`, `formatForNote()`
-- `src/Whisper/SidecarManager.ts` — detects `python3`/`pip3`, installs deps via `pip3` with streaming output, starts/stops `whisper-server.py` as a child process. Always instantiated as `plugin.sidecarManager` (not gated on enabled flag).
-- `src/Whisper/TranscribeCommand.ts` — Feature 2 command handler (file picker → transcribe → vault write)
-- `src/Whisper/TranscribeUtils.ts` — `createFolderOrPrompt()` modal helper
-- `whisper-server.py` — FastAPI + faster-whisper sidecar (ships in plugin root); `POST /transcribe`, `GET /health`
+**AgentLoop**: optional `allowedTools: string[]` 5th constructor arg — when non-empty, only those tools are exposed. `runAgentMode` passes `skillAllowedTools`.
 
-**Integration points:**
-- `LLMPlugin.whisperService: WhisperService | null` — null when disabled. Call `plugin.initWhisperService()` after toggling `whisperSettings.enabled`.
-- `LLMPlugin.sidecarManager: SidecarManager` — always available; used by the settings wizard to detect Python, install deps, and start/stop the server. `isServerOwned` is true only when we spawned the process ourselves.
-- `ChatContainer._triggerSend: (() => void) | null` — closure wired by `generateChatContainer` so voice auto-send can fire the full send action (including clearing the field) without holding references to `header`/`sendButton`.
-- `ChatContainer.micButton` — only created when Whisper is enabled at container build time. Three CSS states: `llm-mic-recording` (pulsing red), `llm-mic-transcribing` (muted, disabled), default (inherits `.llm-scan-button`).
-- Settings: `whisperSettings: WhisperSettings` — deep-merged in `loadSettings()`. Includes `backend`, `sidecarHost`, `whisperModel`, `language`, `includeTimestamps`, `outputFolder`, `autoOpenNote`, `autoSend`, `lastPickerDirectory`.
+**Settings**: `skillsSettings: SkillsSettings` deep-merged with `{ enabledSkills: {} }`. The folder is NOT stored in settings — derived from `rootVaultFolder` (default `"AI"`; Skills/Projects/Memories all live under it). After changing `rootVaultFolder`, `reinitSkillRegistry()` and `reinitProjectManager()` are called.
 
-**Electron note:** `require("electron")` is cast as `any` — `@types/electron` is not installed. Do not add a typed import.
+## Memory System
 
-**Deferred:** Feature 3 (AI-assisted transcription) and Transformers.js local backend — see memory for design notes.
+Cross-session memories as plain markdown files in the vault.
 
-### RAG / Vault Search
+**Hierarchy**: `<rootVaultFolder>/Memories/<uuid>.md` (global, always recalled); `Assistants/<name>/memories/` (when assistant active); `Projects/<name>/memories/` (when project active).
 
-The plugin supports semantic search over the user's vault via three classes in `src/RAG/`:
+**File format**: frontmatter `created` (ISO), `source` (`"global"` | assistant | project name), `type` (`"fact" | "preference" | "context"`); body = one-sentence memory.
 
-- **`VectorStore.ts`** — Persists embeddings as a flat JSON file (path passed via constructor). Provides cosine similarity search and incremental updates (skips files whose `mtime` hasn't changed). `save()` ensures the parent directory exists before writing — always use `vault.adapter.mkdir()` guard before any `adapter.write()` to a plugin-relative path, as the directory may not exist on fresh installs. **Important**: always call `store.ensureLoaded()` (or `store.load()`) before calling `store.upsert()` or `store.save()` outside of `indexVault()` — otherwise a partial in-memory state will overwrite the full on-disk index. `VaultIndexer.indexFile()` calls `ensureLoaded()` for this reason.
-- **`EmbeddingService.ts`** — Provider-agnostic embedding generation. Supports OpenAI (`text-embedding-3-small`), Gemini (`text-embedding-004`), Ollama, and LM Studio (all via the OpenAI-compatible `/v1/embeddings` endpoint). LM Studio calls must pass `encoding_format: "float"` explicitly. Reuses API keys/hosts already stored in plugin settings.
-- **`VaultIndexer.ts`** — Orchestrates indexing (chunking by paragraph, ~1500 chars per chunk with file path + heading prefix) and exposes `semanticSearch(query, topK)` which returns a formatted markdown context block. Calls `EmbeddingService.checkOllamaModel()` before indexing to surface a clear pull-command error if the Ollama model isn't available.
+**`src/Memory/MemoryService.ts`**: `extractAndSave(messages, scope, scopeName, callModel)` (model call with structured JSON prompt; skips duplicates at cosine ≥ 0.92), `recall(query, ctx, topK, indexer)` (VaultIndexer hybrid search restricted to active scope folders; deduped by filePath; block prepended to `pendingContextString`), `isMemoryFile(path)`, `loadMemoriesFromFolder(folder)` (adapter-based, bypasses TFile cache).
 
-**How it integrates:**
-- `LLMPlugin.vaultIndexer` is the singleton instance; call `plugin.initVaultIndexer()` after any RAG setting change.
-- `LLMPlugin` registers `vault.on('modify')`, `vault.on('delete')`, and `vault.on('rename')` events to keep the index incrementally up-to-date. Modify events are debounced (2 s) to avoid hammering the embedding API during rapid autosaves.
-- `ObsidianToolRegistry` receives the `VaultIndexer` and exposes a `search_vault_semantic` tool (`risk: "safe"`). Tool-capable models (Claude, GPT-4, Gemini, Ollama, Mistral) call this autonomously via `AgentLoop`.
-- **Targeted write tools** (prefer these over `obsidian_modify_note` for partial edits):
-  - `obsidian_insert_after_heading` — inserts content on a new line immediately after a named heading (case-insensitive, strips leading `#`). Returns an error if the heading isn't found.
-  - `obsidian_patch_note` — finds an exact string and replaces it in one operation. Returns an error if the string is absent or appears more than once (the model should widen the `old_string` to make it unique).
-- `AgentLoop` fires `AgentCallbacks.onToolResult(toolName, input, result)` after each successful tool execution — `ChatContainer` uses this to (a) capture `search_vault_semantic` results and populate the cited sources panel, and (b) record the call in `pendingToolCalls` for inclusion in the saved chat file.
-- `ChatContainer` has a `useVaultSearch` toggle (toolbar button, always visible when RAG is enabled) that pre-fills `pendingContextString` with top-k results — a reliable manual fallback especially for Ollama/LM Studio/Mistral models whose tool-calling support varies per model. After generation, a collapsible "Sources" panel (`<details class="llm-rag-sources">`) is appended listing the contributing files as clickable links.
-- Search uses **hybrid scoring**: 70% cosine similarity + 30% BM25 keyword score. BM25 IDF is computed at search time across the in-memory corpus. The `VectorStore.hybridSearch()` method handles both; `VectorStore.search()` delegates to it with full vector weight for pure semantic use.
-- RAG settings live under `plugin.settings.ragSettings` (`RAGSettings` type in `types.ts`) and are configured in `LLMSettingsModal` under the "Vault Search" tab.
+Extraction is provider-agnostic — `ChatContainer.buildMemoryCallModel()` builds the wrapper for the active provider. A `llm-memory-panel` indicator appears when memories were injected.
 
-#### Tool call recording in chat files
+**Settings** (`memorySettings`, deep-merged): `enabled` (requires RAG for recall), `extractionTrigger: "end-of-chat" | "manual"`, `recallTopK`. `recallAlways` is **deprecated/unused** — `useMemory` is always `true` when enabled (no toggle chip; kept in the type for backward compat). Per-conversation opt-out exists via the `+` menu.
 
-`ChatContainer` tracks tool calls via two instance vars: `pendingToolCalls: ToolCallRecord[]` (accumulates during the current agent turn) and `allToolCallsByTurn: Map<number, ToolCallRecord[]>` (keyed by 0-based assistant-message index). At the start of `runAgentMode` the current assistant-message count is captured as `turnIndex`; `onToolResult` pushes to `pendingToolCalls`; after the turn completes the pending calls are committed to `allToolCallsByTurn.set(turnIndex, ...)`. Both vars are reset in `newChat()`.
+**/remember command**: `/remember [content]` saves verbatim as a `fact` memory, no model call; intercepted in `handleGenerateClick` before skill resolution. Also in the `+` menu ("Save a memory…", memory-enabled only). Duplicate check still applies.
 
-`ChatHistory.save()` accepts an optional `toolCallsByTurn` map. When present, `messagesToMarkdown` injects a collapsible `> [!tool-use]-` callout immediately after each `## Assistant` heading. `markdownToMessages` strips these callouts before returning message content so they never pollute re-submitted conversation context.
+**ChatContainer hooks**: `extractMemories()` (toolbar button or auto at `newChat()` with `"end-of-chat"` trigger), `appendMemoryIndicator(container)`, `buildMemoryCallModel()`.
 
-### Skills System
+**RAG dependency**: recall needs `plugin.vaultIndexer` non-null. Memory files are indexed by the existing vault `modify` watcher. `plugin.initMemoryService()` rebuilds with RAG's `EmbeddingService` config.
 
-The plugin supports a vault-native Skills feature. Each skill is a folder inside the configurable `skillsSettings.folder` (default `LLM-Skills`) containing a `SKILL.md` file.
+## Projects System
 
-#### Built-in skills
+Named workspaces scoping chat context: system instructions, pinned notes, memory recall.
 
-Three skills ship with the plugin and are seeded into the vault on first run (and whenever `reinitSkillRegistry` is called, e.g. after changing `rootVaultFolder`). They are defined in `src/Skills/BuiltinSkills.ts` as `BUILTIN_SKILLS: BuiltinSkillDef[]`. Seeding is non-destructive — existing files are never overwritten. The built-in skills are:
+**Hierarchy**: `<rootVaultFolder>/Projects/<project-id>/PROJECT.md` + `memories/`.
 
-- **obsidian-markdown** — Obsidian Flavored Markdown syntax (wikilinks, callouts, embeds, properties). Content sourced from [kepano/obsidian-skills](https://github.com/kepano/obsidian-skills) (MIT).
-- **obsidian-bases** — Obsidian Bases (`.base`) file format: filters, columns, formulas, views.
-- **json-canvas** — JSON Canvas (`.canvas`) format: nodes, edges, groups, colors.
+**PROJECT.md frontmatter**: `name`, `description`, `pinned-notes` (paths), `default-assistant` (optional), `created`. Body = system instructions injected as system-prompt prefix.
 
-To add a new built-in skill, add a `BuiltinSkillDef` entry to the `BUILTIN_SKILLS` array in `BuiltinSkills.ts`. The `id` field becomes the folder name and skill id.
+**`src/Projects/ProjectManager.ts`** — discovery/parsing/hot-reload, same pattern as `SkillRegistry`. Types in `src/Types/types.ts`.
 
-#### SKILL.md format
+Integration:
+- `LLMPlugin.projectManager` singleton; `projectSettings.activeProjectId` persisted (deep-merged default `{ activeProjectId: null }`); `plugin.projectsFolder` getter. `reinitProjectManager()` on `rootVaultFolder` change. Managed via Settings → Features → Projects.
+- Switching projects does **not** auto-start a new chat; chip strip refreshed via `syncChips()`.
+- On send with active project: pinned notes injected as `# Pinned Project Notes`; instructions as `# Project Instructions: <name>`; recall passes `activeProject: project.name`.
+- Saved chats get `project: "<name>"` frontmatter, and **chat files co-locate with their project** in `Projects/<projectId>/chats/` (moved there/back via `ChatHistory.moveToFolder()` and `updateProjectField()`).
+- **`ChatContainer.setActiveProject(projectId | null)` is the single authority** for changing the active project at runtime (moves file, patches frontmatter, updates settings, syncs chips). Never mutate `activeProjectId` directly in UI handlers.
+- **`ChatContainer.restoreProjectFromChat(filePath, metaProjectName?)`** runs after every chat file load (HistoryContainer, Widget, StatusBarButton): detects membership from path first (`Projects/<id>/chats/`), then `meta.project` name, else clears `activeProjectId`.
+- UI: pinned notes = non-removable dashed chips; active project = `.llm-project-chip` (icon at rest, expands on hover with name + ×). Project selection: "+ button" menu (new chat) or more-options menu (started chat). There is **no project switcher pill** in the header (`buildProjectSwitcher`/`updateProjectSwitcher` removed from `Header.ts`).
 
-```yaml
----
-name: My Skill
-description: What this skill does
-allowed-tools:
-  - obsidian_read_note
-  - obsidian_search
-disable-model-invocation: false
-argument-hint: "[target-note]"
----
+## Assistants System
 
-## Instructions
+Vault-native AI personas as `ASSISTANT.md` files. **Distinct from the OpenAI Assistants API integration** (`AssistantHandler.ts`/`AssistantsContainer.ts`) — do not modify those files.
 
-<instruction body injected as system context when the skill is active>
-```
+**Hierarchy**: `<rootVaultFolder>/Assistants/<assistant-id>/ASSISTANT.md` + `memories/`.
 
-- **`allowed-tools`**: restricts which ObsidianToolRegistry tools the AgentLoop can call. Empty = all tools allowed.
-- **`disable-model-invocation`**: when `true`, the skill's instruction body is rendered directly as the assistant reply — no API call is made. Useful for template/canned-response skills.
-- **`argument-hint`**: displayed grayed-out next to the skill name in the slash picker (e.g., `[target-note]`).
-- **`{{args}}` substitution**: any `{{args}}` placeholder in the instruction body is replaced at send time with the text typed after the skill prefix (e.g., `/summarize-note My Note` → `{{args}}` becomes `"My Note"`). Applies to slash-invoked skills only (globally-enabled skills have no per-message args).
+**ASSISTANT.md frontmatter**: `name`, `description`, `provider`/`model` (informational only), `preferred-model` (auto-selected when assistant chosen), `enabled-skills` (skill ids), `allowed-tools` (tool names), `created`. Body = system prompt injected when active.
 
-#### Key files
+**`src/Assistants/AssistantManager.ts`** — discovery/parsing/hot-reload (adapter-based, same pattern as SkillRegistry/ProjectManager) plus `createAssistant()`/`deleteAssistant()`.
 
-- **`src/Skills/SkillRegistry.ts`** — discovers and parses `SKILL.md` files; hot-reloads on vault `create/modify/delete/rename` events registered in `main.ts`.
-- **`src/Plugin/Components/SkillsContainer.ts`** — per-skill enable/disable toggles (accessible via LLMSettingsModal → Skills, not from the chat header).
-- **`src/Settings/LLMSettingsModal.ts`** — "Skills" nav item under Core Settings; lets the user configure the skills folder and global enable/disable toggles.
+Integration:
+- `LLMPlugin.assistantManager` singleton; `assistantSettings.activeAssistantId` persisted (default `{ activeAssistantId: null }`); `plugin.assistantsFolder` getter; `reinitAssistantManager()` on `rootVaultFolder` change. Managed via Settings → Core Settings → Assistants.
+- On send with active assistant: `enabled-skills` union with globally-enabled skills; `allowed-tools` **intersect** with skill restrictions (most restrictive wins); system prompt injected as `# Assistant: <name>` **after** project instructions (project outer, assistant inner); recall passes `activeAssistant: assistant.id`.
+- No explicit assistant + project `default-assistant` → that assistant auto-activates.
+- Memory extraction scope: project active → project memories; only assistant → assistant memories; neither → global.
+- Selection via the combined model+assistant dropdown in the chat toolbar (two `<optgroup>`s: Models / Assistants). Choosing an assistant sets `activeAssistantId`, may switch to `preferredModel`, starts a new chat; choosing a plain model clears the assistant. `syncAssistantDropdownOptions()` rebuilds the optgroup on hot-reload.
+- `.llm-assistant-panel` — per-response indicator (analogous to skill/memory panels).
 
-#### Invocation
+**Context injection order** (top → bottom): recalled memories → project instructions → assistant system prompt → skill instructions → vault/file context.
 
-Three ways to activate a skill:
+## Obsidian Agent
 
-1. **Slash command**: type `/skill-id` in the chat input. A floating picker appears listing all skills; selecting one inserts `/skill-id ` as inline text in the textarea. The prefix is parsed by `handleGenerateClick` and stripped before the API call. The picker only shows while the input matches `^\/[a-zA-Z0-9_-]*$` (no trailing space or message text).
-2. **Plus button menu**: clicking the `+` button opens an Obsidian `Menu` with "Add file as context" and (if skills exist) "Add a skill". The "Add a skill" item opens a second Menu listing all skills; selecting one inserts `/skill-id ` into the textarea.
-3. **Global enable**: toggle a skill on in Settings → Skills. Enabled skills' instructions are injected into every message across all views; their `allowed-tools` are unioned.
+The single always-available primary agent: knows the vault, can invoke any enabled Skill, routes to Assistants.
 
-#### Slash menu implementation notes
+**Entry points** (when `obsidianAgentSettings.enabled`): FAB (`generateFAB()` sets `chatContainer.isObsidianAgent = true`), status bar popover, `open-obsidian-agent` command (`ChatModal2(plugin, true)`), and `ChatModal2` reads the setting when opened without the flag.
 
-- `ChatContainer.slashMenuEl` — the floating menu div, mounted on `document.body` with `position: fixed`. Stored as an instance variable so each `ChatContainer` only removes its own previous menu (not other views' menus). Cleaned up in `destroy()`.
-- Menu is positioned via `requestAnimationFrame` after layout, using `promptContainer.getBoundingClientRect()` to compute `top = rect.top - menuHeight - 6px`.
-- Do NOT use `document.querySelectorAll(".llm-slash-menu").forEach(el => el.remove())` — this would destroy other views' menus.
-- Each item shows: icon | name + argument hint (`.llm-slash-menu-item-hint`, grayed out) | description | edit pencil button.
-- The edit button uses `stopPropagation()` on its `mousedown` to prevent the parent item's selection handler from firing. It opens the skill's `SKILL.md` via `app.workspace.getLeaf(false).openFile(file)`.
+**Agent mode in ChatContainer** (`isObsidianAgent: boolean`):
+1. After memory recall, `ObsidianAgent.buildSystemPrompt()` is appended to `pendingContextString` (memories stay first).
+2. `runAgentMode` passes an `extraSetup` callback to `AgentLoop` that calls `ObsidianAgent.registerTools(registry)` — registers the dynamic `invoke_assistant` tool (only when agent-available assistants exist). Execution returns the assistant's system prompt + task as a string — the main loop continues from that persona (no sub-AgentLoop).
+3. `onToolResult` captures the routed assistant name; `appendAgentRoutingIndicator()` adds a `.llm-agent-routing-panel` banner after generation.
+4. New files tagged `agent: true` in frontmatter (`ChatFileMeta.agent?: boolean`).
 
-#### Skill call display in chat UI and chat files
+**`buildSystemPrompt()` is async** — reads `obsidianAgentSettings.agentGuidanceFile` from the vault if configured. Composes: identity paragraph, available Skills (filtered by `availableSkills`), available Assistants + `invoke_assistant` instructions (filtered by `availableAssistants`), projects list, chat-history folder paths (when `chatHistoryEnabled`), guidance file content.
 
-When a skill is active for a generation, it is recorded and shown:
+**Two distinct guidance files**:
 
-- **In the chat UI**: a small `llm-skill-panel` banner (with `scroll-text` icon and skill name) appears above the assistant message, before any tool-call panel.
-- **In saved chat files**: a `> [!tip]- Skill: <id>` callout is written immediately after the `## Assistant` heading (before tool-call callouts). Stripped by `markdownToMessages` before messages are re-submitted to the model.
+| File | Setting | Scope |
+|------|---------|-------|
+| `AI/OBSIDIAN-AGENT.md` (default empty) | `obsidianAgentSettings.agentGuidanceFile` | Obsidian Agent turns only (inside `buildSystemPrompt()`) |
+| `AI/AGENTS.md` (default path) | `LLMPluginSettings.agentsFilePath` | Every conversation — prepended to `pendingContextString` before memory recall |
 
-**Data flow:**
-- `ChatContainer.allSkillsByTurn: Map<number, string>` — turn index → skill id. Populated by `runAgentMode` (agent path) and `handleGenerateClick` (non-agent path). Cleared in `newChat()`.
-- `ChatContainer.setSkillsByTurn(map)` — restores skill data when loading a conversation from a file. Called alongside `setToolCallsByTurn` in `Widget.ts`, `HistoryContainer.ts`, and `StatusBarButton.ts`.
-- `ChatHistory.save()` accepts an optional `skillsByTurn?: Map<number, string>` 7th argument and serializes it via `renderSkillBlock`.
-- `ChatHistory.load()` calls `parseSkillsFromBody()` to reconstruct the map and returns it as `skillsByTurn` on `LoadedChat`.
+Both use the shared `renderGuidanceFilePicker()` helper in `LLMSettingsModal` (path input + smart Open/Create button). Call `plugin.refreshAllChips()` after `agentsFilePath` changes. **Guidance files are not chips** — they render in the Chat Details panel "Guidance" section (`ChatDetailsState.guidanceFiles`; `"book-open"` icon for AGENTS.md, `"scroll-text"` for OBSIDIAN-AGENT.md; rendered by `renderGuidanceSection()` in `ChatDetailsRenderer.ts`).
 
-#### Icon convention
+**Settings** (`obsidianAgentSettings`, deep-merged): `enabled` (toggling regenerates the FAB), `enableWebSearch` (placeholder), `availableSkills` / `availableAssistants` (`Record<string, boolean>`; missing keys = available), `agentGuidanceFile`.
 
-All skills-related UI uses the `scroll-text` lucide icon (previously `wand-sparkles`). This applies to skill item rows in `SkillsContainer`, the "Skills" nav item in `LLMSettingsModal`, the slash picker menu items, the `+` button's "Add a skill" menu item, and the `llm-skill-panel` indicator in chat messages. The Skills tab has been removed from the chat header — skill selection is via the slash command or `+` button instead.
+**Dynamic tools**: `ObsidianToolRegistry.registerDynamicTool(def, executor)` adds tools at runtime. `AgentLoop` optional constructor args: `extraSetup?: (registry) => void` (8th), `chatHistory?: ChatHistory` (9th, forwarded to the registry).
 
-#### AgentLoop integration
+**`get_chat_history` tool** (static, in `ALL_TOOL_DEFINITIONS`): action `list` (filenames + mtimes; `limit`, `filter_project`, `filter_agent`) and action `load` (full metadata + parsed turns). `runAgentMode` passes `this.plugin.chatHistory` when `chatHistoryEnabled`. `buildSystemPrompt()` injects a `## Chat History` section describing folder paths.
 
-`AgentLoop` accepts an optional `allowedTools: string[]` 5th constructor argument. When non-empty, only tools in that list are exposed to the model. `ChatContainer.runAgentMode` passes `skillAllowedTools` built during skill resolution.
+**Token usage**: `.llm-token-usage` indicator below each response when the provider reports usage ("↑ N ↓ N tokens"); rendered by `appendTokenUsage()`, cleared in `newChat()`.
 
-#### Settings persistence
+## Web Search (SearXNG)
 
-`LLMPluginSettings.skillsSettings: SkillsSettings` — deep-merged on load with defaults `{ enabledSkills: {} }`. The skills folder is **not** stored in `skillsSettings`; it is derived as `plugin.skillsFolder` (getter): `plugin.settings.rootVaultFolder + "/Skills"`.
+Self-hosted SearXNG instance behind `searxngSettings.enabled`; exposes a `web_search` tool to tool-capable models.
 
-`LLMPluginSettings.rootVaultFolder: string` — top-level setting (default `"AI"`) shared across all AI features. Skills live at `<rootVaultFolder>/Skills`, Projects at `<rootVaultFolder>/Projects`, Memories at `<rootVaultFolder>/Memories`. Configurable via Settings → General → "Root vault folder". After changing it, both `plugin.reinitSkillRegistry()` and `plugin.reinitProjectManager()` are called to hot-reload from the new path.
+**`src/WebSearch/SearxngService.ts`**: `search(query, numResults?)` (uses `throw: false`; converts 429/403/5xx to descriptive `SearxngHttpError` with `.status`; browser-like UA/Accept headers to dodge bot detection), `checkHealth()` (probes `/healthz`, falls back to a minimal search; returns `true` on 429 — instance up, just rate-limited), static `formatResults()` (renders `**N. [Title](URL)**` markdown so the model reproduces clickable citations).
 
-### Memory System
+**Settings** (`searxngSettings`, deep-merged): `enabled` (toggling calls `plugin.initSearxngService()`), `host` (default `http://localhost:8080`), `maxResults` (1–10, default 5). `LLMPlugin.searxngService` is null when disabled/blank host.
 
-The plugin supports a cross-session Memory feature. Memories are plain markdown files stored in the vault so users can read, edit, and delete them directly in Obsidian.
+**Tool integration**: `web_search` in `ALL_TOOL_DEFINITIONS` with `requiresWebSearch: true` (Settings → Tools shows a warning when SearXNG is off). The executor try/catches and returns error text to the model — never throws. `AgentLoop` takes `searxngService` as its 11th constructor arg, forwards it to `ObsidianToolRegistry` (4th arg); `runAgentMode` passes `this.plugin.searxngService`.
 
-#### Vault hierarchy
+**Web sources panel**: `ChatContainer` regex-parses `**N. [Title](URL)**` links from the tool result into `pendingWebSources`; `appendWebSourcesPanel()` renders a collapsible `<details class="llm-web-sources">` panel (same pattern as RAG sources). Cleared in `newChat()` and on error.
 
-```
-<rootVaultFolder>/
-  Memories/                          ← global (always recalled)
-    <uuid>.md
-  Assistants/<name>/memories/        ← recalled when assistant is active
-    <uuid>.md
-  Projects/<name>/memories/          ← recalled when project is active
-    <uuid>.md
-```
+**Settings UI**: "Web Search" group under Settings → Obsidian Agent (visible only when agent enabled): enable toggle, host + Test connection button, max-results slider.
 
-#### Memory file format
+**Common setup issue**: the official SearXNG Docker image needs `server.limiter: false` (default true → 429 for non-browser clients) and `json` added under `search.formats` (default omits it → 403) in the host-mounted `settings.yml`, then `docker restart searxng`.
 
-```yaml
----
-created: <ISO date>
-source: <"global" | assistant name | project name>
-type: <"fact" | "preference" | "context">
----
-<one-sentence memory content>
-```
+## Key Files
 
-#### Key files
+- `src/Plugin/ObsidianAgent/ObsidianAgent.ts` — system prompt builder, `registerTools()`, `invoke_assistant`
+- `src/WebSearch/SearxngService.ts` — SearXNG wrapper, `SearxngHttpError`, `formatResults()`
+- `src/Assistants/AssistantManager.ts` / `src/Projects/ProjectManager.ts` — discovery, parsing, hot-reload, create/delete
+- `src/Memory/MemoryService.ts` — memory extraction, dedup, recall, persistence
+- `src/Types/types.ts` — TypeScript interfaces (ChatParams, ImageParams, RAGSettings, MemorySettings, ProjectSettings, AssistantSettings, ObsidianAgentSettings, …)
+- `src/utils/constants.ts` — provider/model/endpoint constants
+- `src/utils/models.ts` — model configuration definitions
+- `src/utils/utils.ts` — API validation and helpers
 
-- **`src/Memory/MemoryService.ts`** — core service:
-  - `extractAndSave(messages, scope, scopeName, callModel)` — calls the active model with a structured extraction prompt, writes individual `.md` files to the correct scope folder, skips duplicates (cosine similarity ≥ 0.92).
-  - `recall(query, ctx, topK, indexer)` — queries the VaultIndexer restricted to active scope folders, returns a formatted context block.
-  - `isMemoryFile(path)` — returns true for any path inside a memories folder (used for hot-reloading).
-  - `loadMemoriesFromFolder(folder)` — reads and parses all `.md` files from a folder via adapter (bypasses Obsidian TFile cache).
+## Constants Convention
 
-#### Extraction
-
-Extraction runs a single model call with a structured JSON prompt. The model returns `[{ type, content }]` objects. Each item is checked for semantic similarity against existing memories in the same scope before writing. Extraction is provider-agnostic — `ChatContainer.buildMemoryCallModel()` builds the right wrapper for the active provider (Claude, Gemini, OpenAI-compatible).
-
-#### Recall
-
-Before each send in `handleGenerateClick`, `MemoryService.recall()` searches the VaultIndexer (hybrid search, 70% cosine + 30% BM25) restricted to the active scope folders. Results are deduped by filePath and the top-k block is prepended to `pendingContextString` before the API call. A `llm-memory-panel` indicator appears under the assistant message when memories were injected.
-
-#### Settings
-
-`LLMPluginSettings.memorySettings: MemorySettings` — deep-merged on load:
-- `enabled: boolean` — gates the entire feature (requires RAG to be enabled for recall).
-- `extractionTrigger: "end-of-chat" | "manual"` — when to run extraction; surfaced as a toggle in the Memory settings tab.
-- `recallTopK: number` — how many memory chunks to inject per send.
-- `recallAlways: boolean` — **deprecated / unused**. Memory recall (`useMemory`) is now always `true` when `enabled` is true — there is no per-conversation toggle chip. The field is kept in the type for backwards compatibility with existing settings objects but is no longer read or surfaced in the UI.
-
-#### /remember command
-
-Typing `/remember [content]` in the chat input saves that exact string as a `fact` memory without a model call. The command is intercepted in `handleGenerateClick` before skill resolution. A confirmation message is shown in the chat. Also accessible via the `+` button menu as "Save a memory…" (only visible when memory is enabled). Duplicate check still runs — if the content is semantically similar to an existing memory it is skipped with a "already in memory" response.
-
-#### UI integration in ChatContainer
-
-- `useMemory: boolean` — always `true` when `memorySettings.enabled` is true; no toolbar button or chip. Can still be toggled off per-conversation via the `+` button menu as a power-user escape hatch.
-- `extractMemories()` — called by the toolbar extract button or automatically at `newChat()` when trigger is `"end-of-chat"`.
-- `appendMemoryIndicator(container)` — renders a `llm-memory-panel` banner on the assistant message when memories were recalled.
-- `buildMemoryCallModel()` — builds a provider-specific `(system, user) => Promise<string>` wrapper for the extraction call.
-
-#### Memory + RAG dependency
-
-Memory recall requires `plugin.vaultIndexer` to be non-null (i.e. RAG must be enabled). Memory files are indexed automatically by the existing `vault.on('modify')` watcher in `main.ts`. `plugin.initMemoryService()` rebuilds the `MemoryService` using the same `EmbeddingService` configuration as RAG.
-
-### Projects System
-
-The plugin supports a Projects feature. Projects are named workspaces that scope the chat context: system instructions, pinned notes, and memory recall.
-
-#### Vault hierarchy
-
-```
-<rootVaultFolder>/
-  Projects/
-    <project-id>/
-      PROJECT.md             ← project definition (frontmatter + system instructions)
-      memories/              ← project-scoped memory files (recalled alongside global)
-```
-
-#### PROJECT.md format
-
-```yaml
----
-name: My Project
-description: One-line description
-pinned-notes:
-  - path/to/note.md
-default-assistant: <assistant name>   # optional, future Assistants feature
-created: <ISO date>
----
-
-<system instructions — injected as system prompt prefix for every conversation>
-```
-
-#### Key files
-
-- **`src/Projects/ProjectManager.ts`** — discovers and parses `PROJECT.md` files; hot-reloads on vault `create/modify/delete/rename` events registered in `main.ts`. Same pattern as `SkillRegistry`.
-- **`src/Types/types.ts`** — `Project` and `ProjectSettings` types.
-
-#### How it integrates
-
-- `LLMPlugin.projectManager` is the singleton instance (always initialized, folder derived from `rootVaultFolder`).
-- `LLMPlugin.settings.projectSettings.activeProjectId` (persisted) holds the active project id or `null`.
-- `LLMPlugin.projectsFolder` getter returns `<rootVaultFolder>/Projects`.
-- Switching projects does **not** auto-start a new chat; the project is set via `plugin.settings.projectSettings.activeProjectId` and the chip strip is refreshed via `chatContainer.syncChips()`.
-- In `ChatContainer.handleGenerateClick()`, if a project is active:
-  1. Pinned notes are read from vault and injected into `pendingContextString` as `# Pinned Project Notes` block.
-  2. Project system instructions are injected as `# Project Instructions: <name>` block (prepended to context, after pinned notes).
-  3. Memory recall passes `activeProject: project.name` to `MemoryContext` so project-scoped memories are included.
-- Saved chat files get a `project: "<name>"` YAML field in frontmatter when a project is active.
-- **Chat files are co-located with their project**: new chats saved while a project is active land in `<rootVaultFolder>/Projects/<projectId>/chats/` instead of the default chat folder. Adding a project to an existing chat moves the file there immediately; removing it moves it back to the default folder. Use `ChatHistory.moveToFolder()` and `ChatHistory.updateProjectField()` for this.
-- **`ChatContainer.setActiveProject(projectId | null)`** is the single authority for changing the active project at runtime. It moves the file, patches frontmatter, updates `activeProjectId` in settings, and calls `syncChips()`. Never mutate `activeProjectId` directly in UI handlers — always call this method.
-- **`ChatContainer.restoreProjectFromChat(filePath, metaProjectName?)`** is called after every chat file load (HistoryContainer, Widget, StatusBarButton). It detects project membership from the file path first (`Projects/<id>/chats/`), falls back to `meta.project` name matching, and clears `activeProjectId` if neither matches. This ensures the project chip always reflects the loaded chat.
-- Project pinned notes appear as non-removable chips (dashed border, pin icon) in the chip strip above the chat input.
-- **Project chip**: when a project is active, a `.llm-project-chip` chip appears first in the chip strip. It shows only the box icon at rest; on hover it expands (CSS `max-width` transition) to reveal the project name and a remove (×) button.
-- **Project selection UI** — two entry points depending on chat state:
-  - *New chat (no messages)*: "Add to project" submenu in the **+ button** menu (`addFilesButton` in `ChatContainer`).
-  - *Started chat*: "Add to project" submenu in the **more-options menu** — chevron button on FAB/StatusBar headers; `more-horizontal` button on Widget/Modal (default) header.
-- There is **no longer a project switcher pill** in the chat header — `buildProjectSwitcher` and `updateProjectSwitcher` have been removed from `Header.ts`.
-- `LLMPlugin.reinitProjectManager()` is called when `rootVaultFolder` changes (Settings → General).
-- Projects are managed (create/edit/delete/activate) via Settings → Features → Projects.
-
-#### `projectSettings` persistence
-
-`LLMPluginSettings.projectSettings: ProjectSettings` — deep-merged on load with defaults `{ activeProjectId: null }`.
-
-### Assistants System
-
-The plugin supports a vault-native Assistants feature. Assistants are user-defined AI personas stored as `ASSISTANT.md` files in the vault. This is **distinct from the existing OpenAI Assistants API integration** (`AssistantHandler.ts`/`AssistantsContainer.ts`) — do not modify those files.
-
-#### Vault hierarchy
-
-```
-<rootVaultFolder>/
-  Assistants/
-    <assistant-id>/
-      ASSISTANT.md             ← assistant definition
-      memories/                ← assistant-scoped memory files
-```
-
-#### ASSISTANT.md format
-
-```yaml
----
-name: My Assistant
-description: One-line description
-provider: claude                   # informational only
-model: claude-sonnet-4-6           # informational only
-preferred-model: claude-sonnet-4-6 # auto-selected when this assistant is chosen in the dropdown
-enabled-skills:                    # skill ids from AI/Skills/
-  - summarize
-  - create-note
-allowed-tools:                     # ObsidianToolRegistry tool names
-  - obsidian_read_note
-  - obsidian_search
-created: 2024-01-01T00:00:00.000Z
----
-
-<system prompt — injected into context when this assistant is active>
-```
-
-#### Key files
-
-- **`src/Assistants/AssistantManager.ts`** — discovers and parses `ASSISTANT.md` files; hot-reloads on vault `create/modify/delete/rename` events. Same adapter-based pattern as `SkillRegistry` and `ProjectManager`. Also has `createAssistant()` / `deleteAssistant()` helpers.
-- **`src/Types/types.ts`** — `Assistant` and `AssistantSettings` types.
-
-#### How it integrates
-
-- `LLMPlugin.assistantManager` is the singleton instance (always initialized, folder derived from `rootVaultFolder`).
-- `LLMPlugin.settings.assistantSettings.activeAssistantId` (persisted) holds the active assistant id or `null`.
-- `LLMPlugin.assistantsFolder` getter returns `<rootVaultFolder>/Assistants`.
-- In `ChatContainer.handleGenerateClick()`, if an assistant is active:
-  1. Its `enabled-skills` are merged with globally-enabled skills (union).
-  2. Its `allowed-tools` intersect with any skill-level tool restrictions (most restrictive wins).
-  3. Its system prompt is injected as `# Assistant: <name>` block — positioned **after** project instructions (project is outer, assistant is inner).
-  4. Memory recall passes `activeAssistant: assistant.id` to `MemoryContext`, so assistant-scoped memories are included.
-- If no explicit assistant is set but the active project has a `default-assistant`, that assistant is auto-activated for the conversation.
-- Memory extraction scope: project active → write to project memories; only assistant active → write to assistant memories; neither → global.
-- Assistant selection is handled via the combined model+assistant dropdown in the chat input toolbar (not a header pill). The dropdown has two `<optgroup>` sections: "Models" and "Assistants". Selecting an assistant sets `activeAssistantId`, optionally switches to the assistant's `preferredModel`, and starts a new chat. Selecting a plain model clears the active assistant.
-- `ChatContainer.syncAssistantDropdownOptions()` rebuilds the assistants optgroup on hot-reload; call it whenever `AssistantManager` reloads.
-- `LLMPlugin.reinitAssistantManager()` is called when `rootVaultFolder` changes (Settings → General).
-- Assistants are managed (create/edit/delete/activate) via Settings → Core Settings → Assistants.
-
-#### Context injection order (from top of model context to bottom)
-
-```
-[Recalled memories]     ← prepended last, so they appear first
-[Project instructions]  ← outer scope
-[Assistant system prompt] ← inner persona
-[Skill instructions]
-[Vault / file context]
-```
-
-#### `assistantSettings` persistence
-
-`LLMPluginSettings.assistantSettings: AssistantSettings` — deep-merged on load with defaults `{ activeAssistantId: null }`.
-
-#### CSS classes
-
-- `.llm-assistant-panel` — per-response indicator showing which assistant was active (analogous to `.llm-skill-panel` and `.llm-memory-panel`)
-
-### Obsidian Agent
-
-The Obsidian Agent is the single always-available primary agent — the equivalent of Linear's "Linear Agent." It knows the full vault, can invoke any enabled Skill, and can route to any configured Assistant for specialised work.
-
-#### Entry points
-
-When `obsidianAgentSettings.enabled` is true:
-- **FAB** — `FAB.generateFAB()` sets `chatContainer.isObsidianAgent = true`
-- **Status bar button** — `StatusBarButton.buildPopover()` sets `chatContainer.isObsidianAgent = true`
-- **Command palette** — `open-obsidian-agent` command opens `ChatModal2(plugin, true)`
-- **Modal (non-agent)** — `ChatModal2` also sets `isObsidianAgent` from the setting when opened without the flag
-
-#### How agent mode works in ChatContainer
-
-`ChatContainer.isObsidianAgent: boolean` (default `false`) enables agent mode:
-1. In `handleGenerateClick`, after memory recall, `ObsidianAgent.buildSystemPrompt()` is appended to `pendingContextString` (memories remain first in context; agent prompt follows).
-2. In `runAgentMode`, when `isObsidianAgent`, an `extraSetup` callback is passed to `AgentLoop` that calls `ObsidianAgent.registerTools(registry)` — this registers the `invoke_assistant` dynamic tool.
-3. When `invoke_assistant` fires, `onToolResult` captures the assistant name into `agentRoutedAssistantThisTurn`.
-4. After generation, `appendAgentRoutingIndicator(container, assistantName)` adds a `.llm-agent-routing-panel` banner below the response.
-5. `historyPushToFile` tags new files with `agent: true` in frontmatter via `ChatHistory.save(... isAgent=true)`.
-
-#### `invoke_assistant` tool
-
-Defined and registered in `ObsidianAgent.registerTools(registry: ObsidianToolRegistry)`. Only registered when there are agent-available assistants. Execution returns the assistant's system prompt + task as a string — the main agent loop continues from that persona. Routing is expressed entirely through the system prompt, not a separate sub-AgentLoop.
-
-#### System prompt composition
-
-`ObsidianAgent.buildSystemPrompt()` is **async** — it reads the vault file at `obsidianAgentSettings.agentGuidanceFile` if configured. Auto-generates from live state:
-1. Base identity paragraph
-2. Available Skills list (filtered by `obsidianAgentSettings.availableSkills`)
-3. Available Assistants list with `invoke_assistant` instructions (filtered by `obsidianAgentSettings.availableAssistants`)
-4. Projects in the vault
-5. Chat history folder paths (when `chatHistoryEnabled`)
-6. Agent guidance file content (read from vault at `agentGuidanceFile` path)
-
-#### Vault guidance files (two distinct concepts)
-
-The plugin exposes two vault-native guidance files:
-
-| File | Setting key | Scope | Injected when |
-|------|-------------|-------|---------------|
-| `AI/OBSIDIAN-AGENT.md` (default empty) | `obsidianAgentSettings.agentGuidanceFile` | Obsidian Agent only | Agent turns — appended inside `buildSystemPrompt()` |
-| `AI/AGENTS.md` (default path) | `LLMPluginSettings.agentsFilePath` | Every conversation | All sends — prepended to `pendingContextString` before memory recall |
-
-- **Agent guidance file** — tells the Obsidian Agent how to navigate this specific vault (structure, conventions, off-limits folders, routing rules). Configured in Settings → Obsidian Agent → "Agent Guidance".
-- **General instructions file** (AGENTS.md) — a global system prompt injected into every conversation regardless of model or assistant. Configured in Settings → General → "General Instructions".
-- Both use the shared `renderGuidanceFilePicker()` helper in `LLMSettingsModal` — a path text input + smart "Open"/"Create" button.
-- `plugin.refreshAllChips()` re-renders chips in all live views (FAB, StatusBar, Widget). Call after the `agentsFilePath` setting changes.
-- **Guidance files are no longer shown as chips in the input strip.** They appear instead in a "Guidance" section in the Chat Details panel (`ChatDetailsView` / inline widget sidebar). `ChatDetailsState.guidanceFiles` carries `{ name, path, icon }` entries — `"book-open"` for AGENTS.md (always when configured), `"scroll-text"` for OBSIDIAN-AGENT.md (only when Obsidian Agent is active). Rendered by `renderGuidanceSection()` in `ChatDetailsRenderer.ts`.
-
-#### Settings
-
-`LLMPluginSettings.obsidianAgentSettings: ObsidianAgentSettings` — deep-merged on load:
-- `enabled: boolean` — gates the feature; when toggled, FAB is regenerated
-- `enableWebSearch: boolean` — placeholder for future web search support
-- `availableSkills: Record<string, boolean>` — per-skill opt-in/out; missing keys = available
-- `availableAssistants: Record<string, boolean>` — per-assistant opt-in/out; missing keys = available
-- `agentGuidanceFile: string` — vault-relative path to the agent's guidance note (empty = disabled)
-
-`LLMPluginSettings.agentsFilePath: string` — vault-relative path to the general instructions file (default `"AI/AGENTS.md"`; empty = disabled).
-
-Settings UI lives in `LLMSettingsModal` under Features → Obsidian Agent (agent guidance) and General → General Instructions (AGENTS.md).
-
-#### Dynamic tool registration
-
-`ObsidianToolRegistry.registerDynamicTool(def, executor)` adds tools at runtime without modifying `ALL_TOOL_DEFINITIONS`. `AgentLoop` accepts an optional `extraSetup?: (registry) => void` 8th constructor argument that's called after the registry is created, and an optional `chatHistory?: ChatHistory` 9th argument that is forwarded to `ObsidianToolRegistry` for the `get_chat_history` tool.
-
-#### Chat history access (`get_chat_history` tool)
-
-The agent can read saved conversations via the `get_chat_history` static tool (defined in `ALL_TOOL_DEFINITIONS`). `ObsidianToolRegistry` accepts an optional `chatHistory?: ChatHistory` 3rd constructor param; `AgentLoop` accepts it as a 9th param and forwards it. `ChatContainer.runAgentMode` passes `this.plugin.chatHistory` when `chatHistoryEnabled` is true.
-
-- **action `list`**: calls `ChatHistory.list()`, returns filenames + mtimes, supports `limit`, `filter_project`, and `filter_agent` filters.
-- **action `load`**: calls `ChatHistory.load(path)`, returns full metadata + parsed message turns as readable markdown.
-
-`ObsidianAgent.buildSystemPrompt()` injects a `## Chat History` section (when `chatHistoryEnabled`) describing the default chat folder and project chat paths, so the agent knows where to look without guessing.
-
-#### History tagging
-
-Agent conversations are saved to the same `ChatHistory` folder as regular chats but with `agent: true` in YAML frontmatter. `ChatFileMeta.agent?: boolean` is the field; `buildFrontmatter` emits it; `load()` returns it in `ChatFileMeta`.
-
-#### CSS classes
-
-- `.llm-agent-routing-panel` — routing indicator below the response when `invoke_assistant` was called
-- `.llm-agent-routing-panel-icon` — icon element (uses `waypoints` Lucide icon, accent-coloured)
-- `.llm-agent-routing-panel-label` — "Routed to <Assistant Name>" text
-- `.llm-agent-guidance-textarea` — textarea in settings for vault guidance input
-- `.llm-token-usage` — token count indicator shown below each response when the provider reports usage (Claude, OpenAI, Gemini). Format: "↑ N ↓ N tokens" (input / output). Rendered by `appendTokenUsage(container, inputTokens, outputTokens)` in `ChatContainer`; cleared in `newChat()`.
-
-### Web Search (SearXNG)
-
-The plugin supports web search via a self-hosted [SearXNG](https://searxng.github.io/searxng/) instance. The feature is gated behind `searxngSettings.enabled` and exposes a `web_search` tool to any tool-capable model (Claude, GPT-4, Gemini, etc.).
-
-#### Architecture
-
-- **`src/WebSearch/SearxngService.ts`** — service class wrapping the SearXNG JSON API (`GET /search?q=<query>&format=json`). Key methods:
-  - `search(query, numResults?)` — calls SearXNG with `throw: false` so HTTP errors (429, 403, 5xx) are caught and converted to descriptive `SearxngHttpError` instances rather than opaque exceptions. Adds browser-like `User-Agent` / `Accept` headers to avoid bot-detection rate limits.
-  - `checkHealth()` — probes `/healthz`, falls back to a minimal search request. Returns `true` even on 429 (instance is up, just rate-limited).
-  - `SearxngService.formatResults(results)` — static formatter; renders results as `**N. [Title](URL)**` markdown hyperlinks so the model naturally reproduces clickable citations in its response.
-  - `SearxngHttpError` — typed error class with a `.status` field; 429 includes a human-readable explanation about underlying engine rate limits.
-
-#### Settings
-
-`LLMPluginSettings.searxngSettings: SearxngSettings` — deep-merged on load:
-- `enabled: boolean` — gates the entire feature; toggling calls `plugin.initSearxngService()`.
-- `host: string` — base URL of the SearXNG instance (default `http://localhost:8080`).
-- `maxResults: number` — maximum results returned per query (1–10, default 5).
-
-`LLMPlugin.searxngService: SearxngService | null` — null when disabled or host is blank. Rebuilt by `initSearxngService()` after any settings change.
-
-#### Tool integration
-
-`web_search` is defined in `ALL_TOOL_DEFINITIONS` (with `requiresWebSearch: true` so Settings → Tools shows a warning when SearXNG is not enabled). The executor in `ObsidianToolRegistry.executeTool()` calls `searxngService.search()` inside its own try/catch and returns the descriptive error message to the model on failure — never throws.
-
-`AgentLoop` accepts `searxngService?: SearxngService | null` as its 11th constructor argument and forwards it to `ObsidianToolRegistry` as the 4th constructor argument. `ChatContainer.runAgentMode` passes `this.plugin.searxngService`.
-
-#### Web sources panel
-
-After a `web_search` tool call, `ChatContainer` parses `**N. [Title](URL)**` links from the result string via regex and stores them in `pendingWebSources: { title, url }[]`. After generation, `appendWebSourcesPanel()` renders a collapsible `<details class="llm-web-sources">` panel below the response — matching the existing RAG sources panel pattern. Cleared in `newChat()` and on error.
-
-#### Settings UI
-
-"Web Search" group appears in Settings → Obsidian Agent (visible only when the agent is enabled) with:
-- Enable toggle (calls `initSearxngService()` on change and re-renders the tab)
-- Host text input + **Test connection** button (calls `checkHealth()`, shows a `Notice`)
-- Max results slider (1–10)
-
-Tools → Available Tools shows a `⚠ Requires Web Search (SearXNG)` note next to `web_search` when `searxngSettings.enabled` is false.
-
-#### Common setup issues
-
-The official SearXNG Docker Compose image (`searxng/searxng:latest` + Valkey sidecar) ships with two settings that must be changed in the **host-mounted** `settings.yml` (typically `~/Downloads/searxng-setup/searxng/settings.yml`):
-
-```yaml
-server:
-  limiter: false     # default true — causes 429 for non-browser clients
-
-search:
-  formats:
-    - html
-    - json           # must be added — default omits json, causing 403
-```
-
-After editing, `docker restart searxng`. The `limiter` key is patched by `sed -i '' 's/limiter: true/limiter: false/'`; the `json` format must be added manually under `formats:`.
-
-#### CSS classes
-
-- `.llm-web-sources` — outer `<details>` wrapper (border-top, margin)
-- `.llm-web-sources-summary` — clickable summary row with globe icon and `›` chevron
-- `.llm-web-sources-icon` — `<span>` holding the Lucide `globe` icon
-- `.llm-web-sources-list` — `<ul>` of result links
-- `.llm-web-source-link` — individual `<a>` link (accent colour, opens in new tab)
-
-### Key Files
-
-- `src/Plugin/ObsidianAgent/ObsidianAgent.ts` - System prompt builder, `registerTools()`, `invoke_assistant` tool logic
-- `src/WebSearch/SearxngService.ts` - SearXNG API wrapper, `SearxngHttpError`, `formatResults()`
-- `src/Assistants/AssistantManager.ts` - Assistant discovery, parsing, hot-reload, and create/delete helpers
-- `src/Projects/ProjectManager.ts` - Project discovery, parsing, hot-reload, and create/delete helpers
-- `src/Memory/MemoryService.ts` - Memory extraction, deduplication, recall, and vault persistence
-- `src/Types/types.ts` - TypeScript interfaces (ChatParams, ImageParams, RAGSettings, MemorySettings, ProjectSettings, AssistantSettings, ObsidianAgentSettings, etc.)
-- `src/utils/constants.ts` - Provider/model/endpoint constants (includes `images`, `chat`, `messages`, `assistant`, `claudeCodeEndpoint`, etc.)
-- `src/utils/models.ts` - Model configuration definitions
-- `src/utils/utils.ts` - API validation and helper functions
-
-### Constants Convention
-
-All endpoint type strings live in `src/utils/constants.ts` and must be imported as constants rather than compared against raw string literals. The full set of endpoint constants is: `chat`, `messages`, `images`, `claudeCodeEndpoint`. Provider type constants are: `openAI`, `claude`, `claudeCode`, `gemini`, `mistral`, `ollama`, `lmStudio`, `GPT4All`.
-
-### CSS / Styling Convention
-
-- Always use Obsidian CSS variables (`--size-4-2`, `--font-ui-small`, `--text-muted`, `--interactive-accent`, etc.) instead of hardcoded px/em/color values.
-- Use `--icon-xs` / `--icon-s` for icon sizes rather than raw pixel values.
-- Component-specific styles belong in `styles.css` as named classes — never use inline `element.style.*` assignments in TypeScript (use `.addClass()` with a CSS class instead).
-- `FileSelector.ts` uses the `.llm-file-selector-*` family of classes defined in `styles.css`.
-
-## Build Configuration
-
-- **esbuild** bundles to CommonJS format targeting ES2018
-- External dependencies: `obsidian`, `electron`, `@codemirror/*`, Node builtins
-- SVG files loaded inline via esbuild loader
-- TypeScript configured with strict null checks, baseUrl `src`
+All endpoint type strings live in `src/utils/constants.ts` and must be imported as constants — never compared against raw string literals. Endpoint constants: `chat`, `messages`, `images`, `claudeCodeEndpoint`. Provider constants: `openAI`, `claude`, `claudeCode`, `gemini`, `mistral`, `ollama`, `lmStudio`, `GPT4All`.

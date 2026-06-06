@@ -23,9 +23,8 @@ export class ChatModal2 extends Modal {
 		setHistoryIndex(this.plugin, "modal");
 		this.plugin.settings.currentIndex = -1;
 		void this.plugin.saveSettings();
-		this.modalEl
-			.getElementsByClassName("modal-close-button")[0]
-			.setAttr("style", "display: none");
+		(this.modalEl.getElementsByClassName("modal-close-button")[0] as HTMLElement | undefined)
+			?.setAttr("style", "display: none");
 		const { contentEl } = this;
 		const header = new Header(this.plugin, "modal");
 		// Modal always gets a fresh store — each opening starts a new conversation.

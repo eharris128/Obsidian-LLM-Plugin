@@ -448,8 +448,8 @@ export async function openAIMessage(
 		const image = await openai.images.generate({
 			model,
 			prompt,
-			size: size,
-			quality: normalizedQuality,
+			size: size as Parameters<typeof openai.images.generate>[0]["size"],
+			quality: normalizedQuality as Parameters<typeof openai.images.generate>[0]["quality"],
 			n: numberOfImages,
 			response_format: response_format ?? "url",
 		});

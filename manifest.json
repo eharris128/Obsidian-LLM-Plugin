@@ -6,5 +6,6 @@
 	"author": "eharris128, r-mahoney, & jsmorabito",
 	"authorUrl": "https://github.com/eharris128/Obsidian-LLM-Plugin",
 	"fundingUrl": "https://www.buymeacoffee.com/johnny1093",
-	"isDesktopOnly": false
+	"isDesktopOnly": false,
+	"version": "0.24.6"
 }

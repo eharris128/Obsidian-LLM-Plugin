@@ -15,7 +15,7 @@ import { buildOllamaModels, buildLMStudioModels, modelNames, models } from "util
 import { GPT4All, ollama, lmStudio } from "utils/constants";
 import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
-import { EmbeddingService } from "RAG/EmbeddingService";
+import { EmbeddingService, EmbeddingProvider, DEFAULT_EMBEDDING_MODELS } from "RAG/EmbeddingService";
 import { ALL_TOOL_DEFINITIONS } from "services/ObsidianToolRegistry";
 
 type APIKeyType = "claude" | "gemini" | "openai" | "mistral";
@@ -1272,44 +1272,93 @@ export class LLMSettingsModal extends Modal {
 		// Embedding configuration
 		const embeddingItems = this.addSettingGroup(el);
 
-		const embeddingService = EmbeddingService.getInstance();
-		const modelStatusSetting = new Setting(embeddingItems)
-			.setName("Embedding model")
-			.setDesc(
-				embeddingService.isLoaded()
-					? "Model ready (Xenova/nomic-embed-text-v1.5, runs in-process)"
-					: this.plugin.settings.ragSettings.modelCached
-						? "Model cached — will load on next use"
-						: "Not downloaded"
-			);
+		const rag = this.plugin.settings.ragSettings;
+		const currentProvider = rag.embeddingProvider ?? "onnx";
 
-		modelStatusSetting.addButton((button) => {
-			const cached = this.plugin.settings.ragSettings.modelCached;
-			const loaded = embeddingService.isLoaded();
-			button.setButtonText(loaded ? "Loaded" : cached ? "Load now" : "Download & load");
-			if (loaded) button.setDisabled(true);
-			button.onClick(async () => {
-				button.setButtonText("Downloading…");
-				button.setDisabled(true);
-				modelStatusSetting.setDesc("Downloading model…");
-				try {
-					await embeddingService.load((progress) => {
-						modelStatusSetting.setDesc(`Downloading… ${Math.round(progress)}%`);
-					});
-					this.plugin.settings.ragSettings.modelCached = true;
+		// Provider selector
+		new Setting(embeddingItems)
+			.setName("Embedding provider")
+			.setDesc("ONNX runs in-process (no server needed). External providers use your existing API keys / local servers.")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("onnx", "ONNX (local, no server)");
+				dropdown.addOption("ollama", "Ollama");
+				dropdown.addOption("openai", "OpenAI");
+				dropdown.addOption("gemini", "Gemini");
+				dropdown.addOption("lmStudio", "LM Studio");
+				dropdown.setValue(currentProvider);
+				dropdown.onChange(async (value: any) => {
+					this.plugin.settings.ragSettings.embeddingProvider = value;
+					this.plugin.settings.ragSettings.embeddingModel = DEFAULT_EMBEDDING_MODELS[value as EmbeddingProvider];
 					await this.plugin.saveSettings();
 					this.plugin.initVaultIndexer();
-					modelStatusSetting.setDesc("Model ready (Xenova/nomic-embed-text-v1.5, runs in-process)");
-					button.setButtonText("Loaded");
-					new Notice("✓ Embedding model loaded successfully.");
-				} catch (e: any) {
-					new Notice(`Failed to load embedding model: ${e?.message ?? String(e)}`);
-					modelStatusSetting.setDesc("Download failed — check console for details.");
-					button.setButtonText(cached ? "Retry" : "Download & load");
-					button.setDisabled(false);
-				}
+					// Re-render so provider-specific UI appears
+					this.renderTab("embeddings");
+				});
 			});
-		});
+
+		// Provider-specific controls
+		if (currentProvider === "onnx") {
+			// ONNX: show download/load button with status
+			const loaded = EmbeddingService.isOnnxLoaded();
+			const cached = rag.modelCached;
+			const modelStatusSetting = new Setting(embeddingItems)
+				.setName("Model status")
+				.setDesc(
+					loaded
+						? "Model ready — Xenova/nomic-embed-text-v1.5 (runs in-process)"
+						: cached
+							? "Model cached — will load on next use"
+							: "Model not downloaded (~90 MB on first use)"
+				);
+
+			modelStatusSetting.addButton((button) => {
+				button.setButtonText(loaded ? "Loaded" : cached ? "Load now" : "Download & load");
+				if (loaded) button.setDisabled(true);
+				button.onClick(async () => {
+					button.setButtonText("Downloading…");
+					button.setDisabled(true);
+					modelStatusSetting.setDesc("Downloading model…");
+					try {
+						await EmbeddingService.loadOnnx((progress) => {
+							modelStatusSetting.setDesc(`Downloading… ${Math.round(progress)}%`);
+						});
+						this.plugin.settings.ragSettings.modelCached = true;
+						await this.plugin.saveSettings();
+						this.plugin.initVaultIndexer();
+						modelStatusSetting.setDesc("Model ready — Xenova/nomic-embed-text-v1.5 (runs in-process)");
+						button.setButtonText("Loaded");
+						button.setDisabled(true);
+						new Notice("✓ Embedding model loaded successfully.");
+					} catch (e: any) {
+						new Notice(`Failed to load embedding model: ${e?.message ?? String(e)}`);
+						modelStatusSetting.setDesc("Download failed — check console for details.");
+						button.setButtonText(cached ? "Retry" : "Download & load");
+						button.setDisabled(false);
+					}
+				});
+			});
+		} else {
+			// External providers: show model name field and a note about prerequisites
+			const providerLabels: Record<string, string> = {
+				openai: "Uses your OpenAI API key from the API Keys settings.",
+				gemini: "Uses your Gemini API key from the API Keys settings.",
+				ollama: `Uses your Ollama server (${this.plugin.settings.ollamaHost ?? "http://localhost:11434"}). Ensure the model is pulled.`,
+				lmStudio: `Uses your LM Studio server (${this.plugin.settings.lmStudioHost ?? "http://localhost:1234"}). Load an embedding model in LM Studio first.`,
+			};
+
+			new Setting(embeddingItems)
+				.setName("Embedding model")
+				.setDesc(providerLabels[currentProvider] ?? "")
+				.addText((text) => {
+					text.setPlaceholder(DEFAULT_EMBEDDING_MODELS[currentProvider]);
+					text.setValue(rag.embeddingModel || DEFAULT_EMBEDDING_MODELS[currentProvider]);
+					text.onChange(async (value) => {
+						this.plugin.settings.ragSettings.embeddingModel = value || DEFAULT_EMBEDDING_MODELS[currentProvider];
+						await this.plugin.saveSettings();
+						this.plugin.initVaultIndexer();
+					});
+				});
+		}
 
 		new Setting(embeddingItems)
 			.setName("Results per query")
@@ -1344,7 +1393,6 @@ export class LLMSettingsModal extends Modal {
 			});
 
 		// Status display
-		const rag = this.plugin.settings.ragSettings;
 		const lastIndexedText = rag.lastIndexed
 			? `Last indexed: ${new Date(rag.lastIndexed).toLocaleString()} · ${rag.indexedFileCount} file(s)`
 			: "Not yet indexed.";

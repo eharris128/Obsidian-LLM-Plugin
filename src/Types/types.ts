@@ -291,6 +291,10 @@ export type ToolSettings = {
 export type RAGSettings = {
 	/** Whether RAG / vault semantic search is enabled at all. */
 	enabled: boolean;
+	/** Which embedding backend to use. Defaults to "onnx" (runs in-process, no server). */
+	embeddingProvider: import("RAG/EmbeddingService").EmbeddingProvider;
+	/** Embedding model name — only used for external providers (openai/gemini/ollama/lmStudio). */
+	embeddingModel: string;
 	/** Vault-root-relative folder paths to skip during indexing (e.g. "Templates"). */
 	excludedFolders: string[];
 	/** How many chunks to retrieve per query. */
@@ -299,7 +303,7 @@ export type RAGSettings = {
 	lastIndexed: number | null;
 	/** Number of files in the current index. */
 	indexedFileCount: number;
-	/** Whether the ONNX embedding model has been cached locally. */
+	/** Whether the ONNX model has been downloaded and cached locally. */
 	modelCached: boolean;
 };
 

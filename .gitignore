@@ -34,3 +34,8 @@ data-backup.json
 
 # RAG index — generated at runtime from vault contents, vault-specific and large
 rag-index.json
+
+# E2E testing (wdio-obsidian-service)
+.obsidian-cache/
+test/plugin-dist/
+test/logs/

@@ -8,9 +8,12 @@ Guidance for Claude Code when working in this repository — an Obsidian plugin 
 npm run dev      # watch mode (esbuild)
 npm run build    # production build (tsc type-check + esbuild bundle)
 npm run version  # bump manifest.json and versions.json
+npm run test:e2e # E2E suite — real sandboxed Obsidian via wdio-obsidian-service (see test/README.md)
 ```
 
-Output bundles to `main.js` in the root. esbuild targets CommonJS/ES2018; `obsidian`, `electron`, `@codemirror/*`, and Node builtins are external; SVGs load inline. TypeScript uses strict null checks, baseUrl `src`.
+Output bundles to `main.js` in the root. esbuild targets CommonJS/ES2018; `obsidian`, `electron`, `@codemirror/*`, and Node builtins are external; SVGs load inline. TypeScript uses strict null checks, baseUrl `src`. The esbuild banner defines an `import.meta.url` shim (`__import_meta_url`) — `@anthropic-ai/claude-agent-sdk` calls `createRequire(import.meta.url)` at module scope, which would otherwise throw on load in CJS output. Don't remove the `define`/banner pair.
+
+E2E conventions live in `test/README.md` — notably: never point `wdio.conf.mts` `plugins:` at `"."` (the service copies `data.json` — real API keys — into test vaults; always stage via `scripts/stage-plugin.mjs`), and never hardcode the plugin id in specs (read `PLUGIN_ID` from `test/specs/helpers.ts`).
 
 ## Architecture Overview
 

@@ -35,6 +35,9 @@ data-backup.json
 # RAG index — generated at runtime from vault contents, vault-specific and large
 rag-index.json
 
+# Downloaded ONNX model files — 110MB+, fetched at runtime on first use, never committed
+onnx-models/
+
 # E2E testing (wdio-obsidian-service)
 .obsidian-cache/
 test/plugin-dist/

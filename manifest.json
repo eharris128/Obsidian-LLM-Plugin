@@ -1,7 +1,7 @@
 {
 	"id": "large-language-models",
 	"name": "Large Language Models",
-	"version": "0.24.1",
+	"version": "0.24.2",
 	"minAppVersion": "1.7.2",
 	"description": "Chat with LLMs (OpenAI, Claude, Gemini, Mistral, Ollama, LM Studio) directly in Obsidian. Includes Skills, Projects, Assistants, Memory, vault search, voice transcription, and an Obsidian Agent that can read and write your vault.",
 	"author": "eharris128, r-mahoney, & jsmorabito",

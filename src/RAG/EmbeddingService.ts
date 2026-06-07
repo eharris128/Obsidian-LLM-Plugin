@@ -1,6 +1,7 @@
-import { pipeline, FeatureExtractionPipeline } from "@huggingface/transformers";
+import { pipeline, FeatureExtractionPipeline, env } from "@huggingface/transformers";
 import OpenAI from "openai";
 import { GoogleGenAI } from "@google/genai";
+import { join } from "path";
 
 export type EmbeddingProvider = "onnx" | "openai" | "gemini" | "ollama" | "lmStudio";
 
@@ -34,6 +35,19 @@ export class EmbeddingService {
 
 	static isOnnxLoaded(): boolean {
 		return onnxPipe !== null;
+	}
+
+	/**
+	 * Call once during plugin load with the plugin's OS-level directory path.
+	 * Sets the transformers.js cache dir so downloads use Node.js https
+	 * (not browser fetch) — required to bypass Obsidian's CSP restrictions.
+	 */
+	static configure(pluginDir: string): void {
+		const cacheDir = join(pluginDir, "onnx-models");
+		env.cacheDir = cacheDir;
+		env.useBrowserCache = false;
+		env.allowRemoteModels = true;
+		env.allowLocalModels = true;
 	}
 
 	static async loadOnnx(onProgress?: (progress: number) => void): Promise<void> {

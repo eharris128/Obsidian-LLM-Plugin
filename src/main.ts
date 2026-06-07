@@ -361,6 +361,13 @@ export default class LLMPlugin extends Plugin {
 			await this.saveSettings();
 		}
 
+		// Configure ONNX env before any pipeline call — sets cache dir to the
+		// plugin's OS path so transformers.js uses Node.js https (not browser
+		// fetch), bypassing Obsidian's Content Security Policy.
+		const vaultBasePath = (this.app.vault.adapter as any).basePath;
+		const pluginOsDir = require("path").join(vaultBasePath, this.manifest.dir);
+		EmbeddingService.configure(pluginOsDir);
+
 		this.initVaultIndexer();
 		if (this.settings.ragSettings?.enabled && this.settings.ragSettings?.modelCached
 				&& (this.settings.ragSettings?.embeddingProvider ?? "onnx") === "onnx") {

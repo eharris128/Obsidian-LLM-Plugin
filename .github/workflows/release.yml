@@ -44,8 +44,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           tag="${GITHUB_REF#refs/tags/}"
-          gh release create "$tag" main.js styles.css manifest.json \
-            --title "$tag" \
-            --generate-notes \
-            --clobber 2>/dev/null || \
-          gh release upload "$tag" main.js styles.css manifest.json --clobber
+          if gh release view "$tag" &>/dev/null; then
+            gh release upload "$tag" main.js styles.css manifest.json --clobber
+          else
+            gh release create "$tag" main.js styles.css manifest.json \
+              --title "$tag" \
+              --generate-notes
+          fi

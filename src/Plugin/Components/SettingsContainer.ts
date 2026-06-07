@@ -140,8 +140,12 @@ export class SettingsContainer {
 			});
 
 		new Setting(parentContainer)
-			.setName("Tokens")
-			.setDesc("Maximum number of tokens in the response. Set to 0 to use the model's default. Higher values allow longer responses.")
+			.setName("Max response tokens")
+			.setDesc(
+				"Maximum tokens in the response. Set to 0 (recommended) to let the " +
+				"model decide — cloud models stop naturally, local models use the " +
+				"remaining context window. Set a positive number to enforce a hard cap."
+			)
 			.addText((text) => {
 				text.setValue(`${viewSettings.chatSettings.maxTokens}`);
 				text.inputEl.type = "number";

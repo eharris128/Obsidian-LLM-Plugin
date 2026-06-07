@@ -106,6 +106,13 @@ export class ContextBuilder {
 	}
 
 	/**
+	 * Rough token count estimate: 1 token ≈ 4 characters
+	 */
+	static estimateTokens(text: string): number {
+		return Math.ceil(text.length / 4);
+	}
+
+	/**
 	 * Truncate context to fit within token budget
 	 * Rough estimation: 1 token ≈ 4 characters
 	 */

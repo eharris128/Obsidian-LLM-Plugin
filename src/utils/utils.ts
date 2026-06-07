@@ -420,14 +420,17 @@ export async function claudeMessage(
 	const { model, messages, tokens, temperature, systemContext } = params;
 
 	// Anthropic SDK Docs - https://github.com/anthropics/anthropic-sdk-typescript/blob/HEAD/helpers.md#messagestream-api
-	// Claude API requires max_tokens; default to 4096 when user hasn't set it
+	// Claude API requires max_tokens — omitting it is an error. When the caller
+	// passes undefined (smart default / no user override), use a large safe ceiling
+	// so the model can respond fully. The caller (resolveEffectiveMaxTokens) already
+	// enforces user overrides and model-specific caps before passing tokens here.
 	// Claude only accepts "user" | "assistant" in its messages array;
 	// system context is passed via the separate `system` parameter.
 	type ClaudeMessage = { role: "user" | "assistant"; content: string };
 	const stream = client.messages.stream({
 		model,
 		messages: messages.filter(m => m.role !== "system") as ClaudeMessage[],
-		max_tokens: tokens || 4096,
+		max_tokens: tokens ?? 64_000,
 		temperature,
 		stream: true,
 		...(systemContext ? { system: systemContext } : {}),

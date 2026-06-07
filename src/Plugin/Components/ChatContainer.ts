@@ -328,6 +328,38 @@ export class ChatContainer extends Component {
 		return this.messageStore.getMessages();
 	}
 
+	/**
+	 * Compute the effective max_tokens to send to the provider.
+	 *
+	 * - Local models (Ollama, GPT4All): use remaining context window space,
+	 *   floored at 1024. User override is respected only when it's lower.
+	 * - Cloud models: default to 0 (omit from payload, let model decide).
+	 *   User override is capped by model.maxOutputTokens when set.
+	 */
+	private resolveEffectiveMaxTokens(contextTokenBudget: number): number {
+		const settingType = getSettingType(this.viewType);
+		const userMax = this.plugin.settings[settingType].chatSettings.maxTokens;
+		const selectedModelKey = this.plugin.settings[settingType].modelName;
+		const selectedModel = models[selectedModelKey];
+		const modelType = this.plugin.settings[settingType].modelType;
+		const isLocal = modelType === ollama || modelType === GPT4All;
+
+		if (isLocal) {
+			const contextWindow = selectedModel?.contextWindow ?? 8_192;
+			const remaining = contextWindow - contextTokenBudget;
+			const dynamicMax = Math.max(remaining, 1024);
+			return userMax > 0 ? Math.min(userMax, dynamicMax) : dynamicMax;
+		}
+
+		// Cloud models: no cap by default; respect user override clamped to model ceiling
+		const modelCeiling = selectedModel?.maxOutputTokens;
+		if (userMax > 0) {
+			return modelCeiling ? Math.min(userMax, modelCeiling) : userMax;
+		}
+		// 0 means "let the model decide" — caller must omit the field
+		return 0;
+	}
+
 	getParams(endpoint: string, model: string, modelType: string) {
 		const settingType = getSettingType(this.viewType);
 		const rawMessages = this.getMessages();
@@ -464,6 +496,9 @@ export class ChatContainer extends Component {
 			}
 		}
 		const params = this.getParams(modelEndpoint, model, modelType);
+		if ("tokens" in params) {
+			(params as import("Types/types").ChatParams).tokens = this.resolveEffectiveMaxTokens(0) || undefined;
+		}
 		// Start Claude Code handling
 		if (modelEndpoint === claudeCodeEndpoint) {
 			this.setDiv(true);
@@ -866,6 +901,7 @@ export class ChatContainer extends Component {
 			contextWindowSize,
 			contextSettings.maxContextTokensPercent
 		);
+		const effectiveMaxTokens = this.resolveEffectiveMaxTokens(contextTokenBudget);
 
 		// Build context when the global feature flag is on OR when the user has
 		// explicitly added files via the + chip button (explicit intent always wins).
@@ -1251,6 +1287,9 @@ export class ChatContainer extends Component {
 		// is appended before the user message and appears at the top of the chat.
 		await this.renderingPromise;
 		const params = this.getParams(modelEndpoint, model, modelType);
+		if ("tokens" in params) {
+			(params as import("Types/types").ChatParams).tokens = effectiveMaxTokens || undefined;
+		}
 		// Snapshot the assistant-message count before generation so we can key
 		// skill usage (and tool calls on the non-agent path) to the right turn.
 		const preTurnAssistantCount = this.getMessages().filter(

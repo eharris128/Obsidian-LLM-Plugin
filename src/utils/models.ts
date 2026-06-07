@@ -8,6 +8,7 @@ export const openAIModels: Record<string, Model> = {
 		endpoint: chat,
 		url: "/chat/completions",
 		contextWindow: 16_385,
+		maxOutputTokens: 4_096,
 	},
 	"GPT-4o": {
 		model: "gpt-4o",
@@ -15,6 +16,7 @@ export const openAIModels: Record<string, Model> = {
 		endpoint: chat,
 		url: "/chat/completions",
 		contextWindow: 128_000,
+		maxOutputTokens: 16_384,
 	},
 	"GPT-4o-mini": {
 		model: "gpt-4o-mini",
@@ -22,6 +24,7 @@ export const openAIModels: Record<string, Model> = {
 		endpoint: chat,
 		url: "/chat/completions",
 		contextWindow: 128_000,
+		maxOutputTokens: 16_384,
 	},
 	"GPT-4.1": {
 		model: "gpt-4.1",
@@ -29,6 +32,7 @@ export const openAIModels: Record<string, Model> = {
 		endpoint: chat,
 		url: "/chat/completions",
 		contextWindow: 1_047_576,
+		maxOutputTokens: 32_768,
 	},
 	"GPT-4.1-mini": {
 		model: "gpt-4.1-mini",
@@ -36,6 +40,7 @@ export const openAIModels: Record<string, Model> = {
 		endpoint: chat,
 		url: "/chat/completions",
 		contextWindow: 1_047_576,
+		maxOutputTokens: 32_768,
 	},
 	"GPT-4.1-nano": {
 		model: "gpt-4.1-nano",
@@ -43,6 +48,7 @@ export const openAIModels: Record<string, Model> = {
 		endpoint: chat,
 		url: "/chat/completions",
 		contextWindow: 1_047_576,
+		maxOutputTokens: 32_768,
 	},
 	"o3": {
 		model: "o3",
@@ -50,6 +56,7 @@ export const openAIModels: Record<string, Model> = {
 		endpoint: chat,
 		url: "/chat/completions",
 		contextWindow: 200_000,
+		maxOutputTokens: 100_000,
 	},
 	"o3-mini": {
 		model: "o3-mini",
@@ -57,6 +64,7 @@ export const openAIModels: Record<string, Model> = {
 		endpoint: chat,
 		url: "/chat/completions",
 		contextWindow: 200_000,
+		maxOutputTokens: 65_536,
 	},
 	"o4-mini": {
 		model: "o4-mini",
@@ -64,6 +72,7 @@ export const openAIModels: Record<string, Model> = {
 		endpoint: chat,
 		url: "/chat/completions",
 		contextWindow: 200_000,
+		maxOutputTokens: 100_000,
 	},
 }
 
@@ -167,6 +176,7 @@ export const models: Record<string, Model> = {
 		endpoint: messages,
 		url: "/v1/messages",
 		contextWindow: 200_000,
+		maxOutputTokens: 64_000,
 	},
 	"Claude Opus 4.6": {
 		model: claudeOpus46Model,
@@ -174,6 +184,7 @@ export const models: Record<string, Model> = {
 		endpoint: messages,
 		url: "/v1/messages",
 		contextWindow: 200_000,
+		maxOutputTokens: 32_000,
 	},
 	"Claude Haiku 4.5": {
 		model: claudeHaiku45Model,
@@ -181,6 +192,7 @@ export const models: Record<string, Model> = {
 		endpoint: messages,
 		url: "/v1/messages",
 		contextWindow: 200_000,
+		maxOutputTokens: 16_000,
 	},
 	// Gemini Models
 	"Gemini-3-Pro-Preview": {
@@ -189,6 +201,7 @@ export const models: Record<string, Model> = {
 		endpoint: "gemini",
 		url: "gemini",
 		contextWindow: 1_048_576,
+		maxOutputTokens: 65_536,
 	},
 	"Gemini-2.5-Pro": {
 		model: gemini25ProModel,
@@ -196,6 +209,7 @@ export const models: Record<string, Model> = {
 		endpoint: "gemini",
 		url: "gemini",
 		contextWindow: 1_048_576,
+		maxOutputTokens: 65_536,
 	},
 	"Gemini-Flash-Latest": {
 		model: geminiFlashLatestModel,
@@ -203,6 +217,7 @@ export const models: Record<string, Model> = {
 		endpoint: "gemini",
 		url: "gemini",
 		contextWindow: 1_048_576,
+		maxOutputTokens: 65_536,
 	},
 	"Gemini-Flash-Lite-Latest": {
 		model: geminiFlashLiteLatestModel,
@@ -210,6 +225,7 @@ export const models: Record<string, Model> = {
 		endpoint: "gemini",
 		url: "gemini",
 		contextWindow: 1_048_576,
+		maxOutputTokens: 65_536,
 	},
 	"Gemini-2.5-Flash": {
 		model: gemini25FlashModel,
@@ -217,6 +233,7 @@ export const models: Record<string, Model> = {
 		endpoint: "gemini",
 		url: "gemini",
 		contextWindow: 1_048_576,
+		maxOutputTokens: 65_536,
 	},
 	"Gemini-2.5-Flash-Lite": {
 		model: gemini25FlashLiteModel,
@@ -224,6 +241,7 @@ export const models: Record<string, Model> = {
 		endpoint: "gemini",
 		url: "gemini",
 		contextWindow: 1_048_576,
+		maxOutputTokens: 65_536,
 	},
 	"Gemini-2.0-Flash": {
 		model: gemini2FlashStableModel,
@@ -231,6 +249,7 @@ export const models: Record<string, Model> = {
 		endpoint: "gemini",
 		url: "gemini",
 		contextWindow: 1_048_576,
+		maxOutputTokens: 65_536,
 	},
 	"Gemini-2.0-Flash-Lite": {
 		model: gemini2FlashLiteModel,
@@ -238,6 +257,7 @@ export const models: Record<string, Model> = {
 		endpoint: "gemini",
 		url: "gemini",
 		contextWindow: 1_048_576,
+		maxOutputTokens: 65_536,
 	},
 	// Claude Code (Agent SDK)
 	"Claude Code": {
@@ -246,6 +266,7 @@ export const models: Record<string, Model> = {
 		endpoint: claudeCodeEndpoint,
 		url: "",
 		contextWindow: 200_000,
+		maxOutputTokens: 64_000,
 	},
 	"GPT Image 1": {
 		model: "gpt-image-1",
@@ -260,6 +281,7 @@ export const models: Record<string, Model> = {
 		endpoint: chat,
 		url: "/v1/chat/completions",
 		contextWindow: 131_072,
+		maxOutputTokens: 32_768,
 	},
 	"Mistral Medium": {
 		model: "mistral-medium-latest",
@@ -267,6 +289,7 @@ export const models: Record<string, Model> = {
 		endpoint: chat,
 		url: "/v1/chat/completions",
 		contextWindow: 131_072,
+		maxOutputTokens: 32_768,
 	},
 	"Mistral Small": {
 		model: "mistral-small-latest",
@@ -274,6 +297,7 @@ export const models: Record<string, Model> = {
 		endpoint: chat,
 		url: "/v1/chat/completions",
 		contextWindow: 131_072,
+		maxOutputTokens: 32_768,
 	},
 	"Mistral Nemo": {
 		model: "mistral-nemo-12b-24-07",
@@ -281,6 +305,7 @@ export const models: Record<string, Model> = {
 		endpoint: chat,
 		url: "/v1/chat/completions",
 		contextWindow: 131_072,
+		maxOutputTokens: 32_768,
 	},
 	"Magistral Medium": {
 		model: "magistral-medium-latest",
@@ -288,6 +313,7 @@ export const models: Record<string, Model> = {
 		endpoint: chat,
 		url: "/v1/chat/completions",
 		contextWindow: 131_072,
+		maxOutputTokens: 32_768,
 	},
 	"Magistral Small": {
 		model: "magistral-small-latest",
@@ -295,6 +321,7 @@ export const models: Record<string, Model> = {
 		endpoint: chat,
 		url: "/v1/chat/completions",
 		contextWindow: 131_072,
+		maxOutputTokens: 32_768,
 	},
 	"Devstral Small": {
 		model: "devstral-small-latest",
@@ -302,6 +329,7 @@ export const models: Record<string, Model> = {
 		endpoint: chat,
 		url: "/v1/chat/completions",
 		contextWindow: 131_072,
+		maxOutputTokens: 32_768,
 	},
 	"Codestral": {
 		model: "codestral-latest",
@@ -309,6 +337,7 @@ export const models: Record<string, Model> = {
 		endpoint: chat,
 		url: "/v1/chat/completions",
 		contextWindow: 131_072,
+		maxOutputTokens: 32_768,
 	},
 };
 

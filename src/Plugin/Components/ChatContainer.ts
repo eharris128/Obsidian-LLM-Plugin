@@ -496,7 +496,7 @@ export class ChatContainer extends Component {
 			}
 		}
 		const params = this.getParams(modelEndpoint, model, modelType);
-		if ("tokens" in params) {
+		if (params && "tokens" in params) {
 			(params as import("Types/types").ChatParams).tokens = this.resolveEffectiveMaxTokens(0) || undefined;
 		}
 		// Start Claude Code handling
@@ -1287,7 +1287,7 @@ export class ChatContainer extends Component {
 		// is appended before the user message and appears at the top of the chat.
 		await this.renderingPromise;
 		const params = this.getParams(modelEndpoint, model, modelType);
-		if ("tokens" in params) {
+		if (params && "tokens" in params) {
 			(params as import("Types/types").ChatParams).tokens = effectiveMaxTokens || undefined;
 		}
 		// Snapshot the assistant-message count before generation so we can key

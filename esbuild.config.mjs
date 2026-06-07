@@ -1,7 +1,7 @@
 import esbuild from "esbuild";
 import process from "process";
 import { builtinModules } from "module";
-import { existsSync, readFileSync, writeFileSync, rmSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, rmSync, copyFileSync } from "fs";
 import { resolve, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -74,6 +74,11 @@ function patchBundle() {
 	writeFileSync(bundlePath, src, "utf8");
 }
 
+function copyPluginAssets() {
+	copyFileSync("manifest.json", "../large-language-models/manifest.json");
+	copyFileSync("styles.css", "../large-language-models/styles.css");
+}
+
 function cleanupDeadFiles() {
 	// embed-worker.js was used by the abandoned child-process approach — remove it.
 	try { rmSync("../large-language-models/embed-worker.js"); } catch (_) {}
@@ -84,11 +89,13 @@ function cleanupDeadFiles() {
 if (prod) {
 	await context.rebuild();
 	patchBundle();
+	copyPluginAssets();
 	cleanupDeadFiles();
 	process.exit(0);
 } else {
 	await context.rebuild();
 	patchBundle();
+	copyPluginAssets();
 	cleanupDeadFiles();
 	await context.watch();
 }

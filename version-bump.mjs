@@ -6,7 +6,7 @@ const targetVersion = process.env.npm_package_version;
 let manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
 const { minAppVersion } = manifest;
 // Rebuild with version near the top so it's never accidentally omitted
-const updated = { id: manifest.id, name: manifest.name, version: targetVersion, ...manifest, minAppVersion };
+const updated = { ...manifest, version: targetVersion };
 writeFileSync("manifest.json", JSON.stringify(updated, null, "\t"));
 
 // update versions.json with target version and minAppVersion from manifest.json

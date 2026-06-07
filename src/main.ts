@@ -95,6 +95,7 @@ export interface LLMPluginSettings {
 	defaultAgentMode: boolean;
 	ollamaHost: string;
 	ollamaModels: string[];
+	ollamaContextWindows: Record<string, number>;
 	lmStudioHost: string;
 	lmStudioModels: string[];
 	emptyChatAvatar: string;
@@ -207,6 +208,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	defaultAgentMode: false,
 	ollamaHost: "http://localhost:11434",
 	ollamaModels: [],
+	ollamaContextWindows: {},
 	lmStudioHost: "http://localhost:1234",
 	lmStudioModels: [],
 	emptyChatAvatar: "llm-gal",
@@ -1071,7 +1073,10 @@ export default class LLMPlugin extends Plugin {
 
 	private registerOllamaModels() {
 		if (this.settings.ollamaModels.length > 0) {
-			const built = buildOllamaModels(this.settings.ollamaModels);
+			const built = buildOllamaModels(
+				this.settings.ollamaModels,
+				this.settings.ollamaContextWindows ?? {}
+			);
 			Object.assign(models, built.models);
 			Object.assign(modelNames, built.names);
 		}

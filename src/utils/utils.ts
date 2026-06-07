@@ -110,6 +110,37 @@ export async function messageGPT4AllServer(params: ChatParams, url: string) {
 	return response.choices[0].message;
 }
 
+export async function fetchOllamaContextWindows(
+	host: string,
+	modelNames: string[]
+): Promise<Record<string, number>> {
+	const result: Record<string, number> = {};
+	for (const name of modelNames) {
+		try {
+			const response = await requestUrl({
+				url: `${host}/api/show`,
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ name }),
+			}).then((res) => res.json);
+			const fromInfo = response?.model_info?.["llm.context_length"];
+			const fromParams = response?.parameters
+				? parseInt(
+					(response.parameters as string)
+						.split("\n")
+						.find((l: string) => l.startsWith("num_ctx"))
+						?.split(/\s+/)[1] ?? ""
+				)
+				: NaN;
+			const ctx = fromInfo ?? (isNaN(fromParams) ? undefined : fromParams);
+			if (ctx && ctx > 0) result[name] = ctx;
+		} catch {
+			// silently skip — 8_192 fallback applies in buildOllamaModels
+		}
+	}
+	return result;
+}
+
 export async function fetchOllamaModels(host: string): Promise<string[]> {
 	const request = {
 		url: `${host}/api/tags`,

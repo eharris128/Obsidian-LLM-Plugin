@@ -10,7 +10,7 @@ import {
 	TFile,
 } from "obsidian";
 import { FeatureSettings } from "Types/types";
-import { changeDefaultModel, fetchOllamaModels, fetchLMStudioModels, getGpt4AllPath } from "utils/utils";
+import { changeDefaultModel, fetchOllamaModels, fetchOllamaContextWindows, fetchLMStudioModels, getGpt4AllPath } from "utils/utils";
 import { buildOllamaModels, buildLMStudioModels, modelNames, models } from "utils/models";
 import { GPT4All, ollama, lmStudio } from "utils/constants";
 import { FAB } from "Plugin/FAB/FAB";
@@ -917,8 +917,13 @@ export class LLMSettingsModal extends Modal {
 						const foundModels = await fetchOllamaModels(
 							this.plugin.settings.ollamaHost
 						);
+						const ctxWindows = await fetchOllamaContextWindows(
+							this.plugin.settings.ollamaHost,
+							foundModels
+						);
 						this.plugin.settings.ollamaModels = foundModels;
-						const built = buildOllamaModels(foundModels);
+						this.plugin.settings.ollamaContextWindows = ctxWindows;
+						const built = buildOllamaModels(foundModels, ctxWindows);
 						Object.assign(models, built.models);
 						Object.assign(modelNames, built.names);
 						await this.plugin.saveSettings();

@@ -7,54 +7,63 @@ export const openAIModels: Record<string, Model> = {
 		type: "openAI",
 		endpoint: chat,
 		url: "/chat/completions",
+		contextWindow: 16_385,
 	},
 	"GPT-4o": {
 		model: "gpt-4o",
 		type: "openAI",
 		endpoint: chat,
 		url: "/chat/completions",
+		contextWindow: 128_000,
 	},
 	"GPT-4o-mini": {
 		model: "gpt-4o-mini",
 		type: "openAI",
 		endpoint: chat,
 		url: "/chat/completions",
+		contextWindow: 128_000,
 	},
 	"GPT-4.1": {
 		model: "gpt-4.1",
 		type: "openAI",
 		endpoint: chat,
 		url: "/chat/completions",
+		contextWindow: 1_047_576,
 	},
 	"GPT-4.1-mini": {
 		model: "gpt-4.1-mini",
 		type: "openAI",
 		endpoint: chat,
 		url: "/chat/completions",
+		contextWindow: 1_047_576,
 	},
 	"GPT-4.1-nano": {
 		model: "gpt-4.1-nano",
 		type: "openAI",
 		endpoint: chat,
 		url: "/chat/completions",
+		contextWindow: 1_047_576,
 	},
 	"o3": {
 		model: "o3",
 		type: "openAI",
 		endpoint: chat,
 		url: "/chat/completions",
+		contextWindow: 200_000,
 	},
 	"o3-mini": {
 		model: "o3-mini",
 		type: "openAI",
 		endpoint: chat,
 		url: "/chat/completions",
+		contextWindow: 200_000,
 	},
 	"o4-mini": {
 		model: "o4-mini",
 		type: "openAI",
 		endpoint: chat,
 		url: "/chat/completions",
+		contextWindow: 200_000,
 	},
 }
 
@@ -65,78 +74,91 @@ export const models: Record<string, Model> = {
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	"Mistral OpenOrca": {
 		model: "mistral-7b-openorca.Q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	"Mistral Instruct": {
 		model: "mistral-7b-instruct-v0.1.Q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	"GPT4All Falcon": {
 		model: "gpt4all-falcon-newbpe-q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	"Orca 2 (Medium)": {
 		model: "orca-2-7b.Q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	"Orca 2 (Full)": {
 		model: "orca-2-13b.Q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	"Mini Orca (Small)": {
 		model: "orca-mini-3b-gguf2-q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	"MPT Chat": {
 		model: "mpt-7b-chat-newbpe-q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	"Wizard v1.2": {
 		model: "wizardlm-13b-v1.2.Q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	"Hermes 13B": {
 		model: "nous-hermes-llama2-13b.Q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	"Hermes 7B": {
 		model: "Nous-Hermes-2-Mistral-7B-DPO.Q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	Snoozy: {
 		model: "gpt4all-13b-snoozy-q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	"EM German Mistral": {
 		model: "em_german_mistral_v01.Q4_0.gguf",
 		type: GPT4All,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 8_192,
 	},
 	// Claude Models
 	"Claude Sonnet 4.6": {
@@ -144,18 +166,21 @@ export const models: Record<string, Model> = {
 		type: claude,
 		endpoint: messages,
 		url: "/v1/messages",
+		contextWindow: 200_000,
 	},
 	"Claude Opus 4.6": {
 		model: claudeOpus46Model,
 		type: claude,
 		endpoint: messages,
 		url: "/v1/messages",
+		contextWindow: 200_000,
 	},
 	"Claude Haiku 4.5": {
 		model: claudeHaiku45Model,
 		type: claude,
 		endpoint: messages,
 		url: "/v1/messages",
+		contextWindow: 200_000,
 	},
 	// Gemini Models
 	"Gemini-3-Pro-Preview": {
@@ -163,48 +188,56 @@ export const models: Record<string, Model> = {
 		type: gemini,
 		endpoint: "gemini",
 		url: "gemini",
+		contextWindow: 1_048_576,
 	},
 	"Gemini-2.5-Pro": {
 		model: gemini25ProModel,
 		type: gemini,
 		endpoint: "gemini",
 		url: "gemini",
+		contextWindow: 1_048_576,
 	},
 	"Gemini-Flash-Latest": {
 		model: geminiFlashLatestModel,
 		type: gemini,
 		endpoint: "gemini",
 		url: "gemini",
+		contextWindow: 1_048_576,
 	},
 	"Gemini-Flash-Lite-Latest": {
 		model: geminiFlashLiteLatestModel,
 		type: gemini,
 		endpoint: "gemini",
 		url: "gemini",
+		contextWindow: 1_048_576,
 	},
 	"Gemini-2.5-Flash": {
 		model: gemini25FlashModel,
 		type: gemini,
 		endpoint: "gemini",
 		url: "gemini",
+		contextWindow: 1_048_576,
 	},
 	"Gemini-2.5-Flash-Lite": {
 		model: gemini25FlashLiteModel,
 		type: gemini,
 		endpoint: "gemini",
 		url: "gemini",
+		contextWindow: 1_048_576,
 	},
 	"Gemini-2.0-Flash": {
 		model: gemini2FlashStableModel,
 		type: gemini,
 		endpoint: "gemini",
 		url: "gemini",
+		contextWindow: 1_048_576,
 	},
 	"Gemini-2.0-Flash-Lite": {
 		model: gemini2FlashLiteModel,
 		type: gemini,
 		endpoint: "gemini",
 		url: "gemini",
+		contextWindow: 1_048_576,
 	},
 	// Claude Code (Agent SDK)
 	"Claude Code": {
@@ -212,6 +245,7 @@ export const models: Record<string, Model> = {
 		type: claudeCode,
 		endpoint: claudeCodeEndpoint,
 		url: "",
+		contextWindow: 200_000,
 	},
 	"GPT Image 1": {
 		model: "gpt-image-1",
@@ -225,48 +259,56 @@ export const models: Record<string, Model> = {
 		type: mistral,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 131_072,
 	},
 	"Mistral Medium": {
 		model: "mistral-medium-latest",
 		type: mistral,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 131_072,
 	},
 	"Mistral Small": {
 		model: "mistral-small-latest",
 		type: mistral,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 131_072,
 	},
 	"Mistral Nemo": {
 		model: "mistral-nemo-12b-24-07",
 		type: mistral,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 131_072,
 	},
 	"Magistral Medium": {
 		model: "magistral-medium-latest",
 		type: mistral,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 131_072,
 	},
 	"Magistral Small": {
 		model: "magistral-small-latest",
 		type: mistral,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 131_072,
 	},
 	"Devstral Small": {
 		model: "devstral-small-latest",
 		type: mistral,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 131_072,
 	},
 	"Codestral": {
 		model: "codestral-latest",
 		type: mistral,
 		endpoint: chat,
 		url: "/v1/chat/completions",
+		contextWindow: 131_072,
 	},
 };
 
@@ -322,7 +364,10 @@ export const openAIModelIds: Set<string> = new Set(
 	Object.values(openAIModels).map((m) => m.model)
 );
 
-export function buildOllamaModels(ollamaModelNames: string[]): { models: Record<string, Model>, names: Record<string, string> } {
+export function buildOllamaModels(
+	ollamaModelNames: string[],
+	contextWindows: Record<string, number> = {}
+): { models: Record<string, Model>, names: Record<string, string> } {
 	const ollamaModels: Record<string, Model> = {};
 	const ollamaNames: Record<string, string> = {};
 	for (const name of ollamaModelNames) {
@@ -332,6 +377,7 @@ export function buildOllamaModels(ollamaModelNames: string[]): { models: Record<
 			type: ollama,
 			endpoint: chat,
 			url: "/v1/chat/completions",
+			contextWindow: contextWindows[name] ?? 8_192,
 		};
 		ollamaNames[name] = displayName;
 	}

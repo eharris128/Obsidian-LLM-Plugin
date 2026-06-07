@@ -85,6 +85,7 @@ export type Model = {
 	type: string;
 	endpoint: string;
 	url: string;
+	contextWindow?: number; // model's input context limit in tokens
 };
 
 export type ViewType = "modal" | "widget" | "floating-action-button";

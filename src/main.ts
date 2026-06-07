@@ -26,7 +26,7 @@ import { MemoryService } from "Memory/MemoryService";
 import { SkillRegistry } from "Skills/SkillRegistry";
 import { VaultIndexer } from "RAG/VaultIndexer";
 import { VectorStore } from "RAG/VectorStore";
-import { EmbeddingService, DEFAULT_EMBEDDING_MODELS } from "RAG/EmbeddingService";
+import { EmbeddingService } from "RAG/EmbeddingService";
 
 import { History } from "History/HistoryHandler";
 import { ChatHistory } from "services/ChatHistory";
@@ -215,12 +215,11 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	showStatusBarButton: false,
 	ragSettings: {
 		enabled: false,
-		embeddingProvider: "openai",
-		embeddingModel: DEFAULT_EMBEDDING_MODELS["openai"],
 		excludedFolders: [],
 		topK: 5,
 		lastIndexed: null,
 		indexedFileCount: 0,
+		modelCached: false,
 	},
 	skillsSettings: {
 		enabledSkills: {},
@@ -361,6 +360,9 @@ export default class LLMPlugin extends Plugin {
 		}
 
 		this.initVaultIndexer();
+		if (this.settings.ragSettings?.enabled && this.settings.ragSettings?.modelCached) {
+			EmbeddingService.getInstance().load().catch(e => console.error("[RAG] Failed to warm up model:", e));
+		}
 		this.initMemoryService();
 		this.initWhisperService();
 		this.initSearxngService();
@@ -678,14 +680,7 @@ export default class LLMPlugin extends Plugin {
 			this.vaultIndexer = null;
 			return;
 		}
-		const embeddingService = new EmbeddingService({
-			provider: rag.embeddingProvider,
-			model: rag.embeddingModel,
-			openAIKey: this.settings.openAIAPIKey,
-			geminiKey: this.settings.geminiAPIKey,
-			ollamaHost: this.settings.ollamaHost,
-			lmStudioHost: this.settings.lmStudioHost,
-		});
+		const embeddingService = EmbeddingService.getInstance();
 		const indexPath = `${this.manifest.dir}/rag-index.json`;
 		const store = new VectorStore(this.app, indexPath);
 		this.vaultIndexer = new VaultIndexer(this.app, store, embeddingService);
@@ -882,15 +877,8 @@ export default class LLMPlugin extends Plugin {
 			this.memoryService = null;
 			return;
 		}
-		// MemoryService reuses the RAG embedding provider already configured
-		const embeddingService = new EmbeddingService({
-			provider: rag.embeddingProvider,
-			model: rag.embeddingModel,
-			openAIKey: this.settings.openAIAPIKey,
-			geminiKey: this.settings.geminiAPIKey,
-			ollamaHost: this.settings.ollamaHost,
-			lmStudioHost: this.settings.lmStudioHost,
-		});
+		// MemoryService reuses the singleton ONNX embedding service
+		const embeddingService = EmbeddingService.getInstance();
 		this.memoryService = new MemoryService(
 			this.app,
 			embeddingService,

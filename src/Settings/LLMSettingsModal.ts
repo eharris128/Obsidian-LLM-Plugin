@@ -15,7 +15,7 @@ import { buildOllamaModels, buildLMStudioModels, modelNames, models } from "util
 import { GPT4All, ollama, lmStudio } from "utils/constants";
 import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
-import { DEFAULT_EMBEDDING_MODELS, EmbeddingProvider, OllamaModelNotFoundError } from "RAG/EmbeddingService";
+import { EmbeddingService } from "RAG/EmbeddingService";
 import { ALL_TOOL_DEFINITIONS } from "services/ObsidianToolRegistry";
 
 type APIKeyType = "claude" | "gemini" | "openai" | "mistral";
@@ -1272,41 +1272,44 @@ export class LLMSettingsModal extends Modal {
 		// Embedding configuration
 		const embeddingItems = this.addSettingGroup(el);
 
-		new Setting(embeddingItems)
-			.setName("Embedding provider")
-			.setDesc("Which provider to use for generating embeddings. Uses the API key you've already configured.")
-			.addDropdown((dropdown: DropdownComponent) => {
-				dropdown.addOption("openai", "OpenAI");
-				dropdown.addOption("gemini", "Gemini");
-				dropdown.addOption("ollama", "Ollama (local)");
-				dropdown.addOption("lmStudio", "LM Studio (local)");
-				dropdown.setValue(this.plugin.settings.ragSettings.embeddingProvider);
-				dropdown.onChange(async (value) => {
-					const provider = value as EmbeddingProvider;
-					this.plugin.settings.ragSettings.embeddingProvider = provider;
-					this.plugin.settings.ragSettings.embeddingModel = DEFAULT_EMBEDDING_MODELS[provider];
-					await this.plugin.saveSettings();
-					this.plugin.initVaultIndexer();
-					// Re-render to update the model field placeholder
-					this.renderTab("embeddings");
-				});
-			});
-
-		new Setting(embeddingItems)
+		const embeddingService = EmbeddingService.getInstance();
+		const modelStatusSetting = new Setting(embeddingItems)
 			.setName("Embedding model")
 			.setDesc(
-				`Model used to generate embeddings. Default: ${DEFAULT_EMBEDDING_MODELS[this.plugin.settings.ragSettings.embeddingProvider]}`
-			)
-			.addText((text) => {
-				text.setPlaceholder(DEFAULT_EMBEDDING_MODELS[this.plugin.settings.ragSettings.embeddingProvider]);
-				text.setValue(this.plugin.settings.ragSettings.embeddingModel);
-				text.onChange(async (value) => {
-					this.plugin.settings.ragSettings.embeddingModel = value.trim() ||
-						DEFAULT_EMBEDDING_MODELS[this.plugin.settings.ragSettings.embeddingProvider];
+				embeddingService.isLoaded()
+					? "Model ready (Xenova/nomic-embed-text-v1.5, runs in-process)"
+					: this.plugin.settings.ragSettings.modelCached
+						? "Model cached — will load on next use"
+						: "Not downloaded"
+			);
+
+		modelStatusSetting.addButton((button) => {
+			const cached = this.plugin.settings.ragSettings.modelCached;
+			const loaded = embeddingService.isLoaded();
+			button.setButtonText(loaded ? "Loaded" : cached ? "Load now" : "Download & load");
+			if (loaded) button.setDisabled(true);
+			button.onClick(async () => {
+				button.setButtonText("Downloading…");
+				button.setDisabled(true);
+				modelStatusSetting.setDesc("Downloading model…");
+				try {
+					await embeddingService.load((progress) => {
+						modelStatusSetting.setDesc(`Downloading… ${Math.round(progress)}%`);
+					});
+					this.plugin.settings.ragSettings.modelCached = true;
 					await this.plugin.saveSettings();
 					this.plugin.initVaultIndexer();
-				});
+					modelStatusSetting.setDesc("Model ready (Xenova/nomic-embed-text-v1.5, runs in-process)");
+					button.setButtonText("Loaded");
+					new Notice("✓ Embedding model loaded successfully.");
+				} catch (e: any) {
+					new Notice(`Failed to load embedding model: ${e?.message ?? String(e)}`);
+					modelStatusSetting.setDesc("Download failed — check console for details.");
+					button.setButtonText(cached ? "Retry" : "Download & load");
+					button.setDisabled(false);
+				}
 			});
+		});
 
 		new Setting(embeddingItems)
 			.setName("Results per query")
@@ -1374,18 +1377,8 @@ export class LLMSettingsModal extends Modal {
 						new Notice(`✓ Vault indexed — ${indexed} updated, ${skipped} unchanged.`);
 						this.renderTab("embeddings");
 					} catch (e: any) {
-						if (e instanceof OllamaModelNotFoundError) {
-							new Notice(
-								`Ollama model "${e.model}" isn't pulled yet.\n\nRun this in your terminal:\n  ollama pull ${e.model}`,
-								10000
-							);
-							indexSetting.setDesc(
-								`Model not found. Run: ollama pull ${e.model}`
-							);
-						} else {
-							new Notice(`Indexing failed: ${e?.message ?? String(e)}`);
-							indexSetting.setDesc(lastIndexedText);
-						}
+						new Notice(`Indexing failed: ${e?.message ?? String(e)}`);
+						indexSetting.setDesc(lastIndexedText);
 						button.setButtonText("Index now");
 						button.setDisabled(false);
 					}

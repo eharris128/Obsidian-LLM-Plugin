@@ -1,181 +1,52 @@
-import OpenAI from "openai";
-import { GoogleGenAI } from "@google/genai";
+import { pipeline, FeatureExtractionPipeline } from "@huggingface/transformers";
 
-export type EmbeddingProvider = "openai" | "gemini" | "ollama" | "lmStudio";
-
-export interface EmbeddingConfig {
-	provider: EmbeddingProvider;
-	model: string;
-	/** OpenAI API key (used when provider === "openai") */
-	openAIKey?: string;
-	/** Gemini API key (used when provider === "gemini") */
-	geminiKey?: string;
-	/** Ollama host URL, e.g. "http://localhost:11434" (used when provider === "ollama") */
-	ollamaHost?: string;
-	/** LM Studio host URL, e.g. "http://localhost:1234" (used when provider === "lmStudio") */
-	lmStudioHost?: string;
-}
-
-export const DEFAULT_EMBEDDING_MODELS: Record<EmbeddingProvider, string> = {
-	openai: "text-embedding-3-small",
-	gemini: "text-embedding-004",
-	ollama: "nomic-embed-text",
-	lmStudio: "nomic-embed-text",
-};
+export type EmbeddingVector = number[];
 
 export class EmbeddingService {
-	constructor(private config: EmbeddingConfig) {}
+	private static instance: EmbeddingService | null = null;
+	private pipe: FeatureExtractionPipeline | null = null;
+	private readonly modelId = "Xenova/nomic-embed-text-v1.5";
+	private loadPromise: Promise<void> | null = null;
 
-	async embed(text: string): Promise<number[]> {
-		const { provider, model } = this.config;
-
-		switch (provider) {
-			case "openai":
-				return this.embedOpenAI(text, model);
-			case "gemini":
-				return this.embedGemini(text, model);
-			case "ollama":
-				return this.embedOllama(text, model);
-			case "lmStudio":
-				return this.embedLMStudio(text, model);
-			default:
-				throw new Error(`[RAG] Unknown embedding provider: ${provider}`);
+	static getInstance(): EmbeddingService {
+		if (!EmbeddingService.instance) {
+			EmbeddingService.instance = new EmbeddingService();
 		}
+		return EmbeddingService.instance;
 	}
 
-	/** Embed a batch of texts, returning vectors in the same order. */
-	async embedBatch(texts: string[]): Promise<number[][]> {
-		// OpenAI supports true batching; others fall back to sequential
-		if (this.config.provider === "openai") {
-			return this.embedBatchOpenAI(texts, this.config.model);
-		}
-		const results: number[][] = [];
-		for (const text of texts) {
-			results.push(await this.embed(text));
-		}
-		return results;
+	async load(onProgress?: (progress: number) => void): Promise<void> {
+		if (this.pipe) return;
+		if (this.loadPromise) return this.loadPromise;
+		this.loadPromise = (async () => {
+			this.pipe = await pipeline("feature-extraction", this.modelId, {
+				dtype: "q8" as any,
+				progress_callback: onProgress
+					? (p: any) => onProgress(p.progress ?? 0)
+					: undefined,
+			}) as FeatureExtractionPipeline;
+		})();
+		return this.loadPromise;
 	}
 
-	// ── OpenAI ───────────────────────────────────────────────────────────────
-
-	private async embedOpenAI(text: string, model: string): Promise<number[]> {
-		const [result] = await this.embedBatchOpenAI([text], model);
-		return result;
+	isLoaded(): boolean {
+		return this.pipe !== null;
 	}
 
-	private async embedBatchOpenAI(texts: string[], model: string): Promise<number[][]> {
-		const key = this.config.openAIKey;
-		if (!key) throw new Error("[RAG] OpenAI API key not set");
-		const client = new OpenAI({ apiKey: key, dangerouslyAllowBrowser: true });
-		const response = await client.embeddings.create({ model, input: texts });
-		// Response data is sorted by index
-		return response.data
-			.sort((a, b) => a.index - b.index)
-			.map(item => item.embedding);
+	async embed(text: string): Promise<EmbeddingVector> {
+		return (await this.embedBatch([text]))[0];
 	}
 
-	// ── Gemini ───────────────────────────────────────────────────────────────
-
-	private async embedGemini(text: string, model: string): Promise<number[]> {
-		const key = this.config.geminiKey;
-		if (!key) throw new Error("[RAG] Gemini API key not set");
-		const client = new GoogleGenAI({ apiKey: key });
-		const response = await client.models.embedContent({
-			model,
-			contents: text,
-		});
-		const values = response.embeddings?.[0]?.values;
-		if (!values) throw new Error("[RAG] Gemini returned no embedding");
-		return values;
-	}
-
-	// ── Ollama ───────────────────────────────────────────────────────────────
-
-	private async embedOllama(text: string, model: string): Promise<number[]> {
-		const host = this.config.ollamaHost ?? "http://localhost:11434";
-		// Ollama supports the OpenAI-compatible /v1/embeddings endpoint
-		const client = new OpenAI({
-			apiKey: "ollama",
-			baseURL: `${host}/v1`,
-			dangerouslyAllowBrowser: true,
-		});
-		try {
-			const response = await client.embeddings.create({ model, input: text });
-			const embedding = response.data[0]?.embedding;
-			if (!embedding) throw new Error("[RAG] Ollama returned no embedding");
-			return embedding;
-		} catch (e: any) {
-			// Ollama returns a 404 with "model not found" when the model isn't pulled.
-			// Surface a clear, actionable message rather than a raw API error.
-			const msg: string = e?.message ?? String(e);
-			if (msg.includes("404") || msg.toLowerCase().includes("model") && msg.toLowerCase().includes("not found")) {
-				throw new OllamaModelNotFoundError(model, host);
-			}
-			throw e;
-		}
-	}
-
-	// ── LM Studio ────────────────────────────────────────────────────────────
-
-	private async embedLMStudio(text: string, model: string): Promise<number[]> {
-		const host = this.config.lmStudioHost ?? "http://localhost:1234";
-		// LM Studio exposes an OpenAI-compatible /v1/embeddings endpoint.
-		// We must explicitly request encoding_format "float" here: the OpenAI SDK
-		// defaults to "base64" for performance, but GGUF-backed embedding models in
-		// LM Studio return all-zero vectors when base64 is requested (known LM Studio
-		// bug — see lmstudio-ai/lmstudio-bug-tracker#1647). Float format is safe
-		// across all LM Studio model types.
-		const client = new OpenAI({
-			apiKey: "lm-studio",
-			baseURL: `${host}/v1`,
-			dangerouslyAllowBrowser: true,
-		});
-		const response = await client.embeddings.create({
-			model,
-			input: text,
-			encoding_format: "float",
-		});
-		const embedding = response.data[0]?.embedding;
-		if (!embedding || embedding.length === 0) {
-			throw new Error("[RAG] LM Studio returned no embedding — ensure an embedding model is loaded in LM Studio");
-		}
-		return embedding;
-	}
-
-	/**
-	 * Check whether the configured Ollama model is available without running an
-	 * embedding. Resolves to `true` if available, `false` if Ollama is unreachable,
-	 * throws `OllamaModelNotFoundError` if Ollama is up but the model isn't pulled.
-	 */
-	async checkOllamaModel(): Promise<boolean> {
-		if (this.config.provider !== "ollama") return true;
-		const host = this.config.ollamaHost ?? "http://localhost:11434";
-		const model = this.config.model;
-		try {
-			// Hit the Ollama /api/tags endpoint to list pulled models
-			const res = await fetch(`${host}/api/tags`);
-			if (!res.ok) return false; // Ollama unreachable / non-200
-			const data = await res.json() as { models?: Array<{ name: string }> };
-			const pulled = (data.models ?? []).map(m => m.name.split(":")[0]);
-			const modelBase = model.split(":")[0];
-			if (!pulled.includes(modelBase)) {
-				throw new OllamaModelNotFoundError(model, host);
-			}
-			return true;
-		} catch (e) {
-			if (e instanceof OllamaModelNotFoundError) throw e;
-			return false; // Ollama not running — fail gracefully
-		}
-	}
-}
-
-/** Thrown when the configured Ollama embedding model hasn't been pulled yet. */
-export class OllamaModelNotFoundError extends Error {
-	constructor(public readonly model: string, public readonly host: string) {
-		super(
-			`[RAG] Ollama model "${model}" is not available at ${host}. ` +
-			`Pull it first by running: ollama pull ${model}`
+	async embedBatch(texts: string[]): Promise<EmbeddingVector[]> {
+		if (!this.pipe) throw new Error("[RAG] EmbeddingService not loaded — call load() first");
+		const output = await this.pipe(texts, { pooling: "mean", normalize: true });
+		return Array.from({ length: texts.length }, (_, i) =>
+			Array.from((output as any)[i].data as Float32Array)
 		);
-		this.name = "OllamaModelNotFoundError";
+	}
+
+	async checkOllamaModel(): Promise<boolean> {
+		// No-op: ONNX runs in-process, no server check needed
+		return true;
 	}
 }

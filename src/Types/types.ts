@@ -1,5 +1,4 @@
 import { assistant } from "utils/constants";
-import { EmbeddingProvider } from "RAG/EmbeddingService";
 
 export type ContextSettings = {
 	includeActiveFile: boolean;
@@ -292,10 +291,6 @@ export type ToolSettings = {
 export type RAGSettings = {
 	/** Whether RAG / vault semantic search is enabled at all. */
 	enabled: boolean;
-	/** Which provider to use for generating embeddings. */
-	embeddingProvider: EmbeddingProvider;
-	/** Model name for the chosen provider (e.g. "text-embedding-3-small"). */
-	embeddingModel: string;
 	/** Vault-root-relative folder paths to skip during indexing (e.g. "Templates"). */
 	excludedFolders: string[];
 	/** How many chunks to retrieve per query. */
@@ -304,6 +299,8 @@ export type RAGSettings = {
 	lastIndexed: number | null;
 	/** Number of files in the current index. */
 	indexedFileCount: number;
+	/** Whether the ONNX embedding model has been cached locally. */
+	modelCached: boolean;
 };
 
 export type SearxngSettings = {

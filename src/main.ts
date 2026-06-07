@@ -993,6 +993,9 @@ export default class LLMPlugin extends Plugin {
 		}
 		this.ragDebounceTimers.clear();
 
+		// Kill the ONNX worker child process if running.
+		EmbeddingService.unload();
+
 		this.fab.removeFab();
 		this.statusBarButton.remove();
 		this.recentChatsButton.remove();

@@ -72,6 +72,12 @@ export class VaultIndexer {
 		await this.store.save();
 	}
 
+	/** Clear all indexed entries and persist the empty index to disk. */
+	async clearIndex(): Promise<void> {
+		this.store.clear();
+		await this.store.save();
+	}
+
 	/** Remove a file from the index and persist. */
 	async removeFile(filePath: string): Promise<void> {
 		this.store.remove(filePath);
@@ -150,9 +156,9 @@ export function chunkMarkdown(content: string, filePath: string): string[] {
 	let currentHeading = "";
 	let buffer = "";
 
-	const flush = () => {
+	const flush = (forceIfNonEmpty = false) => {
 		const trimmed = buffer.trim();
-		if (trimmed.length >= MIN_CHUNK_CHARS) {
+		if (trimmed.length > 0 && (trimmed.length >= MIN_CHUNK_CHARS || forceIfNonEmpty)) {
 			const prefix = `[${filePath}${currentHeading ? ` > ${currentHeading}` : ""}]\n`;
 			chunks.push(prefix + trimmed);
 		}
@@ -182,8 +188,8 @@ export function chunkMarkdown(content: string, filePath: string): string[] {
 		}
 	}
 
-	// Flush remaining content
-	flush();
+	// Flush remaining content — force-keep if this is the only content in the file
+	flush(chunks.length === 0);
 
 	return chunks;
 }

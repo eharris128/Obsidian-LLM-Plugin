@@ -85,6 +85,13 @@ export class VectorStore {
 		}
 	}
 
+	/** Wipe all entries (e.g. after switching embedding provider/model). */
+	clear(): void {
+		this.entries.clear();
+		this.dirty = true;
+		this.loaded = true;
+	}
+
 	/** Returns the stored mtime for a file, or -1 if not indexed. */
 	getMtime(filePath: string): number {
 		return this.entries.get(filePath)?.mtime ?? -1;

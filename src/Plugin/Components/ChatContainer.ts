@@ -1892,6 +1892,14 @@ export class ChatContainer extends Component {
 					for (const p of paths) {
 						if (!this.pendingRagSources.includes(p)) this.pendingRagSources.push(p);
 					}
+				} else if (toolName === "grep_vault") {
+					// Extract [[WikiLink]] paths from grep results — format: [[path/without/ext]] (line N):
+					const wikiRegex = /\[\[([^\]]+)\]\]/g;
+					let m: RegExpExecArray | null;
+					while ((m = wikiRegex.exec(result)) !== null) {
+						const p = m[1] + ".md";
+						if (!this.pendingRagSources.includes(p)) this.pendingRagSources.push(p);
+					}
 				} else if (toolName === "web_search") {
 					// Parse **N. [Title](URL)** links from the formatted result block
 					const linkRegex = /\*\*\d+\.\s+\[([^\]]+)\]\((https?:\/\/[^)]+)\)\*\*/g;

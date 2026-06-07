@@ -1291,6 +1291,18 @@ export class LLMSettingsModal extends Modal {
 					this.plugin.settings.ragSettings.embeddingModel = DEFAULT_EMBEDDING_MODELS[value as EmbeddingProvider];
 					await this.plugin.saveSettings();
 					this.plugin.initVaultIndexer();
+					if (this.plugin.vaultIndexer) {
+						await this.plugin.vaultIndexer.clearIndex();
+						new Notice("Embedding provider changed — re-indexing vault…");
+						this.plugin.vaultIndexer.indexVault(this.plugin.settings.ragSettings.excludedFolders)
+							.then(async ({ indexed, skipped }) => {
+								this.plugin.settings.ragSettings.lastIndexed = Date.now();
+								this.plugin.settings.ragSettings.indexedFileCount = this.plugin.vaultIndexer!.indexedFileCount;
+								await this.plugin.saveSettings();
+								new Notice(`✓ Vault indexed — ${indexed} updated, ${skipped} unchanged.`);
+							})
+							.catch((e: any) => new Notice(`Indexing failed: ${e?.message ?? String(e)}`));
+					}
 					// Re-render so provider-specific UI appears
 					this.renderTab("embeddings");
 				});
@@ -1305,7 +1317,7 @@ export class LLMSettingsModal extends Modal {
 				.setName("Model status")
 				.setDesc(
 					loaded
-						? "Model ready — Xenova/nomic-embed-text-v1.5 (runs in-process)"
+						? "Model ready — Xenova/all-mpnet-base-v2 (runs in-process)"
 						: cached
 							? "Model cached — will load on next use"
 							: "Model not downloaded (~90 MB on first use)"
@@ -1325,7 +1337,7 @@ export class LLMSettingsModal extends Modal {
 						this.plugin.settings.ragSettings.modelCached = true;
 						await this.plugin.saveSettings();
 						this.plugin.initVaultIndexer();
-						modelStatusSetting.setDesc("Model ready — Xenova/nomic-embed-text-v1.5 (runs in-process)");
+						modelStatusSetting.setDesc("Model ready — Xenova/all-mpnet-base-v2 (runs in-process)");
 						button.setButtonText("Loaded");
 						button.setDisabled(true);
 						new Notice("✓ Embedding model loaded successfully.");
@@ -1356,6 +1368,18 @@ export class LLMSettingsModal extends Modal {
 						this.plugin.settings.ragSettings.embeddingModel = value || DEFAULT_EMBEDDING_MODELS[currentProvider];
 						await this.plugin.saveSettings();
 						this.plugin.initVaultIndexer();
+						if (this.plugin.vaultIndexer) {
+							await this.plugin.vaultIndexer.clearIndex();
+							new Notice("Embedding model changed — re-indexing vault…");
+							this.plugin.vaultIndexer.indexVault(this.plugin.settings.ragSettings.excludedFolders)
+								.then(async ({ indexed, skipped }) => {
+									this.plugin.settings.ragSettings.lastIndexed = Date.now();
+									this.plugin.settings.ragSettings.indexedFileCount = this.plugin.vaultIndexer!.indexedFileCount;
+									await this.plugin.saveSettings();
+									new Notice(`✓ Vault indexed — ${indexed} updated, ${skipped} unchanged.`);
+								})
+								.catch((e: any) => new Notice(`Indexing failed: ${e?.message ?? String(e)}`));
+						}
 					});
 				});
 		}

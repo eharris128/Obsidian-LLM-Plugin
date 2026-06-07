@@ -89,7 +89,8 @@ export class ObsidianAgent {
 			"2. **`search_vault_semantic`** — conceptual/thematic matches. Use `limit: '10'` for thorough searches. " +
 			"Semantic search can return false positives when the query contains common words like 'empty' (it may return literally-empty files), " +
 			"so always cross-check with grep results.\n\n" +
-			"Never rely on only one tool — grep misses paraphrases, semantic search misses exact terms."
+			"Never rely on only one tool — grep misses paraphrases, semantic search misses exact terms.\n\n" +
+			"`grep_vault` and `search_vault_semantic` search **local vault notes only** — they have no access to the internet. Never use them to follow up on a web search result or fetch online information. For anything internet-facing, use `web_search`."
 		);
 
 		// ── Write-tool guidance ───────────────────────────────────────────────
@@ -102,6 +103,17 @@ export class ObsidianAgent {
 			"## Vault Write Tools\n\n" +
 			"If the user asks you to create, add to, or modify a note: read it first if it exists, then make the change immediately using the appropriate tool. Do not stop to summarise or ask for confirmation — complete the action.\n\n" +
 			"If the user did not ask for a write action but you think creating a note would be useful, offer it rather than writing automatically."
+		);
+
+		// ── Learning loop ─────────────────────────────────────────────────────
+		const guidancePathForInstruction = settings.agentGuidanceFile?.trim();
+		const agentGuidancePath = guidancePathForInstruction
+			? `\`${guidancePathForInstruction}\``
+			: "the agent guidance file (not yet configured — ask the user to set one in plugin settings)";
+		parts.push(
+			"## Learning Loop\n\n" +
+			`If the user expresses a persistent behavioral preference — using phrases like "remember that", "always", "never", "from now on", or "I prefer" — update the agent guidance file at ${agentGuidancePath} to record the new preference, then confirm the update. If no guidance file is configured, tell the user to set one in plugin settings.\n\n` +
+			"Do not update the guidance file for one-off requests or task-specific instructions. Only write preferences that should apply to all future conversations."
 		);
 
 		// ── Agent guidance file ───────────────────────────────────────────────

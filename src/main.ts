@@ -1,4 +1,4 @@
-import { Plugin, WorkspaceLeaf, Platform, addIcon, Notice } from "obsidian";
+import { Plugin, WorkspaceLeaf, Platform, addIcon, Notice, normalizePath, TFile } from "obsidian";
 import { logger } from "./utils/logger";
 import {
 	AssistantSettings,
@@ -615,7 +615,7 @@ export default class LLMPlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("modify", (file) => {
 				if (!this.vaultIndexer || !this.settings.ragSettings?.enabled) return;
-				if (!(file as any).extension || (file as any).extension !== "md") return;
+				if (!(file instanceof TFile) || file.extension !== "md") return;
 
 				const path = file.path;
 				const existing = this.ragDebounceTimers.get(path);
@@ -624,7 +624,7 @@ export default class LLMPlugin extends Plugin {
 				const timer = activeWindow.setTimeout(async () => {
 					this.ragDebounceTimers.delete(path);
 					try {
-						await this.vaultIndexer!.indexFile(file as import("obsidian").TFile);
+						await this.vaultIndexer!.indexFile(file);
 						await this.vaultIndexer!.save();
 						this.settings.ragSettings.lastIndexed = Date.now();
 						this.settings.ragSettings.indexedFileCount = this.vaultIndexer!.indexedFileCount;
@@ -642,7 +642,7 @@ export default class LLMPlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("delete", (file) => {
 				if (!this.vaultIndexer || !this.settings.ragSettings?.enabled) return;
-				if ((file as any).extension !== "md") return;
+				if (!(file instanceof TFile) || file.extension !== "md") return;
 
 				// Cancel any pending reindex for this file
 				const timer = this.ragDebounceTimers.get(file.path);
@@ -665,11 +665,11 @@ export default class LLMPlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("rename", (file, oldPath) => {
 				if (!this.vaultIndexer || !this.settings.ragSettings?.enabled) return;
-				if ((file as any).extension !== "md") return;
+				if (!(file instanceof TFile) || file.extension !== "md") return;
 
 				// Remove old path, re-index under new path
 				this.vaultIndexer.removeFile(oldPath).catch(() => {});
-				this.vaultIndexer.indexFile(file as import("obsidian").TFile)
+				this.vaultIndexer.indexFile(file)
 					.then(async () => {
 						await this.vaultIndexer!.save();
 						this.settings.ragSettings.lastIndexed = Date.now();
@@ -710,7 +710,7 @@ export default class LLMPlugin extends Plugin {
 	 */
 	get skillsFolder(): string {
 		return this.settings.rootVaultFolder
-			? this.settings.rootVaultFolder + "/Skills"
+			? normalizePath(this.settings.rootVaultFolder + "/Skills")
 			: "";
 	}
 
@@ -719,7 +719,7 @@ export default class LLMPlugin extends Plugin {
 	 */
 	get memoriesFolder(): string {
 		return this.settings.rootVaultFolder
-			? this.settings.rootVaultFolder + "/Memories"
+			? normalizePath(this.settings.rootVaultFolder + "/Memories")
 			: "";
 	}
 
@@ -728,7 +728,7 @@ export default class LLMPlugin extends Plugin {
 	 */
 	get projectsFolder(): string {
 		return this.settings.rootVaultFolder
-			? this.settings.rootVaultFolder + "/Projects"
+			? normalizePath(this.settings.rootVaultFolder + "/Projects")
 			: "";
 	}
 
@@ -737,7 +737,7 @@ export default class LLMPlugin extends Plugin {
 	 */
 	get assistantsFolder(): string {
 		return this.settings.rootVaultFolder
-			? this.settings.rootVaultFolder + "/Assistants"
+			? normalizePath(this.settings.rootVaultFolder + "/Assistants")
 			: "";
 	}
 

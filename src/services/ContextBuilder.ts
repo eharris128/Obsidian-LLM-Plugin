@@ -1,4 +1,5 @@
 import { App, MarkdownView, TFile } from "obsidian";
+import { logger } from "../utils/logger";
 import { ContextSettings, VaultContext } from "Types/types";
 
 export class ContextBuilder {
@@ -27,7 +28,7 @@ export class ContextBuilder {
 					};
 					hasContext = true;
 				} catch (error) {
-					console.error("Error reading active file:", error);
+					logger.error("Error reading active file:", error);
 				}
 			}
 		}
@@ -59,7 +60,7 @@ export class ContextBuilder {
 						hasContext = true;
 					}
 				} catch (error) {
-					console.error(`Error reading file ${filePath}:`, error);
+					logger.error(`Error reading file ${filePath}:`, error);
 				}
 			}
 		}

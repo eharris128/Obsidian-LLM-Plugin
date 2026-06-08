@@ -1,4 +1,5 @@
 import { Plugin, WorkspaceLeaf, Platform, addIcon, Notice } from "obsidian";
+import { logger } from "./utils/logger";
 import {
 	AssistantSettings,
 	FeatureSettings,
@@ -371,7 +372,7 @@ export default class LLMPlugin extends Plugin {
 		this.initVaultIndexer();
 		if (this.settings.ragSettings?.enabled && this.settings.ragSettings?.modelCached
 				&& (this.settings.ragSettings?.embeddingProvider ?? "onnx") === "onnx") {
-			EmbeddingService.loadOnnx().catch(e => console.error("[RAG] Failed to warm up ONNX model:", e));
+			EmbeddingService.loadOnnx().catch(e => logger.error("[RAG] Failed to warm up ONNX model:", e));
 		}
 		this.initMemoryService();
 		this.initWhisperService();
@@ -628,9 +629,9 @@ export default class LLMPlugin extends Plugin {
 						this.settings.ragSettings.lastIndexed = Date.now();
 						this.settings.ragSettings.indexedFileCount = this.vaultIndexer!.indexedFileCount;
 						await this.saveSettings();
-						console.log("[RAG] Auto-reindexed:", path);
+						logger.log("[RAG] Auto-reindexed:", path);
 					} catch (e) {
-						console.error("[RAG] Auto-reindex failed for", path, e);
+						logger.error("[RAG] Auto-reindex failed for", path, e);
 					}
 				}, DEBOUNCE_MS);
 
@@ -656,7 +657,7 @@ export default class LLMPlugin extends Plugin {
 						await this.saveSettings();
 					})
 					.catch((e) => {
-						console.error("[RAG] Failed to remove deleted file from index:", file.path, e);
+						logger.error("[RAG] Failed to remove deleted file from index:", file.path, e);
 					});
 			})
 		);
@@ -675,7 +676,7 @@ export default class LLMPlugin extends Plugin {
 						this.settings.ragSettings.indexedFileCount = this.vaultIndexer!.indexedFileCount;
 						await this.saveSettings();
 					})
-					.catch((e) => console.error("[RAG] Failed to reindex renamed file:", e));
+					.catch((e) => logger.error("[RAG] Failed to reindex renamed file:", e));
 			})
 		);
 	}

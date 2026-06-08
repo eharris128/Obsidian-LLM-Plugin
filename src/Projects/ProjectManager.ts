@@ -24,6 +24,7 @@
  */
 
 import { App, TFile } from "obsidian";
+import { logger } from "../utils/logger";
 import { Project } from "Types/types";
 
 export class ProjectManager {
@@ -99,10 +100,10 @@ export class ProjectManager {
 			const project = ProjectManager.parseProjectFile(raw, filePath, this.projectsFolder);
 			if (project) {
 				this.projects.set(project.id, project);
-				console.log(`[ProjectManager] Loaded project: ${project.id} (${project.name})`);
+				logger.log(`[ProjectManager] Loaded project: ${project.id} (${project.name})`);
 			}
 		} catch (e) {
-			console.error(`[ProjectManager] Failed to parse ${filePath}:`, e);
+			logger.error(`[ProjectManager] Failed to parse ${filePath}:`, e);
 		}
 	}
 
@@ -176,7 +177,7 @@ created: ${created}
 			await this.loadProjectByPath(filePath);
 			return filePath;
 		} catch (e) {
-			console.error(`[ProjectManager] Failed to create project at ${filePath}:`, e);
+			logger.error(`[ProjectManager] Failed to create project at ${filePath}:`, e);
 			return null;
 		}
 	}
@@ -196,7 +197,7 @@ created: ${created}
 			}
 			this.projects.delete(id);
 		} catch (e) {
-			console.error(`[ProjectManager] Failed to delete project ${id}:`, e);
+			logger.error(`[ProjectManager] Failed to delete project ${id}:`, e);
 		}
 	}
 

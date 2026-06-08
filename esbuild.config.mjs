@@ -48,7 +48,7 @@ const context = await esbuild.context({
 		...builtinModules.map(m => `node:${m}`),
 	],
 	format: "cjs",
-	define: { "import.meta.url": "__import_meta_url" },
+	define: { "import.meta.url": "__import_meta_url", "__DEV__": (!prod).toString() },
 	loader: { ".svg": "text" },
 	target: "es2018",
 	logLevel: "info",

@@ -1,4 +1,5 @@
 import { App, ButtonComponent, Menu, Modal, Notice, TFile, setIcon } from "obsidian";
+import { logger } from "../../utils/logger";
 import LLMPlugin from "main";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 
@@ -159,7 +160,7 @@ export function attachChatRowMenu(
 								);
 								onRefresh();
 							} catch (err) {
-								console.error("[ChatRowMenu] Failed to remove from project:", err);
+								logger.error("[ChatRowMenu] Failed to remove from project:", err);
 								new Notice("Failed to move conversation.");
 							}
 						}
@@ -184,7 +185,7 @@ export function attachChatRowMenu(
 									);
 									onRefresh();
 								} catch (err) {
-									console.error("[ChatRowMenu] Failed to move to project:", err);
+									logger.error("[ChatRowMenu] Failed to move to project:", err);
 									new Notice("Failed to move conversation.");
 								}
 							})
@@ -210,7 +211,7 @@ export function attachChatRowMenu(
 							await plugin.chatHistory.rename(file.path, newTitle);
 							onRefresh();
 						} catch (err) {
-							console.error("[ChatRowMenu] Failed to rename chat:", err);
+							logger.error("[ChatRowMenu] Failed to rename chat:", err);
 							new Notice("Failed to rename conversation.");
 						}
 					}).open();
@@ -229,7 +230,7 @@ export function attachChatRowMenu(
 							await plugin.chatHistory.delete(file.path);
 							onRefresh();
 						} catch (err) {
-							console.error("[ChatRowMenu] Failed to delete chat:", err);
+							logger.error("[ChatRowMenu] Failed to delete chat:", err);
 							new Notice("Failed to delete conversation.");
 						}
 					}).open();

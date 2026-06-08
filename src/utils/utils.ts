@@ -1,4 +1,5 @@
 import LLMPlugin from "main";
+import { logger } from "./logger";
 import { Editor, Platform, requestUrl, RequestUrlParam } from "obsidian";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
@@ -250,7 +251,7 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 		}
 	} catch (error) {
 		if (error.status === 401) {
-			console.error(`Invalid API key for ${providerKeyPair.provider}.`);
+			logger.error(`Invalid API key for ${providerKeyPair.provider}.`);
 			SingletonNotice.show(
 				`Invalid API key for ${upperCaseFirst(
 					providerKeyPair.provider
@@ -331,7 +332,7 @@ function resolveNodePath(): string {
 		} catch { /* ignore */ }
 	}
 
-	console.warn("[Claude Code] Could not find node binary, falling back to 'node'");
+	logger.warn("[Claude Code] Could not find node binary, falling back to 'node'");
 	return "node";
 }
 

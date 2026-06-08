@@ -1,4 +1,5 @@
 import { Notice, TFile, parseYaml } from "obsidian";
+import { logger } from "../utils/logger";
 import LLMPlugin from "main";
 import { ChatHistoryItem, HistoryItem, Message, ToolCallRecord, VaultContext } from "Types/types";
 
@@ -601,7 +602,7 @@ export class ChatHistory {
 				);
 				migrated++;
 			} catch (e) {
-				console.error("[ChatHistory] Failed to migrate item:", e);
+				logger.error("[ChatHistory] Failed to migrate item:", e);
 				skipped++;
 			}
 		}
@@ -628,7 +629,7 @@ export class ChatHistory {
 				const result = await generator();
 				if (result?.trim()) return result.trim();
 			} catch (e) {
-				console.warn("[ChatHistory] Title generation failed, using fallback:", e);
+				logger.warn("[ChatHistory] Title generation failed, using fallback:", e);
 			}
 		}
 

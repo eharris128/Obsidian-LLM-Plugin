@@ -1,4 +1,5 @@
 import LLMPlugin from "main";
+import { logger } from "../../utils/logger";
 import { ButtonComponent, Menu } from "obsidian";
 import { ChatContainer } from "./ChatContainer";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
@@ -274,7 +275,7 @@ export class Header {
 									this.plugin.chatHistory
 										.delete(filePath)
 										.catch((e) =>
-											console.error("[Header] Failed to delete chat file:", e)
+											logger.error("[Header] Failed to delete chat file:", e)
 										);
 									setHistoryFilePath(this.plugin, this.viewType, null);
 								}
@@ -425,7 +426,7 @@ export class Header {
 									this.plugin.chatHistory
 										.delete(historyFilePath)
 										.catch((e) =>
-											console.error("[Header] Failed to delete chat file:", e)
+											logger.error("[Header] Failed to delete chat file:", e)
 										);
 									setHistoryFilePath(this.plugin, this.viewType, null);
 								}

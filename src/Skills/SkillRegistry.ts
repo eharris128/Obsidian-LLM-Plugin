@@ -25,6 +25,7 @@
  */
 
 import { App, TFile } from "obsidian";
+import { logger } from "../utils/logger";
 import { BUILTIN_SKILLS } from "./BuiltinSkills";
 
 export interface ParsedSkill {
@@ -107,7 +108,7 @@ export class SkillRegistry {
 			}
 
 			await adapter.write(skillFile, skill.content);
-			console.log(`[SkillRegistry] Seeded built-in skill: ${skill.id}`);
+			logger.log(`[SkillRegistry] Seeded built-in skill: ${skill.id}`);
 		}
 	}
 
@@ -158,10 +159,10 @@ export class SkillRegistry {
 			const skill = SkillRegistry.parseSkillFile(raw, filePath, this.skillsFolder);
 			if (skill) {
 				this.skills.set(skill.id, skill);
-				console.log(`[SkillRegistry] Loaded skill: ${skill.id} (${skill.name})`);
+				logger.log(`[SkillRegistry] Loaded skill: ${skill.id} (${skill.name})`);
 			}
 		} catch (e) {
-			console.error(`[SkillRegistry] Failed to parse ${filePath}:`, e);
+			logger.error(`[SkillRegistry] Failed to parse ${filePath}:`, e);
 		}
 	}
 

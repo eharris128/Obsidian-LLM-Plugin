@@ -24,7 +24,7 @@ export class ChatModal2 extends Modal {
 		this.plugin.settings.currentIndex = -1;
 		void this.plugin.saveSettings();
 		(this.modalEl.getElementsByClassName("modal-close-button")[0] as HTMLElement | undefined)
-			?.setAttr("style", "display: none");
+			?.addClass("llm-hidden");
 		const { contentEl } = this;
 		const header = new Header(this.plugin, "modal");
 		// Modal always gets a fresh store — each opening starts a new conversation.
@@ -56,9 +56,9 @@ export class ChatModal2 extends Modal {
 		);
 		let history = this.plugin.settings.promptHistory;
 
-		settingsContainerDiv.setAttr("style", "display: none");
+		settingsContainerDiv.hide();
 		settingsContainerDiv.addClass("llm-modal-settings-container", "llm-flex");
-		chatHistoryContainer.setAttr("style", "display: none");
+		chatHistoryContainer.hide();
 		chatHistoryContainer.addClass("llm-modal-chat-history-container", "llm-flex");
 		lineBreak.className = classNames["modal"]["title-border"];
 		chatContainerDiv.addClass("llm-modal-chat-container", "llm-flex");

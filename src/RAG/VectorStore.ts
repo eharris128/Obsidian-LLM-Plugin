@@ -1,4 +1,5 @@
 import { App } from "obsidian";
+import { logger } from "../utils/logger";
 
 export interface VectorChunk {
 	text: string;
@@ -32,7 +33,7 @@ export class VectorStore {
 			const raw = await this.app.vault.adapter.read(this.indexPath);
 			const parsed: IndexFile = JSON.parse(raw);
 			if (parsed.version !== INDEX_VERSION) {
-				console.warn("[RAG] Index version mismatch — rebuilding");
+				logger.warn("[RAG] Index version mismatch — rebuilding");
 				this.entries.clear();
 				this.loaded = true;
 				return;

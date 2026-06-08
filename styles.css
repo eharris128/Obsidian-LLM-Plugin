@@ -1380,8 +1380,10 @@ button.llm-scan-button.is-active:hover {
 	box-shadow: none;
 }
 
-button.llm-scan-button.llm-hidden {
-	display: none;
+/* Generic visibility utility — toggle with el.toggleClass("llm-hidden", …).
+   !important so it overrides a base class's own display (flex/block). */
+.llm-hidden {
+	display: none !important;
 }
 
 /* STATUS BAR BUTTON */

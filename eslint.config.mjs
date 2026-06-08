@@ -23,8 +23,18 @@ export default tseslint.config(
 			"@typescript-eslint/no-require-imports": "off",
 			"@typescript-eslint/no-unused-expressions": "off",
 			"@typescript-eslint/no-wrapper-object-types": "off",
-			"prefer-const": "off",
+			// Re-enabled as warnings (not errors, so `npm run lint` stays green) to
+			// guide gradual cleanup — these mirror the Obsidian best-practice rules
+			// enforced by the sister plugins.
+			"prefer-const": "warn",
+			"eqeqeq": ["warn", "smart"],
+			"no-console": "warn",
 		},
+	},
+	{
+		// The logger module is the one sanctioned place to call console.*.
+		files: ["src/utils/logger.ts"],
+		rules: { "no-console": "off" },
 	},
 	{
 		// Type-aware linting, scoped to the one type-checked rule we care about

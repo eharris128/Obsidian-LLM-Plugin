@@ -1,4 +1,5 @@
 import LLMPlugin from "main";
+import { logger } from "../../utils/logger";
 import {
 	ButtonComponent,
 	Component,
@@ -286,9 +287,9 @@ export class ChatContainer extends Component {
 		sendButton.buttonEl.addClass("llm-stop-mode");
 		sendButton.setDisabled(false);
 		// Always show the stop button regardless of input contents
-		sendButton.buttonEl.style.display = "";
+		sendButton.buttonEl.removeClass("llm-hidden");
 		if (this.micButton) {
-			this.micButton.buttonEl.style.display = "none";
+			this.micButton.buttonEl.addClass("llm-hidden");
 		}
 	}
 
@@ -304,8 +305,8 @@ export class ChatContainer extends Component {
 		sendButton.setDisabled(isEmpty);
 		sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
 		if (this.micButton && this.micState === "idle") {
-			this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
-			sendButton.buttonEl.style.display = isEmpty ? "none" : "";
+			this.micButton.buttonEl.toggleClass("llm-hidden", !isEmpty);
+			sendButton.buttonEl.toggleClass("llm-hidden", isEmpty);
 		}
 	}
 
@@ -497,7 +498,7 @@ export class ChatContainer extends Component {
 		}
 		const params = this.getParams(modelEndpoint, model, modelType);
 		if (params && "tokens" in params) {
-			(params as import("Types/types").ChatParams).tokens = this.resolveEffectiveMaxTokens(0) || undefined;
+			params.tokens = this.resolveEffectiveMaxTokens(0) || undefined;
 		}
 		// Start Claude Code handling
 		if (modelEndpoint === claudeCodeEndpoint) {
@@ -603,7 +604,7 @@ export class ChatContainer extends Component {
 					};
 				}
 			} catch (err) {
-				console.error(err);
+				logger.error(err);
 				return false;
 			}
 
@@ -928,7 +929,7 @@ export class ChatContainer extends Component {
 					this.pendingContextString = contextString;
 				}
 			} catch (error) {
-				console.error("Error building vault context:", error);
+				logger.error("Error building vault context:", error);
 			}
 		}
 
@@ -955,7 +956,7 @@ export class ChatContainer extends Component {
 						(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
 				}
 			} catch (error) {
-				console.error("[RAG] Vault search failed:", error);
+				logger.error("[RAG] Vault search failed:", error);
 				new Notice("Vault search failed — sending without vault context.");
 			}
 		}
@@ -982,7 +983,7 @@ export class ChatContainer extends Component {
 					};
 				}
 			} catch (error) {
-				console.error("Error reading active file for context:", error);
+				logger.error("Error reading active file for context:", error);
 			}
 		}
 
@@ -1064,7 +1065,7 @@ export class ChatContainer extends Component {
 				);
 				this.messageStore.addMessage({ role: assistant, content: response });
 			} catch (e) {
-				console.error("[Memory] /remember save failed:", e);
+				logger.error("[Memory] /remember save failed:", e);
 				new Notice("Failed to save memory — see console for details.");
 			}
 
@@ -1188,7 +1189,7 @@ export class ChatContainer extends Component {
 							(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
 					}
 				} catch (e) {
-					console.error("[Projects] Failed to build pinned notes context:", e);
+					logger.error("[Projects] Failed to build pinned notes context:", e);
 				}
 			}
 
@@ -1218,7 +1219,7 @@ export class ChatContainer extends Component {
 					}
 				}
 			} catch (e) {
-				console.warn("[ChatContainer] Could not read AGENTS.md:", e);
+				logger.warn("[ChatContainer] Could not read AGENTS.md:", e);
 			}
 		}
 		// ── End general instructions ──────────────────────────────────────────────
@@ -1254,7 +1255,7 @@ export class ChatContainer extends Component {
 					this.pushChatDetailsState();
 				}
 			} catch (e) {
-				console.error("[Memory] Recall failed:", e);
+				logger.error("[Memory] Recall failed:", e);
 			}
 		}
 		// ── End memory recall ─────────────────────────────────────────────────────
@@ -1288,7 +1289,7 @@ export class ChatContainer extends Component {
 		await this.renderingPromise;
 		const params = this.getParams(modelEndpoint, model, modelType);
 		if (params && "tokens" in params) {
-			(params as import("Types/types").ChatParams).tokens = effectiveMaxTokens || undefined;
+			params.tokens = effectiveMaxTokens || undefined;
 		}
 		// Snapshot the assistant-message count before generation so we can key
 		// skill usage (and tool calls on the non-agent path) to the right turn.
@@ -1987,7 +1988,7 @@ export class ChatContainer extends Component {
 				vaultContext,
 				historyFilePath
 			).catch((e) =>
-				console.error("[ChatContainer] Failed to save chat file:", e)
+				logger.error("[ChatContainer] Failed to save chat file:", e)
 			);
 			return;
 		}
@@ -2110,7 +2111,7 @@ export class ChatContainer extends Component {
 		if (projectId) {
 			const project = this.plugin.projectManager?.getProject(projectId);
 			if (!project) {
-				console.warn(`[ChatContainer] setActiveProject: project not found: ${projectId}`);
+				logger.warn(`[ChatContainer] setActiveProject: project not found: ${projectId}`);
 				return;
 			}
 			targetFolder = this.plugin.chatHistory.folderForProject(projectId);
@@ -2139,7 +2140,7 @@ export class ChatContainer extends Component {
 						this.currentHistoryFilePath = newPath;
 						setHistoryFilePath(this.plugin, this.viewType, newPath);
 					} catch (e) {
-						console.error("[ChatContainer] Failed to move chat file:", e);
+						logger.error("[ChatContainer] Failed to move chat file:", e);
 					}
 				} else {
 					// File is already in the right folder — just patch the frontmatter field
@@ -2548,11 +2549,11 @@ export class ChatContainer extends Component {
 		const hasProject = !!activeProject;
 
 		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject) {
-			this.chipContainer.style.display = "none";
+			this.chipContainer.addClass("llm-hidden");
 			return;
 		}
 
-		this.chipContainer.style.display = "flex";
+		this.chipContainer.removeClass("llm-hidden");
 
 		// Project chip — icon-only at rest, name revealed on hover
 		if (hasProject && activeProject) {
@@ -2692,13 +2693,13 @@ export class ChatContainer extends Component {
 			try {
 				const { displayName, file } = this.resolvePinnedNote(notePath);
 				if (!file) {
-					console.warn(`[Projects] Pinned note not found: ${notePath}`);
+					logger.warn(`[Projects] Pinned note not found: ${notePath}`);
 					continue;
 				}
 				const content = await this.plugin.app.vault.read(file);
 				blocks.push(`### ${displayName}\nPath: \`${file.path}\`\n\n${content}`);
 			} catch (e) {
-				console.warn(`[Projects] Failed to read pinned note ${notePath}:`, e);
+				logger.warn(`[Projects] Failed to read pinned note ${notePath}:`, e);
 			}
 		}
 
@@ -2726,7 +2727,7 @@ export class ChatContainer extends Component {
 		// Chip strip — shown for all view types; scan button only for FAB/Modal
 		this.chipContainer = promptContainer.createDiv();
 		this.chipContainer.addClass("llm-context-chip-container");
-		this.chipContainer.style.display = "none";
+		this.chipContainer.addClass("llm-hidden");
 
 		// Input area (textarea only — skill prefix is inserted as inline text)
 		const inputSection = promptContainer.createDiv();
@@ -2740,7 +2741,7 @@ export class ChatContainer extends Component {
 		// keeps it invisible to mouse/keyboard so the real textarea handles all input.
 		const mirrorDiv = promptWrapper.createDiv();
 		mirrorDiv.addClass("llm-input-mirror");
-		mirrorDiv.style.display = "none";
+		mirrorDiv.addClass("llm-hidden");
 
 		const promptField = new TextAreaComponent(promptWrapper);
 		promptField.inputEl.className = classNames[this.viewType]["text-area"];
@@ -2757,7 +2758,7 @@ export class ChatContainer extends Component {
 		this.slashMenuEl?.remove();
 		this.slashMenuEl = document.body.createDiv({ cls: "llm-slash-menu" });
 		const slashMenu = this.slashMenuEl;
-		slashMenu.style.display = "none";
+		slashMenu.addClass("llm-hidden");
 		let slashMenuIndex = 0;
 		let slashMenuSkills: ParsedSkill[] = [];
 
@@ -2776,7 +2777,7 @@ export class ChatContainer extends Component {
 		};
 
 		const repositionHandler = () => {
-			if (slashMenu.style.display !== "none") positionSlashMenu();
+			if (!slashMenu.hasClass("llm-hidden")) positionSlashMenu();
 		};
 		window.addEventListener("resize", repositionHandler);
 
@@ -2794,7 +2795,7 @@ export class ChatContainer extends Component {
 			slashMenu.empty();
 			slashMenuSkills = skills;
 			slashMenuIndex = 0;
-			if (skills.length === 0) { slashMenu.style.display = "none"; return; }
+			if (skills.length === 0) { slashMenu.addClass("llm-hidden"); return; }
 
 			// Header label
 			slashMenu.createDiv({ cls: "llm-slash-menu-header", text: "Skills" });
@@ -2843,12 +2844,12 @@ export class ChatContainer extends Component {
 				});
 			}
 
-			slashMenu.style.display = "flex";
+			slashMenu.removeClass("llm-hidden");
 			positionSlashMenu();
 		};
 
 		const hideSlashMenu = () => {
-			slashMenu.style.display = "none";
+			slashMenu.addClass("llm-hidden");
 			slashMenuSkills = [];
 			slashMenuIndex = 0;
 		};
@@ -2895,19 +2896,19 @@ export class ChatContainer extends Component {
 				restSpan.textContent = rest;
 				// Trailing sentinel keeps last-line height correct when rest ends in \n
 				mirrorDiv.createSpan().textContent = "​";
-				mirrorDiv.style.display = "";
+				mirrorDiv.removeClass("llm-hidden");
 				promptField.inputEl.addClass("llm-input-with-mirror");
 				// Keep mirror scroll in sync
 				mirrorDiv.scrollTop = promptField.inputEl.scrollTop;
 			} else {
-				mirrorDiv.style.display = "none";
+				mirrorDiv.addClass("llm-hidden");
 				promptField.inputEl.removeClass("llm-input-with-mirror");
 			}
 		};
 
 		// Sync mirror scroll whenever the textarea scrolls
 		promptField.inputEl.addEventListener("scroll", () => {
-			if (mirrorDiv.style.display !== "none") {
+			if (!mirrorDiv.hasClass("llm-hidden")) {
 				mirrorDiv.scrollTop = promptField.inputEl.scrollTop;
 			}
 		});
@@ -3307,7 +3308,7 @@ export class ChatContainer extends Component {
 						`Mic error: ${err instanceof Error ? err.message : String(err)}`,
 						7000,
 					);
-					console.error("[LLM Plugin] Mic button error:", err);
+					logger.error("[LLM Plugin] Mic button error:", err);
 				}
 			});
 		}
@@ -3332,8 +3333,8 @@ export class ChatContainer extends Component {
 			sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
 			// When Whisper is enabled and mic is idle, swap visibility with send button
 			if (this.micButton && this.micState === "idle") {
-				this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
-				sendButton.buttonEl.style.display     = isEmpty ? "none" : "";
+				this.micButton.buttonEl.toggleClass("llm-hidden", !isEmpty);
+				sendButton.buttonEl.toggleClass("llm-hidden", isEmpty);
 			}
 		};
 
@@ -3381,7 +3382,7 @@ export class ChatContainer extends Component {
 
 		promptField.inputEl.addEventListener("keydown", (event) => {
 			// Handle slash menu keyboard navigation first
-			if (slashMenu.style.display !== "none") {
+			if (!slashMenu.hasClass("llm-hidden")) {
 				if (event.key === "ArrowDown") {
 					event.preventDefault();
 					slashMenuIndex = Math.min(slashMenuIndex + 1, slashMenuSkills.length - 1);
@@ -4121,10 +4122,10 @@ export class ChatContainer extends Component {
 	syncMicSendVisibility(): void {
 		if (!this.micButton || !this.plugin.settings.whisperSettings?.enabled) return;
 		const isEmpty = (this.prompt ?? "").trim().length === 0;
-		this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
+		this.micButton.buttonEl.toggleClass("llm-hidden", !isEmpty);
 		// Send button: opposite of mic — reach it as the next DOM sibling
 		const sendEl = this.micButton.buttonEl.nextElementSibling as HTMLElement | null;
-		if (sendEl) sendEl.style.display = isEmpty ? "none" : "";
+		if (sendEl) sendEl.toggleClass("llm-hidden", isEmpty);
 	}
 
 	/**
@@ -4141,13 +4142,13 @@ export class ChatContainer extends Component {
 		const sendEl = this.micButton.buttonEl.nextElementSibling as HTMLElement | null;
 		if (!enabled) {
 			// Hide the mic; make the send button unconditionally visible
-			this.micButton.buttonEl.style.display = "none";
-			if (sendEl) sendEl.style.display = "";
+			this.micButton.buttonEl.addClass("llm-hidden");
+			if (sendEl) sendEl.removeClass("llm-hidden");
 		} else {
 			// Restore normal visibility logic based on prompt content
 			const isEmpty = (this.prompt ?? "").trim().length === 0;
-			this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
-			if (sendEl) sendEl.style.display = isEmpty ? "none" : "";
+			this.micButton.buttonEl.toggleClass("llm-hidden", !isEmpty);
+			if (sendEl) sendEl.toggleClass("llm-hidden", isEmpty);
 		}
 	}
 
@@ -4196,7 +4197,7 @@ export class ChatContainer extends Component {
 					? "No microphone found. Please connect one and try again."
 					: `Microphone error: ${err?.name} — ${err?.message ?? err}`;
 			new Notice(msg, 7000);
-			console.error("[LLM Plugin] getUserMedia failed:", err);
+			logger.error("[LLM Plugin] getUserMedia failed:", err);
 			return;
 		}
 
@@ -4551,7 +4552,7 @@ export class ChatContainer extends Component {
 				callModel,
 			);
 		} catch (e) {
-			console.error("[Memory] Extraction failed:", e);
+			logger.error("[Memory] Extraction failed:", e);
 			new Notice("Memory extraction failed — see console for details.");
 		}
 	}
@@ -4568,7 +4569,7 @@ export class ChatContainer extends Component {
 		) {
 			// Fire-and-forget — don't block the UI
 			this.extractMemories().catch((e) =>
-				console.error("[Memory] End-of-chat extraction failed:", e)
+				logger.error("[Memory] End-of-chat extraction failed:", e)
 			);
 		}
 

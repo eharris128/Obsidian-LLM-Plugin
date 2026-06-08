@@ -86,12 +86,12 @@ export class StatusBarButton {
 	private buildPopover() {
 		this.popoverEl = document.body.createDiv();
 		this.popoverEl.addClass("llm-status-bar-popover");
-		this.popoverEl.style.display = "none";
+		this.popoverEl.addClass("llm-hidden");
 
 		// Reposition whenever the window is resized or the Obsidian frame is
 		// moved (which fires a "resize" event on the window object).
 		this.boundRepositionHandler = () => {
-			if (this.popoverEl && this.popoverEl.style.display !== "none") {
+			if (this.popoverEl && !this.popoverEl.hasClass("llm-hidden")) {
 				this.repositionPopover();
 			}
 		};
@@ -148,9 +148,9 @@ export class StatusBarButton {
 			() => this.hidePopover()
 		);
 
-		settingsContainerDiv.setAttr("style", "display: none");
+		settingsContainerDiv.hide();
 		settingsContainerDiv.addClass("fab-settings-container", "llm-flex");
-		chatHistoryContainer.setAttr("style", "display: none");
+		chatHistoryContainer.hide();
 		chatHistoryContainer.addClass("fab-chat-history-container", "llm-flex");
 		chatContainerDiv.addClass("fab-chat-container", "llm-flex");
 
@@ -238,7 +238,7 @@ export class StatusBarButton {
 	private togglePopover() {
 		if (!this.popoverEl) return;
 
-		if (this.popoverEl.style.display === "none") {
+		if (this.popoverEl.hasClass("llm-hidden")) {
 			const { historyIndex } = getViewInfo(
 				this.plugin,
 				"floating-action-button"
@@ -247,7 +247,7 @@ export class StatusBarButton {
 			this.plugin.settings.currentIndex = historyIndex;
 			void this.plugin.saveSettings();
 
-			this.popoverEl.style.display = "flex";
+			this.popoverEl.removeClass("llm-hidden");
 
 			// Sync the model dropdown to reflect any default-model change made
 			// since the popover was first built (buildPopover runs once on load).
@@ -277,7 +277,7 @@ export class StatusBarButton {
 	}
 
 	private hidePopover() {
-		if (this.popoverEl) this.popoverEl.style.display = "none";
+		if (this.popoverEl) this.popoverEl.addClass("llm-hidden");
 	}
 
 	/**
@@ -306,9 +306,9 @@ export class StatusBarButton {
 		void this.plugin.saveSettings();
 
 		// Show the popover if it's currently hidden
-		if (this.popoverEl?.style.display === "none") {
+		if (this.popoverEl?.hasClass("llm-hidden")) {
 			setView(this.plugin, "floating-action-button");
-			this.popoverEl.style.display = "flex";
+			this.popoverEl.removeClass("llm-hidden");
 			this.chatContainer.refreshActiveFileChip();
 
 			requestAnimationFrame(() => {
@@ -352,9 +352,9 @@ export class StatusBarButton {
 		const settingType = getSettingType("floating-action-button");
 
 		// Show the popover if it's currently hidden
-		if (this.popoverEl?.style.display === "none") {
+		if (this.popoverEl?.hasClass("llm-hidden")) {
 			setView(this.plugin, "floating-action-button");
-			this.popoverEl.style.display = "flex";
+			this.popoverEl.removeClass("llm-hidden");
 			this.chatContainer.refreshActiveFileChip();
 
 			requestAnimationFrame(() => {

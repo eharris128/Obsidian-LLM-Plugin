@@ -1332,7 +1332,18 @@ export class ChatContainer extends Component {
 			}
 
 			if (modelEndpoint !== images) {
+				// Agent mode bypasses handleGenerate(), so the API key guard there
+				// is never reached. Check here so the error surfaces before any SDK call.
 				if (this.supportsAgentMode(modelType)) {
+					if (modelType === claude && !this.plugin.settings.claudeAPIKey) {
+						throw new Error("No Claude API key configured. Add one in Settings → Anthropic.");
+					}
+					if (modelType === openAI && !this.plugin.settings.openAIAPIKey) {
+						throw new Error("No OpenAI API key configured. Add one in Settings → OpenAI.");
+					}
+					if (modelType === mistral && !this.plugin.settings.mistralAPIKey) {
+						throw new Error("No Mistral API key configured. Add one in Settings → Mistral.");
+					}
 					await this.runAgentMode(
 						params as ChatParams,
 						model,

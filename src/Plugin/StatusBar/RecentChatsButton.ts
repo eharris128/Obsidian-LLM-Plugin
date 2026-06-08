@@ -26,7 +26,7 @@ export class RecentChatsButton {
 
 		this.popoverEl = document.body.createDiv();
 		this.popoverEl.addClass("llm-recent-chats-popover");
-		this.popoverEl.style.display = "none";
+		this.popoverEl.addClass("llm-hidden");
 
 		this.statusBarEl.addEventListener("click", (e: MouseEvent) => {
 			e.stopPropagation();
@@ -234,9 +234,9 @@ export class RecentChatsButton {
 	private togglePopover() {
 		if (!this.popoverEl) return;
 
-		if (this.popoverEl.style.display === "none") {
+		if (this.popoverEl.hasClass("llm-hidden")) {
 			this.renderPopoverContents();
-			this.popoverEl.style.display = "flex";
+			this.popoverEl.removeClass("llm-hidden");
 
 			requestAnimationFrame(() => this.repositionPopover());
 
@@ -265,7 +265,7 @@ export class RecentChatsButton {
 	}
 
 	private hidePopover() {
-		if (this.popoverEl) this.popoverEl.style.display = "none";
+		if (this.popoverEl) this.popoverEl.addClass("llm-hidden");
 		if (this.clickOutsideHandler) {
 			document.removeEventListener("click", this.clickOutsideHandler);
 			this.clickOutsideHandler = null;

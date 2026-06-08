@@ -221,9 +221,9 @@ export class WidgetView extends ItemView {
 		const chatHistoryContainer = this.chatHistoryContainer;
 		const settingsContainerDiv = mainDiv.createDiv();
 
-		settingsContainerDiv.setAttr("style", "display: none");
+		settingsContainerDiv.hide();
 		settingsContainerDiv.addClass("llm-widget-settings-container", "llm-flex");
-		chatHistoryContainer.setAttr("style", "display: none");
+		chatHistoryContainer.hide();
 		chatHistoryContainer.addClass("llm-widget-chat-history-container", "llm-flex");
 		chatContainerDiv.addClass("llm-widget-chat-container", "llm-flex");
 

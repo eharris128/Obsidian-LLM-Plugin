@@ -39,12 +39,10 @@ export class FAB {
 		const viewArea = fabContainer.createDiv();
 		viewArea.addClass("fab-view-area");
 
-		// Set properties independently so they never clobber each other.
-		// setAttr("style", ...) is intentionally avoided — it writes the whole
-		// attribute string atomically and then changing one property (display)
-		// later can race with or lose the other (height).
+		// Visibility is toggled via the .llm-hidden class so it can never clobber
+		// the inline height (the resize handle writes viewArea.style.height directly).
 		const savedHeight = this.plugin.settings.fabViewHeight ?? 600;
-		viewArea.style.display = "none";
+		viewArea.addClass("llm-hidden");
 		viewArea.style.height = `${savedHeight}px`;
 
 		this.fabViewArea = viewArea;
@@ -98,7 +96,7 @@ export class FAB {
 			chatContainer,
 			historyContainer,
 			settingsContainer,
-			() => { viewArea.style.display = "none"; }
+			() => { viewArea.addClass("llm-hidden"); }
 		);
 
 		resizeHandle.addEventListener("pointerdown", (e: PointerEvent) => {
@@ -147,9 +145,9 @@ export class FAB {
 
 		let history = this.plugin.settings.promptHistory;
 
-		settingsContainerDiv.setAttr("style", "display: none");
+		settingsContainerDiv.hide();
 		settingsContainerDiv.addClass("fab-settings-container", "llm-flex");
-		chatHistoryContainer.setAttr("style", "display: none");
+		chatHistoryContainer.hide();
 		chatHistoryContainer.addClass("fab-chat-history-container", "llm-flex");
 		lineBreak.className =
 			classNames["floating-action-button"]["title-border"];
@@ -170,8 +168,8 @@ export class FAB {
 			.setIcon("bot-message-square")
 			.setClass("buttonItem")
 			.onClick(() => {
-				if (viewArea.style.display === "none") {
-					viewArea.style.display = "flex";
+				if (viewArea.hasClass("llm-hidden")) {
+					viewArea.removeClass("llm-hidden");
 					// Sync the model dropdown to reflect any settings changes made
 					// while the FAB was closed (the container is built once, so it
 					// won't pick up new defaults automatically).
@@ -190,7 +188,7 @@ export class FAB {
 						}
 					});
 				} else {
-					viewArea.style.display = "none";
+					viewArea.addClass("llm-hidden");
 				}
 			});
 
@@ -242,8 +240,8 @@ export class FAB {
 		const settingType = getSettingType("floating-action-button") as "fabSettings";
 
 		// Show the FAB view area if it's currently hidden
-		if (this.fabViewArea?.style.display === "none") {
-			this.fabViewArea.style.display = "flex";
+		if (this.fabViewArea?.hasClass("llm-hidden")) {
+			this.fabViewArea.removeClass("llm-hidden");
 			this.chatContainer.syncModelDropdown();
 			requestAnimationFrame(() => {
 				if (!this.fabViewArea) return;

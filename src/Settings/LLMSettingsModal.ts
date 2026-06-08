@@ -158,7 +158,7 @@ export class LLMSettingsModal extends Modal {
 		// Hide our scrim so we look like part of the core settings panel.
 		const modalBg = modalEl.closest(".modal-container")
 			?.querySelector<HTMLElement>(".modal-bg");
-		if (modalBg) modalBg.style.display = "none";
+		if (modalBg) modalBg.addClass("llm-hidden");
 
 		// Apply sizing now and on every window resize.
 		this.matchCoreModal();
@@ -1105,7 +1105,7 @@ export class LLMSettingsModal extends Modal {
 			migrationEl.empty();
 			if (!this.plugin.settings.chatHistoryEnabled) {
 				// Legacy mode — show the reset button for old promptHistory entries.
-				migrationGroup.style.display = "";
+				migrationGroup.removeClass("llm-hidden");
 				new Setting(migrationEl)
 					.setName("Reset legacy chat history")
 					.setDesc("Clears the old in-settings chat history only. Your saved markdown chat files in your vault are not affected.")
@@ -1118,7 +1118,7 @@ export class LLMSettingsModal extends Modal {
 					});
 				return;
 			}
-			migrationGroup.style.display = "";
+			migrationGroup.removeClass("llm-hidden");
 
 			new Setting(migrationEl)
 				.setName("New chat file location")

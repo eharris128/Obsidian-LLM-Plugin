@@ -287,9 +287,9 @@ export class ChatContainer extends Component {
 		sendButton.buttonEl.addClass("llm-stop-mode");
 		sendButton.setDisabled(false);
 		// Always show the stop button regardless of input contents
-		sendButton.buttonEl.style.display = "";
+		sendButton.buttonEl.removeClass("llm-hidden");
 		if (this.micButton) {
-			this.micButton.buttonEl.style.display = "none";
+			this.micButton.buttonEl.addClass("llm-hidden");
 		}
 	}
 
@@ -305,8 +305,8 @@ export class ChatContainer extends Component {
 		sendButton.setDisabled(isEmpty);
 		sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
 		if (this.micButton && this.micState === "idle") {
-			this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
-			sendButton.buttonEl.style.display = isEmpty ? "none" : "";
+			this.micButton.buttonEl.toggleClass("llm-hidden", !isEmpty);
+			sendButton.buttonEl.toggleClass("llm-hidden", isEmpty);
 		}
 	}
 
@@ -2549,11 +2549,11 @@ export class ChatContainer extends Component {
 		const hasProject = !!activeProject;
 
 		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject) {
-			this.chipContainer.style.display = "none";
+			this.chipContainer.addClass("llm-hidden");
 			return;
 		}
 
-		this.chipContainer.style.display = "flex";
+		this.chipContainer.removeClass("llm-hidden");
 
 		// Project chip — icon-only at rest, name revealed on hover
 		if (hasProject && activeProject) {
@@ -2727,7 +2727,7 @@ export class ChatContainer extends Component {
 		// Chip strip — shown for all view types; scan button only for FAB/Modal
 		this.chipContainer = promptContainer.createDiv();
 		this.chipContainer.addClass("llm-context-chip-container");
-		this.chipContainer.style.display = "none";
+		this.chipContainer.addClass("llm-hidden");
 
 		// Input area (textarea only — skill prefix is inserted as inline text)
 		const inputSection = promptContainer.createDiv();
@@ -2741,7 +2741,7 @@ export class ChatContainer extends Component {
 		// keeps it invisible to mouse/keyboard so the real textarea handles all input.
 		const mirrorDiv = promptWrapper.createDiv();
 		mirrorDiv.addClass("llm-input-mirror");
-		mirrorDiv.style.display = "none";
+		mirrorDiv.addClass("llm-hidden");
 
 		const promptField = new TextAreaComponent(promptWrapper);
 		promptField.inputEl.className = classNames[this.viewType]["text-area"];
@@ -2758,7 +2758,7 @@ export class ChatContainer extends Component {
 		this.slashMenuEl?.remove();
 		this.slashMenuEl = document.body.createDiv({ cls: "llm-slash-menu" });
 		const slashMenu = this.slashMenuEl;
-		slashMenu.style.display = "none";
+		slashMenu.addClass("llm-hidden");
 		let slashMenuIndex = 0;
 		let slashMenuSkills: ParsedSkill[] = [];
 
@@ -2777,7 +2777,7 @@ export class ChatContainer extends Component {
 		};
 
 		const repositionHandler = () => {
-			if (slashMenu.style.display !== "none") positionSlashMenu();
+			if (!slashMenu.hasClass("llm-hidden")) positionSlashMenu();
 		};
 		window.addEventListener("resize", repositionHandler);
 
@@ -2795,7 +2795,7 @@ export class ChatContainer extends Component {
 			slashMenu.empty();
 			slashMenuSkills = skills;
 			slashMenuIndex = 0;
-			if (skills.length === 0) { slashMenu.style.display = "none"; return; }
+			if (skills.length === 0) { slashMenu.addClass("llm-hidden"); return; }
 
 			// Header label
 			slashMenu.createDiv({ cls: "llm-slash-menu-header", text: "Skills" });
@@ -2844,12 +2844,12 @@ export class ChatContainer extends Component {
 				});
 			}
 
-			slashMenu.style.display = "flex";
+			slashMenu.removeClass("llm-hidden");
 			positionSlashMenu();
 		};
 
 		const hideSlashMenu = () => {
-			slashMenu.style.display = "none";
+			slashMenu.addClass("llm-hidden");
 			slashMenuSkills = [];
 			slashMenuIndex = 0;
 		};
@@ -2896,19 +2896,19 @@ export class ChatContainer extends Component {
 				restSpan.textContent = rest;
 				// Trailing sentinel keeps last-line height correct when rest ends in \n
 				mirrorDiv.createSpan().textContent = "​";
-				mirrorDiv.style.display = "";
+				mirrorDiv.removeClass("llm-hidden");
 				promptField.inputEl.addClass("llm-input-with-mirror");
 				// Keep mirror scroll in sync
 				mirrorDiv.scrollTop = promptField.inputEl.scrollTop;
 			} else {
-				mirrorDiv.style.display = "none";
+				mirrorDiv.addClass("llm-hidden");
 				promptField.inputEl.removeClass("llm-input-with-mirror");
 			}
 		};
 
 		// Sync mirror scroll whenever the textarea scrolls
 		promptField.inputEl.addEventListener("scroll", () => {
-			if (mirrorDiv.style.display !== "none") {
+			if (!mirrorDiv.hasClass("llm-hidden")) {
 				mirrorDiv.scrollTop = promptField.inputEl.scrollTop;
 			}
 		});
@@ -3333,8 +3333,8 @@ export class ChatContainer extends Component {
 			sendButton.buttonEl.toggleClass("llm-send-button-disabled", isEmpty);
 			// When Whisper is enabled and mic is idle, swap visibility with send button
 			if (this.micButton && this.micState === "idle") {
-				this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
-				sendButton.buttonEl.style.display     = isEmpty ? "none" : "";
+				this.micButton.buttonEl.toggleClass("llm-hidden", !isEmpty);
+				sendButton.buttonEl.toggleClass("llm-hidden", isEmpty);
 			}
 		};
 
@@ -3382,7 +3382,7 @@ export class ChatContainer extends Component {
 
 		promptField.inputEl.addEventListener("keydown", (event) => {
 			// Handle slash menu keyboard navigation first
-			if (slashMenu.style.display !== "none") {
+			if (!slashMenu.hasClass("llm-hidden")) {
 				if (event.key === "ArrowDown") {
 					event.preventDefault();
 					slashMenuIndex = Math.min(slashMenuIndex + 1, slashMenuSkills.length - 1);
@@ -4122,10 +4122,10 @@ export class ChatContainer extends Component {
 	syncMicSendVisibility(): void {
 		if (!this.micButton || !this.plugin.settings.whisperSettings?.enabled) return;
 		const isEmpty = (this.prompt ?? "").trim().length === 0;
-		this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
+		this.micButton.buttonEl.toggleClass("llm-hidden", !isEmpty);
 		// Send button: opposite of mic — reach it as the next DOM sibling
 		const sendEl = this.micButton.buttonEl.nextElementSibling as HTMLElement | null;
-		if (sendEl) sendEl.style.display = isEmpty ? "none" : "";
+		if (sendEl) sendEl.toggleClass("llm-hidden", isEmpty);
 	}
 
 	/**
@@ -4142,13 +4142,13 @@ export class ChatContainer extends Component {
 		const sendEl = this.micButton.buttonEl.nextElementSibling as HTMLElement | null;
 		if (!enabled) {
 			// Hide the mic; make the send button unconditionally visible
-			this.micButton.buttonEl.style.display = "none";
-			if (sendEl) sendEl.style.display = "";
+			this.micButton.buttonEl.addClass("llm-hidden");
+			if (sendEl) sendEl.removeClass("llm-hidden");
 		} else {
 			// Restore normal visibility logic based on prompt content
 			const isEmpty = (this.prompt ?? "").trim().length === 0;
-			this.micButton.buttonEl.style.display = isEmpty ? "" : "none";
-			if (sendEl) sendEl.style.display = isEmpty ? "none" : "";
+			this.micButton.buttonEl.toggleClass("llm-hidden", !isEmpty);
+			if (sendEl) sendEl.toggleClass("llm-hidden", isEmpty);
 		}
 	}
 

@@ -28,6 +28,7 @@
  */
 
 import { App, TFile } from "obsidian";
+import { logger } from "../utils/logger";
 import { Assistant } from "Types/types";
 
 export class AssistantManager {
@@ -116,10 +117,10 @@ export class AssistantManager {
 			const assistant = AssistantManager.parseAssistantFile(raw, filePath, this.assistantsFolder);
 			if (assistant) {
 				this.assistants.set(assistant.id, assistant);
-				console.log(`[AssistantManager] Loaded assistant: ${assistant.id} (${assistant.name})`);
+				logger.log(`[AssistantManager] Loaded assistant: ${assistant.id} (${assistant.name})`);
 			}
 		} catch (e) {
-			console.error(`[AssistantManager] Failed to parse ${filePath}:`, e);
+			logger.error(`[AssistantManager] Failed to parse ${filePath}:`, e);
 		}
 	}
 
@@ -202,7 +203,7 @@ ${systemPrompt || "<!-- Add your assistant's system prompt / persona instruction
 			await this.loadAssistantByPath(filePath);
 			return filePath;
 		} catch (e) {
-			console.error(`[AssistantManager] Failed to create assistant at ${filePath}:`, e);
+			logger.error(`[AssistantManager] Failed to create assistant at ${filePath}:`, e);
 			return null;
 		}
 	}
@@ -222,7 +223,7 @@ ${systemPrompt || "<!-- Add your assistant's system prompt / persona instruction
 			}
 			this.assistants.delete(id);
 		} catch (e) {
-			console.error(`[AssistantManager] Failed to delete assistant ${id}:`, e);
+			logger.error(`[AssistantManager] Failed to delete assistant ${id}:`, e);
 		}
 	}
 

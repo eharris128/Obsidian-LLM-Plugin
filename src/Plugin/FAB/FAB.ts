@@ -1,4 +1,5 @@
 import { ChatContainer } from "Plugin/Components/ChatContainer";
+import { logger } from "../../utils/logger";
 import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
 import { SettingsContainer } from "Plugin/Components/SettingsContainer";
@@ -300,7 +301,7 @@ export class FAB {
 				this.chatContainer!.syncModelDropdown();
 			})
 			.catch((e) => {
-				console.error("[FAB] Failed to load chat file:", e);
+				logger.error("[FAB] Failed to load chat file:", e);
 				new Notice("Failed to load conversation.");
 			});
 	}

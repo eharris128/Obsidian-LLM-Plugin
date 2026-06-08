@@ -1,4 +1,5 @@
 import { ChatContainer } from "Plugin/Components/ChatContainer";
+import { logger } from "../../utils/logger";
 import { ChatsSidebar } from "Plugin/Components/ChatsSidebar";
 import { Header } from "Plugin/Components/Header";
 import { HistoryContainer } from "Plugin/Components/HistoryContainer";
@@ -144,7 +145,7 @@ export class WidgetView extends ItemView {
 			// push here to make sure the model label is current.
 			this.chatContainer.pushChatDetailsState();
 		} catch (e) {
-			console.error("[WidgetView] Failed to load chat file:", e);
+			logger.error("[WidgetView] Failed to load chat file:", e);
 			new Notice("Failed to load conversation.");
 		}
 	}

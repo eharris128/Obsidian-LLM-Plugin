@@ -1,4 +1,5 @@
 import LLMPlugin from "main";
+import { logger } from "../../utils/logger";
 import {
 	ButtonComponent,
 	Component,
@@ -502,7 +503,7 @@ export class ChatContainer extends Component {
 		}
 		const params = this.getParams(modelEndpoint, model, modelType);
 		if (params && "tokens" in params) {
-			(params as import("Types/types").ChatParams).tokens = this.resolveEffectiveMaxTokens(0) || undefined;
+			params.tokens = this.resolveEffectiveMaxTokens(0) || undefined;
 		}
 		// Start Claude Code handling
 		if (modelEndpoint === claudeCodeEndpoint) {
@@ -643,7 +644,7 @@ export class ChatContainer extends Component {
 					};
 				}
 			} catch (err) {
-				console.error(err);
+				logger.error(err);
 				return false;
 			}
 
@@ -968,7 +969,7 @@ export class ChatContainer extends Component {
 					this.pendingContextString = contextString;
 				}
 			} catch (error) {
-				console.error("Error building vault context:", error);
+				logger.error("Error building vault context:", error);
 			}
 		}
 
@@ -995,7 +996,7 @@ export class ChatContainer extends Component {
 						(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
 				}
 			} catch (error) {
-				console.error("[RAG] Vault search failed:", error);
+				logger.error("[RAG] Vault search failed:", error);
 				new Notice("Vault search failed — sending without vault context.");
 			}
 		}
@@ -1022,7 +1023,7 @@ export class ChatContainer extends Component {
 					};
 				}
 			} catch (error) {
-				console.error("Error reading active file for context:", error);
+				logger.error("Error reading active file for context:", error);
 			}
 		}
 
@@ -1186,7 +1187,7 @@ export class ChatContainer extends Component {
 				);
 				this.messageStore.addMessage({ role: assistant, content: response });
 			} catch (e) {
-				console.error("[Memory] /remember save failed:", e);
+				logger.error("[Memory] /remember save failed:", e);
 				new Notice("Failed to save memory — see console for details.");
 			}
 
@@ -1310,7 +1311,7 @@ export class ChatContainer extends Component {
 							(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
 					}
 				} catch (e) {
-					console.error("[Projects] Failed to build pinned notes context:", e);
+					logger.error("[Projects] Failed to build pinned notes context:", e);
 				}
 			}
 
@@ -1340,7 +1341,7 @@ export class ChatContainer extends Component {
 					}
 				}
 			} catch (e) {
-				console.warn("[ChatContainer] Could not read AGENTS.md:", e);
+				logger.warn("[ChatContainer] Could not read AGENTS.md:", e);
 			}
 		}
 		// ── End general instructions ──────────────────────────────────────────────
@@ -1376,7 +1377,7 @@ export class ChatContainer extends Component {
 					this.pushChatDetailsState();
 				}
 			} catch (e) {
-				console.error("[Memory] Recall failed:", e);
+				logger.error("[Memory] Recall failed:", e);
 			}
 		}
 		// ── End memory recall ─────────────────────────────────────────────────────
@@ -1410,7 +1411,7 @@ export class ChatContainer extends Component {
 		await this.renderingPromise;
 		const params = this.getParams(modelEndpoint, model, modelType);
 		if (params && "tokens" in params) {
-			(params as import("Types/types").ChatParams).tokens = effectiveMaxTokens || undefined;
+			params.tokens = effectiveMaxTokens || undefined;
 		}
 		// Snapshot the assistant-message count before generation so we can key
 		// skill usage (and tool calls on the non-agent path) to the right turn.
@@ -2127,7 +2128,7 @@ export class ChatContainer extends Component {
 				vaultContext,
 				historyFilePath
 			).catch((e) =>
-				console.error("[ChatContainer] Failed to save chat file:", e)
+				logger.error("[ChatContainer] Failed to save chat file:", e)
 			);
 			return;
 		}
@@ -2250,7 +2251,7 @@ export class ChatContainer extends Component {
 		if (projectId) {
 			const project = this.plugin.projectManager?.getProject(projectId);
 			if (!project) {
-				console.warn(`[ChatContainer] setActiveProject: project not found: ${projectId}`);
+				logger.warn(`[ChatContainer] setActiveProject: project not found: ${projectId}`);
 				return;
 			}
 			targetFolder = this.plugin.chatHistory.folderForProject(projectId);
@@ -2279,7 +2280,7 @@ export class ChatContainer extends Component {
 						this.currentHistoryFilePath = newPath;
 						setHistoryFilePath(this.plugin, this.viewType, newPath);
 					} catch (e) {
-						console.error("[ChatContainer] Failed to move chat file:", e);
+						logger.error("[ChatContainer] Failed to move chat file:", e);
 					}
 				} else {
 					// File is already in the right folder — just patch the frontmatter field
@@ -2849,13 +2850,13 @@ export class ChatContainer extends Component {
 			try {
 				const { displayName, file } = this.resolvePinnedNote(notePath);
 				if (!file) {
-					console.warn(`[Projects] Pinned note not found: ${notePath}`);
+					logger.warn(`[Projects] Pinned note not found: ${notePath}`);
 					continue;
 				}
 				const content = await this.plugin.app.vault.read(file);
 				blocks.push(`### ${displayName}\nPath: \`${file.path}\`\n\n${content}`);
 			} catch (e) {
-				console.warn(`[Projects] Failed to read pinned note ${notePath}:`, e);
+				logger.warn(`[Projects] Failed to read pinned note ${notePath}:`, e);
 			}
 		}
 
@@ -3562,7 +3563,7 @@ export class ChatContainer extends Component {
 						`Mic error: ${err instanceof Error ? err.message : String(err)}`,
 						7000,
 					);
-					console.error("[LLM Plugin] Mic button error:", err);
+					logger.error("[LLM Plugin] Mic button error:", err);
 				}
 			});
 		}
@@ -4449,7 +4450,7 @@ export class ChatContainer extends Component {
 					? "No microphone found. Please connect one and try again."
 					: `Microphone error: ${err?.name} — ${err?.message ?? err}`;
 			new Notice(msg, 7000);
-			console.error("[LLM Plugin] getUserMedia failed:", err);
+			logger.error("[LLM Plugin] getUserMedia failed:", err);
 			return;
 		}
 
@@ -4804,7 +4805,7 @@ export class ChatContainer extends Component {
 				callModel,
 			);
 		} catch (e) {
-			console.error("[Memory] Extraction failed:", e);
+			logger.error("[Memory] Extraction failed:", e);
 			new Notice("Memory extraction failed — see console for details.");
 		}
 	}
@@ -4821,7 +4822,7 @@ export class ChatContainer extends Component {
 		) {
 			// Fire-and-forget — don't block the UI
 			this.extractMemories().catch((e) =>
-				console.error("[Memory] End-of-chat extraction failed:", e)
+				logger.error("[Memory] End-of-chat extraction failed:", e)
 			);
 		}
 

@@ -1,4 +1,5 @@
 import { HistoryItem, ViewType } from "Types/types";
+import { logger } from "../../utils/logger";
 import LLMPlugin, { DEFAULT_SETTINGS } from "main";
 import { ButtonComponent, Notice, TFile } from "obsidian";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
@@ -99,7 +100,7 @@ export class HistoryContainer {
 					);
 				})
 				.catch((e) => {
-					console.error("[HistoryContainer] Failed to list chat files:", e);
+					logger.error("[HistoryContainer] Failed to list chat files:", e);
 					this.displayNoHistoryView(parentElement);
 				});
 			return;
@@ -417,7 +418,7 @@ export class HistoryContainer {
 						chat.pushChatDetailsState();
 					})
 					.catch((e) => {
-						console.error("[HistoryContainer] Failed to load chat file:", e);
+						logger.error("[HistoryContainer] Failed to load chat file:", e);
 						new Notice("Failed to load conversation.");
 					});
 			};
@@ -467,7 +468,7 @@ export class HistoryContainer {
 							);
 						})
 						.catch((e) =>
-							console.error("[HistoryContainer] Failed to delete chat file:", e)
+							logger.error("[HistoryContainer] Failed to delete chat file:", e)
 						);
 				}).open();
 			});
@@ -507,7 +508,7 @@ export class HistoryContainer {
 						disableOtherItems(parentElement.children, index, false);
 					})
 					.catch((e) => {
-						console.error("[HistoryContainer] Failed to rename chat file:", e);
+						logger.error("[HistoryContainer] Failed to rename chat file:", e);
 						new Notice("Failed to rename conversation.");
 					});
 			});

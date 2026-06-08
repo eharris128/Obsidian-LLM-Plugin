@@ -50,4 +50,12 @@ export function errorMessages(error: Error, params?: object) {
     if ((error as { status?: number }).status === 429 || error.message.includes("Rate limit exceeded")) {
         new Notice(error.message, 8000);
     }
+
+    if ((error as { status?: number }).status === 402 || error.message.toLowerCase().includes("credit balance") || error.message.toLowerCase().includes("insufficient credits") || error.message.toLowerCase().includes("billing")) {
+        new Notice("Your API credit balance is too low. Add credits at console.anthropic.com/settings/billing.", 10000);
+    }
+
+    if ((error as { status?: number }).status === 401 || error.message.toLowerCase().includes("authentication") || error.message.toLowerCase().includes("invalid x-api-key") || (error.message.toLowerCase().includes("api key") && error.message.toLowerCase().includes("missing"))) {
+        new Notice("Invalid or missing API key. Check your key in Settings → Model Providers.", 8000);
+    }
 }

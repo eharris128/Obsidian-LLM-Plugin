@@ -800,13 +800,16 @@ export class LLMSettingsModal extends Modal {
 				text.inputEl.type = "password";
 				text.setValue(this.plugin.settings[config.key] as string);
 				text.onChange((value) => {
-					if (value.trim().length) {
-						(this.plugin.settings[config.key] as string) = value;
-						void this.plugin.saveSettings();
-					}
+					(this.plugin.settings[config.key] as string) = value;
+					void this.plugin.saveSettings();
 					// Refresh empty state live so the setup hint appears/disappears
 					// as the user types or clears a key.
 					this.plugin.refreshAllEmptyStates();
+					// Re-render the agent settings tab so model dropdowns reflect the
+					// newly entered (or cleared) API key immediately.
+					if (this.activeTab === "obsidian-agent") {
+						this.renderTab("obsidian-agent");
+					}
 				});
 			})
 			.addButton((button: ButtonComponent) => {
@@ -1809,6 +1812,7 @@ export class LLMSettingsModal extends Modal {
 					await this.plugin.saveSettings();
 					// Regenerate FAB/StatusBar so the agent flag is picked up.
 					if (this.plugin.settings.showFAB) this.plugin.fab.regenerateFAB();
+					this.plugin.syncAllContainersAgentMode(value);
 					this.renderTab("obsidian-agent");
 				});
 			});

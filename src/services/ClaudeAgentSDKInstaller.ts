@@ -1,7 +1,36 @@
 import { Notice, Platform } from "obsidian";
 
-const SDK_PACKAGE = "@anthropic-ai/claude-agent-sdk@0.3.165";
+const SDK_VERSION = "0.3.170";
+const SDK_PACKAGE = `@anthropic-ai/claude-agent-sdk@${SDK_VERSION}`;
 const INSTALL_TIMEOUT_MS = 120_000;
+
+function getPlatformPackage(): string {
+	const platform = process.platform; // darwin, linux, win32
+	const arch = process.arch;         // arm64, x64
+	let suffix: string;
+	if (platform === "darwin" && arch === "arm64") suffix = "darwin-arm64";
+	else if (platform === "darwin") suffix = "darwin-x64";
+	else if (platform === "linux" && arch === "arm64") suffix = "linux-arm64";
+	else if (platform === "linux") suffix = "linux-x64";
+	else if (platform === "win32" && arch === "arm64") suffix = "win32-arm64";
+	else suffix = "win32-x64";
+	return `@anthropic-ai/claude-agent-sdk-${suffix}@${SDK_VERSION}`;
+}
+
+export function getNativeBinaryPath(pluginDir: string): string {
+	const path = require("path");
+	const platform = process.platform;
+	const arch = process.arch;
+	let suffix: string;
+	if (platform === "darwin" && arch === "arm64") suffix = "darwin-arm64";
+	else if (platform === "darwin") suffix = "darwin-x64";
+	else if (platform === "linux" && arch === "arm64") suffix = "linux-arm64";
+	else if (platform === "linux") suffix = "linux-x64";
+	else if (platform === "win32" && arch === "arm64") suffix = "win32-arm64";
+	else suffix = "win32-x64";
+	const binaryName = platform === "win32" ? "claude.exe" : "claude";
+	return path.join(pluginDir, "node_modules", "@anthropic-ai", `claude-agent-sdk-${suffix}`, binaryName);
+}
 
 function resolveNpmPath(): string {
 	if (!Platform.isDesktop) return "npm";
@@ -56,16 +85,8 @@ function resolveNpmPath(): string {
 
 function isSDKInstalled(pluginDir: string): boolean {
 	if (!Platform.isDesktop) return false;
-	const path = require("path");
 	const fs = require("fs");
-	const cliPath = path.join(
-		pluginDir,
-		"node_modules",
-		"@anthropic-ai",
-		"claude-agent-sdk",
-		"cli.js"
-	);
-	return fs.existsSync(cliPath);
+	return fs.existsSync(getNativeBinaryPath(pluginDir));
 }
 
 let installPromise: Promise<void> | null = null;
@@ -123,9 +144,9 @@ function doInstall(pluginDir: string): Promise<void> {
 			npmPath,
 			"install",
 			SDK_PACKAGE,
+			getPlatformPackage(),
 			"--no-save",
 			"--no-package-lock",
-			"--no-optional",
 		];
 
 		const child = spawn(nodePath, args, {

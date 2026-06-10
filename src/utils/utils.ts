@@ -12,7 +12,7 @@ import {
 	images,
 } from "utils/constants";
 import { query as claudeCodeQuery } from "@anthropic-ai/claude-agent-sdk";
-import { ensureSDKInstalled } from "services/ClaudeAgentSDKInstaller";
+import { ensureSDKInstalled, getNativeBinaryPath } from "services/ClaudeAgentSDKInstaller";
 
 // Patch events.setMaxListeners for Electron compatibility.
 // The Agent SDK calls setMaxListeners(n, abortSignal), but Electron's
@@ -296,44 +296,6 @@ export async function geminiMessage(
 
 // Resolve the absolute path to `node` by checking common install locations.
 // Electron's renderer process has a limited PATH, so we check the filesystem directly.
-function resolveNodePath(): string {
-	if (!Platform.isDesktop) return "";
-	const fs = require("fs");
-	const homedir = require("os").homedir();
-	const candidates: string[] = [];
-
-	// nvm — pick the latest installed version
-	const nvmDir = `${homedir}/.nvm/versions/node`;
-	try {
-		if (fs.existsSync(nvmDir)) {
-			const versions = fs.readdirSync(nvmDir).sort().reverse();
-			if (versions.length > 0) {
-				candidates.push(`${nvmDir}/${versions[0]}/bin/node`);
-			}
-		}
-	} catch { /* ignore */ }
-
-	candidates.push(
-		`${homedir}/.volta/bin/node`,                       // volta
-		`${homedir}/.local/share/fnm/aliases/default/bin/node`, // fnm
-		`${homedir}/.asdf/shims/node`,                      // asdf
-		`${homedir}/.local/bin/node`,
-		"/usr/local/bin/node",
-		"/usr/bin/node",
-		"/snap/bin/node",
-	);
-
-	for (const candidate of candidates) {
-		try {
-			if (fs.existsSync(candidate)) {
-				return candidate;
-			}
-		} catch { /* ignore */ }
-	}
-
-	console.warn("[Claude Code] Could not find node binary, falling back to 'node'");
-	return "node";
-}
 
 export async function claudeCodeMessage(
 	prompt: string,
@@ -345,16 +307,8 @@ export async function claudeCodeMessage(
 ) {
 	if (!Platform.isDesktop) throw new Error("Claude Code is only available on desktop.");
 	await ensureSDKInstalled(pluginDir);
-	const path = require("path");
 	const { spawn } = require("child_process");
-	const cliPath = path.join(
-		pluginDir,
-		"node_modules",
-		"@anthropic-ai",
-		"claude-agent-sdk",
-		"cli.js"
-	);
-	const nodePath = resolveNodePath();
+	const cliPath = getNativeBinaryPath(pluginDir);
 
 	// Build MCP servers and allowedTools from workspace list
 	const mcpServers: Record<string, { type: "http"; url: string; headers: Record<string, string> }> = {};
@@ -380,9 +334,7 @@ export async function claudeCodeMessage(
 			pathToClaudeCodeExecutable: cliPath,
 			...(sessionId ? { resume: sessionId } : {}),
 			spawnClaudeCodeProcess: (options: { command: string; args: string[]; cwd?: string; env?: Record<string, string | undefined> }) => {
-				const cmd =
-					options.command === "node" ? nodePath : options.command;
-				return spawn(cmd, options.args, {
+				return spawn(options.command, options.args, {
 					cwd: options.cwd,
 					env: options.env,
 					stdio: ["pipe", "pipe", "pipe"],

@@ -1,5 +1,4 @@
 import { assistant } from "utils/constants";
-import { EmbeddingProvider } from "RAG/EmbeddingService";
 
 export type ContextSettings = {
 	includeActiveFile: boolean;
@@ -292,9 +291,9 @@ export type ToolSettings = {
 export type RAGSettings = {
 	/** Whether RAG / vault semantic search is enabled at all. */
 	enabled: boolean;
-	/** Which provider to use for generating embeddings. */
-	embeddingProvider: EmbeddingProvider;
-	/** Model name for the chosen provider (e.g. "text-embedding-3-small"). */
+	/** Which embedding backend to use. Defaults to "onnx" (runs in-process, no server). */
+	embeddingProvider: import("RAG/EmbeddingService").EmbeddingProvider;
+	/** Embedding model name — only used for external providers (openai/gemini/ollama/lmStudio). */
 	embeddingModel: string;
 	/** Vault-root-relative folder paths to skip during indexing (e.g. "Templates"). */
 	excludedFolders: string[];
@@ -304,6 +303,8 @@ export type RAGSettings = {
 	lastIndexed: number | null;
 	/** Number of files in the current index. */
 	indexedFileCount: number;
+	/** Whether the ONNX model has been downloaded and cached locally. */
+	modelCached: boolean;
 };
 
 export type SearxngSettings = {

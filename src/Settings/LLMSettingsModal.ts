@@ -15,7 +15,7 @@ import { buildOllamaModels, buildLMStudioModels, modelNames, models } from "util
 import { GPT4All, ollama, lmStudio } from "utils/constants";
 import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
-import { DEFAULT_EMBEDDING_MODELS, EmbeddingProvider, OllamaModelNotFoundError } from "RAG/EmbeddingService";
+import { EmbeddingService, EmbeddingProvider, DEFAULT_EMBEDDING_MODELS } from "RAG/EmbeddingService";
 import { ALL_TOOL_DEFINITIONS } from "services/ObsidianToolRegistry";
 
 type APIKeyType = "claude" | "gemini" | "openai" | "mistral";
@@ -800,13 +800,16 @@ export class LLMSettingsModal extends Modal {
 				text.inputEl.type = "password";
 				text.setValue(this.plugin.settings[config.key] as string);
 				text.onChange((value) => {
-					if (value.trim().length) {
-						(this.plugin.settings[config.key] as string) = value;
-						void this.plugin.saveSettings();
-					}
+					(this.plugin.settings[config.key] as string) = value;
+					void this.plugin.saveSettings();
 					// Refresh empty state live so the setup hint appears/disappears
 					// as the user types or clears a key.
 					this.plugin.refreshAllEmptyStates();
+					// Re-render the agent settings tab so model dropdowns reflect the
+					// newly entered (or cleared) API key immediately.
+					if (this.activeTab === "obsidian-agent") {
+						this.renderTab("obsidian-agent");
+					}
 				});
 			})
 			.addButton((button: ButtonComponent) => {
@@ -1272,41 +1275,117 @@ export class LLMSettingsModal extends Modal {
 		// Embedding configuration
 		const embeddingItems = this.addSettingGroup(el);
 
+		const rag = this.plugin.settings.ragSettings;
+		const currentProvider = rag.embeddingProvider ?? "onnx";
+
+		// Provider selector
 		new Setting(embeddingItems)
 			.setName("Embedding provider")
-			.setDesc("Which provider to use for generating embeddings. Uses the API key you've already configured.")
-			.addDropdown((dropdown: DropdownComponent) => {
+			.setDesc("ONNX runs in-process (no server needed). External providers use your existing API keys / local servers.")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("onnx", "ONNX (local, no server)");
+				dropdown.addOption("ollama", "Ollama");
 				dropdown.addOption("openai", "OpenAI");
 				dropdown.addOption("gemini", "Gemini");
-				dropdown.addOption("ollama", "Ollama (local)");
-				dropdown.addOption("lmStudio", "LM Studio (local)");
-				dropdown.setValue(this.plugin.settings.ragSettings.embeddingProvider);
-				dropdown.onChange(async (value) => {
-					const provider = value as EmbeddingProvider;
-					this.plugin.settings.ragSettings.embeddingProvider = provider;
-					this.plugin.settings.ragSettings.embeddingModel = DEFAULT_EMBEDDING_MODELS[provider];
+				dropdown.addOption("lmStudio", "LM Studio");
+				dropdown.setValue(currentProvider);
+				dropdown.onChange(async (value: any) => {
+					this.plugin.settings.ragSettings.embeddingProvider = value;
+					this.plugin.settings.ragSettings.embeddingModel = DEFAULT_EMBEDDING_MODELS[value as EmbeddingProvider];
 					await this.plugin.saveSettings();
 					this.plugin.initVaultIndexer();
-					// Re-render to update the model field placeholder
+					if (this.plugin.vaultIndexer) {
+						await this.plugin.vaultIndexer.clearIndex();
+						new Notice("Embedding provider changed — re-indexing vault…");
+						this.plugin.vaultIndexer.indexVault(this.plugin.settings.ragSettings.excludedFolders)
+							.then(async ({ indexed, skipped }) => {
+								this.plugin.settings.ragSettings.lastIndexed = Date.now();
+								this.plugin.settings.ragSettings.indexedFileCount = this.plugin.vaultIndexer!.indexedFileCount;
+								await this.plugin.saveSettings();
+								new Notice(`✓ Vault indexed — ${indexed} updated, ${skipped} unchanged.`);
+							})
+							.catch((e: any) => new Notice(`Indexing failed: ${e?.message ?? String(e)}`));
+					}
+					// Re-render so provider-specific UI appears
 					this.renderTab("embeddings");
 				});
 			});
 
-		new Setting(embeddingItems)
-			.setName("Embedding model")
-			.setDesc(
-				`Model used to generate embeddings. Default: ${DEFAULT_EMBEDDING_MODELS[this.plugin.settings.ragSettings.embeddingProvider]}`
-			)
-			.addText((text) => {
-				text.setPlaceholder(DEFAULT_EMBEDDING_MODELS[this.plugin.settings.ragSettings.embeddingProvider]);
-				text.setValue(this.plugin.settings.ragSettings.embeddingModel);
-				text.onChange(async (value) => {
-					this.plugin.settings.ragSettings.embeddingModel = value.trim() ||
-						DEFAULT_EMBEDDING_MODELS[this.plugin.settings.ragSettings.embeddingProvider];
-					await this.plugin.saveSettings();
-					this.plugin.initVaultIndexer();
+		// Provider-specific controls
+		if (currentProvider === "onnx") {
+			// ONNX: show download/load button with status
+			const loaded = EmbeddingService.isOnnxLoaded();
+			const cached = rag.modelCached;
+			const modelStatusSetting = new Setting(embeddingItems)
+				.setName("Model status")
+				.setDesc(
+					loaded
+						? "Model ready — Xenova/all-mpnet-base-v2 (runs in-process)"
+						: cached
+							? "Model cached — will load on next use"
+							: "Model not downloaded (~90 MB on first use)"
+				);
+
+			modelStatusSetting.addButton((button) => {
+				button.setButtonText(loaded ? "Loaded" : cached ? "Load now" : "Download & load");
+				if (loaded) button.setDisabled(true);
+				button.onClick(async () => {
+					button.setButtonText("Downloading…");
+					button.setDisabled(true);
+					modelStatusSetting.setDesc("Downloading model…");
+					try {
+						await EmbeddingService.loadOnnx((progress) => {
+							modelStatusSetting.setDesc(`Downloading… ${Math.round(progress)}%`);
+						});
+						this.plugin.settings.ragSettings.modelCached = true;
+						await this.plugin.saveSettings();
+						this.plugin.initVaultIndexer();
+						modelStatusSetting.setDesc("Model ready — Xenova/all-mpnet-base-v2 (runs in-process)");
+						button.setButtonText("Loaded");
+						button.setDisabled(true);
+						new Notice("✓ Embedding model loaded successfully.");
+					} catch (e: any) {
+						new Notice(`Failed to load embedding model: ${e?.message ?? String(e)}`);
+						modelStatusSetting.setDesc("Download failed — check console for details.");
+						button.setButtonText(cached ? "Retry" : "Download & load");
+						button.setDisabled(false);
+					}
 				});
 			});
+		} else {
+			// External providers: show model name field and a note about prerequisites
+			const providerLabels: Record<string, string> = {
+				openai: "Uses your OpenAI API key from the API Keys settings.",
+				gemini: "Uses your Gemini API key from the API Keys settings.",
+				ollama: `Uses your Ollama server (${this.plugin.settings.ollamaHost ?? "http://localhost:11434"}). Ensure the model is pulled.`,
+				lmStudio: `Uses your LM Studio server (${this.plugin.settings.lmStudioHost ?? "http://localhost:1234"}). Load an embedding model in LM Studio first.`,
+			};
+
+			new Setting(embeddingItems)
+				.setName("Embedding model")
+				.setDesc(providerLabels[currentProvider] ?? "")
+				.addText((text) => {
+					text.setPlaceholder(DEFAULT_EMBEDDING_MODELS[currentProvider]);
+					text.setValue(rag.embeddingModel || DEFAULT_EMBEDDING_MODELS[currentProvider]);
+					text.onChange(async (value) => {
+						this.plugin.settings.ragSettings.embeddingModel = value || DEFAULT_EMBEDDING_MODELS[currentProvider];
+						await this.plugin.saveSettings();
+						this.plugin.initVaultIndexer();
+						if (this.plugin.vaultIndexer) {
+							await this.plugin.vaultIndexer.clearIndex();
+							new Notice("Embedding model changed — re-indexing vault…");
+							this.plugin.vaultIndexer.indexVault(this.plugin.settings.ragSettings.excludedFolders)
+								.then(async ({ indexed, skipped }) => {
+									this.plugin.settings.ragSettings.lastIndexed = Date.now();
+									this.plugin.settings.ragSettings.indexedFileCount = this.plugin.vaultIndexer!.indexedFileCount;
+									await this.plugin.saveSettings();
+									new Notice(`✓ Vault indexed — ${indexed} updated, ${skipped} unchanged.`);
+								})
+								.catch((e: any) => new Notice(`Indexing failed: ${e?.message ?? String(e)}`));
+						}
+					});
+				});
+		}
 
 		new Setting(embeddingItems)
 			.setName("Results per query")
@@ -1341,7 +1420,6 @@ export class LLMSettingsModal extends Modal {
 			});
 
 		// Status display
-		const rag = this.plugin.settings.ragSettings;
 		const lastIndexedText = rag.lastIndexed
 			? `Last indexed: ${new Date(rag.lastIndexed).toLocaleString()} · ${rag.indexedFileCount} file(s)`
 			: "Not yet indexed.";
@@ -1374,18 +1452,8 @@ export class LLMSettingsModal extends Modal {
 						new Notice(`✓ Vault indexed — ${indexed} updated, ${skipped} unchanged.`);
 						this.renderTab("embeddings");
 					} catch (e: any) {
-						if (e instanceof OllamaModelNotFoundError) {
-							new Notice(
-								`Ollama model "${e.model}" isn't pulled yet.\n\nRun this in your terminal:\n  ollama pull ${e.model}`,
-								10000
-							);
-							indexSetting.setDesc(
-								`Model not found. Run: ollama pull ${e.model}`
-							);
-						} else {
-							new Notice(`Indexing failed: ${e?.message ?? String(e)}`);
-							indexSetting.setDesc(lastIndexedText);
-						}
+						new Notice(`Indexing failed: ${e?.message ?? String(e)}`);
+						indexSetting.setDesc(lastIndexedText);
 						button.setButtonText("Index now");
 						button.setDisabled(false);
 					}
@@ -1744,6 +1812,7 @@ export class LLMSettingsModal extends Modal {
 					await this.plugin.saveSettings();
 					// Regenerate FAB/StatusBar so the agent flag is picked up.
 					if (this.plugin.settings.showFAB) this.plugin.fab.regenerateFAB();
+					this.plugin.syncAllContainersAgentMode(value);
 					this.renderTab("obsidian-agent");
 				});
 			});

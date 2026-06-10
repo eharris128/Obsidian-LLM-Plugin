@@ -215,12 +215,13 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	showStatusBarButton: false,
 	ragSettings: {
 		enabled: false,
-		embeddingProvider: "openai",
-		embeddingModel: DEFAULT_EMBEDDING_MODELS["openai"],
+		embeddingProvider: "onnx" as const,
+		embeddingModel: DEFAULT_EMBEDDING_MODELS["onnx"],
 		excludedFolders: [],
 		topK: 5,
 		lastIndexed: null,
 		indexedFileCount: 0,
+		modelCached: false,
 	},
 	skillsSettings: {
 		enabledSkills: {},
@@ -360,7 +361,18 @@ export default class LLMPlugin extends Plugin {
 			await this.saveSettings();
 		}
 
+		// Configure ONNX env before any pipeline call — sets cache dir to the
+		// plugin's OS path so transformers.js uses Node.js https (not browser
+		// fetch), bypassing Obsidian's Content Security Policy.
+		const vaultBasePath = (this.app.vault.adapter as any).basePath;
+		const pluginOsDir = require("path").join(vaultBasePath, this.manifest.dir);
+		EmbeddingService.configure(pluginOsDir);
+
 		this.initVaultIndexer();
+		if (this.settings.ragSettings?.enabled && this.settings.ragSettings?.modelCached
+				&& (this.settings.ragSettings?.embeddingProvider ?? "onnx") === "onnx") {
+			EmbeddingService.loadOnnx().catch(e => console.error("[RAG] Failed to warm up ONNX model:", e));
+		}
 		this.initMemoryService();
 		this.initWhisperService();
 		this.initSearxngService();
@@ -679,7 +691,7 @@ export default class LLMPlugin extends Plugin {
 			return;
 		}
 		const embeddingService = new EmbeddingService({
-			provider: rag.embeddingProvider,
+			provider: rag.embeddingProvider ?? "onnx",
 			model: rag.embeddingModel,
 			openAIKey: this.settings.openAIAPIKey,
 			geminiKey: this.settings.geminiAPIKey,
@@ -882,9 +894,8 @@ export default class LLMPlugin extends Plugin {
 			this.memoryService = null;
 			return;
 		}
-		// MemoryService reuses the RAG embedding provider already configured
 		const embeddingService = new EmbeddingService({
-			provider: rag.embeddingProvider,
+			provider: rag.embeddingProvider ?? "onnx",
 			model: rag.embeddingModel,
 			openAIKey: this.settings.openAIAPIKey,
 			geminiKey: this.settings.geminiAPIKey,
@@ -981,6 +992,9 @@ export default class LLMPlugin extends Plugin {
 			activeWindow.clearTimeout(timer);
 		}
 		this.ragDebounceTimers.clear();
+
+		// Kill the ONNX worker child process if running.
+		EmbeddingService.unload();
 
 		this.fab.removeFab();
 		this.statusBarButton.remove();

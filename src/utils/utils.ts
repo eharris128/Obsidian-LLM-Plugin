@@ -117,12 +117,12 @@ export async function fetchOllamaContextWindows(
 	const result: Record<string, number> = {};
 	for (const name of modelNames) {
 		try {
-			const response = await requestUrl({
-				url: `${host}/api/show`,
+			const res = await fetch(`${host}/api/show`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ name }),
-			}).then((res) => res.json);
+			});
+			const response = await res.json();
 			const fromInfo = response?.model_info?.["llm.context_length"];
 			const fromParams = response?.parameters
 				? parseInt(
@@ -142,21 +142,15 @@ export async function fetchOllamaContextWindows(
 }
 
 export async function fetchOllamaModels(host: string): Promise<string[]> {
-	const request = {
-		url: `${host}/api/tags`,
-		method: "GET",
-	} as RequestUrlParam;
-	const response = await requestUrl(request).then((res) => res.json);
+	const res = await fetch(`${host}/api/tags`);
+	const response = await res.json();
 	return (response.models || []).map((m: { name: string }) => m.name);
 }
 
 /** Fetches the list of models currently loaded in LM Studio via its OpenAI-compatible /v1/models endpoint. */
 export async function fetchLMStudioModels(host: string): Promise<string[]> {
-	const request = {
-		url: `${host}/v1/models`,
-		method: "GET",
-	} as RequestUrlParam;
-	const response = await requestUrl(request).then((res) => res.json);
+	const res = await fetch(`${host}/v1/models`);
+	const response = await res.json();
 	return (response.data || []).map((m: { id: string }) => m.id);
 }
 

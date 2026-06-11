@@ -525,12 +525,13 @@ export class ChatContainer extends Component {
 			let firstText = true;
 			for await (const message of stream) {
 				if (this._abortController?.signal.aborted) break;
+				const msg = message as any;
 				// Capture session ID from first message
-				if (!this.claudeCodeSessionId && (message as { session_id?: string }).session_id) {
-					this.claudeCodeSessionId = (message as { session_id?: string }).session_id ?? null;
+				if (!this.claudeCodeSessionId && msg.session_id) {
+					this.claudeCodeSessionId = msg.session_id ?? null;
 				}
-				if (message.type === "assistant") {
-					for (const block of message.message.content) {
+				if (msg.type === "assistant") {
+					for (const block of msg.message?.content ?? []) {
 						if (block.type === "text" && block.text) {
 							if (firstText) {
 								this.streamingDiv.empty();
@@ -539,13 +540,37 @@ export class ChatContainer extends Component {
 							this.previewText += block.text;
 							this.streamingDiv.textContent = this.previewText;
 							this.historyMessages.scroll(0, 9999);
+						} else if (block.type === "tool_use") {
+							// Show which tool Claude Code is running
+							const toolLabel = (block.name as string).replace(/_/g, " ");
+							this.showThinkingAnimation(`Running: ${toolLabel}`);
+							firstText = true; // next text chunk clears the animation
 						}
 					}
+				} else if (msg.type === "tool_use_summary") {
+					// After tool batch completes, resume "Thinking…"
+					this.showThinkingAnimation();
+					firstText = true;
+				} else if (msg.type === "result" && msg.usage) {
+					// Final result message — capture token usage
+					this.lastTokenUsage = {
+						inputTokens: msg.usage.input_tokens ?? 0,
+						outputTokens: msg.usage.output_tokens ?? 0,
+					};
 				}
 			}
 
 			this.streamingDiv.empty();
 			await this.renderMarkdown(this.previewText, this.streamingDiv);
+			// Append token usage before addMessage triggers a DOM re-render
+			if (this.lastTokenUsage) {
+				this.appendTokenUsage(
+					this.loadingDivContainer,
+					this.lastTokenUsage.inputTokens,
+					this.lastTokenUsage.outputTokens
+				);
+				this.lastTokenUsage = null;
+			}
 			this.messageStore.addMessage({
 				role: assistant,
 				content: this.previewText,
@@ -978,7 +1003,7 @@ export class ChatContainer extends Component {
 				if (contextFile) {
 					const content = await this.plugin.app.vault.read(contextFile);
 					const activeFileContextString =
-						`# Active File: ${contextFile.name}\nPath: \`${contextFile.path}\`\n\n\`\`\`\n${content}\n\`\`\`\n`;
+						`# User's Active Note (the note they are asking about)\nFile: ${contextFile.name}\nPath: \`${contextFile.path}\`\n\nThis note is already loaded below — do not use file-reading tools to re-read it.\n\n\`\`\`\n${content}\n\`\`\`\n`;
 					// Override any previously built context string — explicit toggle wins
 					this.pendingContextString = activeFileContextString;
 					this.currentVaultContext = {
@@ -1038,7 +1063,7 @@ export class ChatContainer extends Component {
 							} catch { continue; }
 						}
 						blocks.push(
-							`# Attached folder: ${entry.label} (${entry.absPath})\n\n## File listing\n\`\`\`\n${listing}\n\`\`\`\n\n## File contents\n\n` +
+							`# Attached folder: ${entry.label}\nPath: ${entry.absPath}\n\nThis folder's contents are pre-loaded below. Do NOT use file-reading or directory-listing tools to re-read these files — use the content already provided here to answer the user's question.\n\n## File listing\n\`\`\`\n${listing}\n\`\`\`\n\n## File contents\n\n` +
 							(fileBlocks.length > 0 ? fileBlocks.join("\n\n") : "(no readable text files found)")
 						);
 					} else {
@@ -1051,7 +1076,7 @@ export class ChatContainer extends Component {
 							nodeFs.closeSync(fd);
 							const ext = nodePath.extname(entry.absPath).replace(/^\./, "").toLowerCase();
 							const truncNote = read === MAX_FILE_BYTES && st.size > MAX_FILE_BYTES ? ` (truncated to first ${MAX_FILE_BYTES} bytes)` : "";
-							blocks.push(`# Attached file: ${entry.label} (${entry.absPath})${truncNote}\n\n\`\`\`${ext}\n${buf.subarray(0, read).toString("utf8")}\n\`\`\``);
+							blocks.push(`# Attached file: ${entry.label}\nPath: ${entry.absPath}${truncNote}\n\nThis file is pre-loaded below. Do NOT use file-reading tools to re-read it.\n\n\`\`\`${ext}\n${buf.subarray(0, read).toString("utf8")}\n\`\`\``);
 						} catch (e) {
 							blocks.push(`# Attached file: ${entry.label}\n\n(Error reading file: ${e})`);
 						}
@@ -1072,16 +1097,21 @@ export class ChatContainer extends Component {
 		// so the model knows which file to act on when the user says "this page", etc.
 		// Only inject when the user has active-file context enabled — otherwise agent
 		// models will autonomously read the file even though the user turned it off.
-		if (this.supportsAgentMode(modelType) && modelEndpoint !== images && this.useActiveFileContext) {
-			const activeFile = this.plugin.app.workspace.getActiveFile();
-			if (activeFile || this.pendingContextString) {
-				const activeHint = activeFile
-					? `The user's currently active note is "${activeFile.name}" at vault path "${activeFile.path}". When the user refers to "this page", "this note", "this file", or similar, they mean this file.\n\n`
-					: "";
-				if (activeHint && this.pendingContextString) {
-					this.pendingContextString = activeHint + this.pendingContextString;
-				} else if (activeHint && !this.pendingContextString) {
-					this.pendingContextString = activeHint;
+		if (this.supportsAgentMode(modelType) && modelEndpoint !== images) {
+			const activeFile = this.useActiveFileContext ? this.plugin.app.workspace.getActiveFile() : null;
+			const hasLocalPaths = this.localContextPaths.length > 0;
+			if (activeFile || hasLocalPaths || this.pendingContextString) {
+				const parts: string[] = [];
+				if (activeFile && this.useActiveFileContext) {
+					parts.push(`The user's currently active note is "${activeFile.name}" (vault path: "${activeFile.path}"). When the user refers to "this page", "this note", "this file", or similar, they mean this note. Its content is pre-loaded in the context below — do not use file-reading tools to re-read it.`);
+				}
+				if (hasLocalPaths) {
+					const labels = this.localContextPaths.map((p) => `"${p.label}" (${p.isDir ? "folder" : "file"}: ${p.absPath})`).join(", ");
+					parts.push(`The user has attached the following local ${this.localContextPaths.length === 1 ? "path" : "paths"} as context: ${labels}. Their contents are pre-loaded below — do NOT use file-reading or directory tools to re-read them. Use the pre-loaded content to answer the question directly.`);
+				}
+				if (parts.length > 0) {
+					const hint = parts.join("\n\n") + "\n\n";
+					this.pendingContextString = hint + (this.pendingContextString ?? "");
 				}
 			}
 		}
@@ -1977,6 +2007,14 @@ export class ChatContainer extends Component {
 				// onChunk will replace streamingDiv content with accumulated text.
 				this.showThinkingAnimation();
 			},
+			onToolStart: (toolName) => {
+				// Show which tool is currently running
+				const displayName = toolName.replace(/_/g, " ");
+				this.showThinkingAnimation(`Running: ${displayName}`);
+			},
+			onUsage: (inputTokens, outputTokens) => {
+				this.lastTokenUsage = { inputTokens, outputTokens };
+			},
 			onToolResult: (toolName, input, result) => {
 				// Track for RAG sources panel
 				if (toolName === "search_vault_semantic") {
@@ -2262,7 +2300,9 @@ export class ChatContainer extends Component {
 				this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined,
 				undefined, // projectName — unchanged on update
 				undefined, // isAgent — unchanged on update
-				this.allModelsByTurn.size > 0 ? this.allModelsByTurn : undefined
+				this.allModelsByTurn.size > 0 ? this.allModelsByTurn : undefined,
+				undefined, // saveFolder — unchanged on update
+				this.localContextPaths.length > 0 ? this.localContextPaths : undefined
 			);
 			return;
 		}
@@ -2311,7 +2351,8 @@ export class ChatContainer extends Component {
 			activeProject?.name,
 			this.isObsidianAgent && this.plugin.settings.obsidianAgentSettings?.enabled,
 			this.allModelsByTurn.size > 0 ? this.allModelsByTurn : undefined,
-			saveFolder
+			saveFolder,
+			this.localContextPaths.length > 0 ? this.localContextPaths : undefined
 		);
 
 		this.currentHistoryFilePath = filePath;
@@ -2865,9 +2906,16 @@ export class ChatContainer extends Component {
 				const rect = (promptContainer as HTMLElement).getBoundingClientRect();
 				const menuH = slashMenu.offsetHeight;
 				const gap = 6;
+				const topAbove = rect.top - menuH - gap;
 				slashMenu.style.left = `${rect.left}px`;
-				slashMenu.style.top = `${rect.top - menuH - gap}px`;
-				slashMenu.style.bottom = "";
+				if (topAbove >= 0) {
+					slashMenu.style.top = `${topAbove}px`;
+					slashMenu.style.bottom = "";
+				} else {
+					// Not enough room above — position below the prompt container instead
+					slashMenu.style.top = `${rect.bottom + gap}px`;
+					slashMenu.style.bottom = "";
+				}
 			});
 		};
 
@@ -2994,7 +3042,7 @@ export class ChatContainer extends Component {
 					title: "Attach file or folder",
 					defaultPath: lastDir,
 					buttonLabel: "Attach",
-					properties: ["openFile", "openDirectory"],
+					properties: ["openFile", "openDirectory", "showHiddenFiles"],
 				}).then((result: { canceled: boolean; filePaths: string[] }) => {
 					if (result.canceled || result.filePaths.length === 0) return;
 					const absPath = result.filePaths[0];
@@ -3766,14 +3814,14 @@ export class ChatContainer extends Component {
 		});
 	}
 
-	showThinkingAnimation() {
+	showThinkingAnimation(label?: string) {
 		this.streamingDiv.empty();
 		const thinkingContainer = this.streamingDiv.createDiv({
 			cls: "llm-thinking-animation"
 		});
 		thinkingContainer.createSpan({
 			cls: "llm-thinking-text",
-			text: "Thinking"
+			text: label ?? "Thinking"
 		});
 		const dots = thinkingContainer.createSpan({ cls: "llm-thinking-dots" });
 		for (let i = 0; i < 3; i++) {

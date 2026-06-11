@@ -1167,7 +1167,7 @@ export class LLMSettingsModal extends Modal {
 
 		// Ensure toolSettings exists (deep-merge guard for existing installs)
 		if (!this.plugin.settings.toolSettings) {
-			this.plugin.settings.toolSettings = { disabledTools: [], maxToolCalls: 10 };
+			this.plugin.settings.toolSettings = { disabledTools: ["run_shell_command"], maxToolCalls: 10, shellCommandOptedIn: false };
 		}
 
 		// ── Agent behaviour ───────────────────────────────────────────────────
@@ -1258,6 +1258,21 @@ export class LLMSettingsModal extends Modal {
 			setting.addToggle((toggle) => {
 				toggle.setValue(!disabledTools.includes(tool.name));
 				toggle.onChange(async (enabled) => {
+					if (enabled && tool.requiresShellConfirm) {
+						// Revert the toggle immediately; only commit after user confirms
+						toggle.setValue(false);
+						new ShellCommandWarningModal(this.app, async () => {
+							this.plugin.settings.toolSettings.shellCommandOptedIn = true;
+							const idx = this.plugin.settings.toolSettings.disabledTools.indexOf(tool.name);
+							if (idx !== -1) this.plugin.settings.toolSettings.disabledTools.splice(idx, 1);
+							await this.plugin.saveSettings();
+							toggle.setValue(true);
+						}).open();
+						return;
+					}
+					if (!enabled && tool.requiresShellConfirm) {
+						this.plugin.settings.toolSettings.shellCommandOptedIn = false;
+					}
 					const idx = this.plugin.settings.toolSettings.disabledTools.indexOf(tool.name);
 					if (enabled && idx !== -1) {
 						this.plugin.settings.toolSettings.disabledTools.splice(idx, 1);
@@ -2516,5 +2531,42 @@ class GuidanceEditorOverlay {
 	close() {
 		this.overlayEl?.remove();
 		this.overlayEl = null;
+	}
+}
+
+class ShellCommandWarningModal extends Modal {
+	constructor(app: App, private onConfirm: () => void) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h2", { text: "⚠ Enable Shell Command Tool?" });
+		contentEl.createEl("p", {
+			text: "The run_shell_command tool lets the AI execute arbitrary shell commands on your computer — it can read, write, or delete any file and run any program.",
+		});
+		contentEl.createEl("p", {
+			text: "Only enable this if you understand the risks and trust the prompts you send to the agent. A rogue or poorly-worded prompt could cause irreversible damage.",
+		});
+		contentEl.createEl("p", {
+			cls: "llm-shell-warning-note",
+			text: "Tip: use it for read-only tasks like 'git log' or 'grep' — avoid prompts that ask the agent to write or delete files via the shell.",
+		});
+
+		const btnRow = contentEl.createDiv({ cls: "llm-shell-warning-buttons" });
+		new ButtonComponent(btnRow)
+			.setButtonText("Cancel")
+			.onClick(() => this.close());
+		new ButtonComponent(btnRow)
+			.setButtonText("Yes, enable shell commands")
+			.setWarning()
+			.onClick(() => {
+				this.close();
+				this.onConfirm();
+			});
+	}
+
+	onClose() {
+		this.contentEl.empty();
 	}
 }

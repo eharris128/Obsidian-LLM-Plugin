@@ -286,6 +286,12 @@ export type ToolSettings = {
 	 * is forced to stop. Prevents runaway agents.
 	 */
 	maxToolCalls: number;
+	/**
+	 * Explicit opt-in for run_shell_command. Must be true before the tool can be
+	 * removed from disabledTools. Defaults to false so the tool is always off
+	 * unless the user consciously enables it via the warning dialog in Settings.
+	 */
+	shellCommandOptedIn: boolean;
 };
 
 export type RAGSettings = {

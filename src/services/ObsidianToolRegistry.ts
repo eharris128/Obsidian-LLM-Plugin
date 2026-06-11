@@ -1,4 +1,7 @@
 import { App, TFile } from "obsidian";
+import * as fs from "fs";
+import * as path from "path";
+import * as child_process from "child_process";
 import { RiskTier } from "Types/types";
 import { VaultIndexer } from "RAG/VaultIndexer";
 import { ChatHistory } from "services/ChatHistory";
@@ -19,6 +22,12 @@ export interface NeutralToolDefinition {
 	requiresRag?: boolean;
 	/** When true, a note is shown in Settings that this tool requires SearXNG to be configured. */
 	requiresWebSearch?: boolean;
+	/**
+	 * When true, enabling this tool in Settings shows a security warning and requires
+	 * the user to explicitly confirm. The tool also defaults to disabled and requires
+	 * shellCommandOptedIn to be set before it can be active.
+	 */
+	requiresShellConfirm?: boolean;
 }
 
 export type ToolResult = { success: boolean; result?: string; error?: string };
@@ -221,6 +230,52 @@ export const ALL_TOOL_DEFINITIONS: NeutralToolDefinition[] = [
 		},
 		risk: "safe",
 		requiresWebSearch: true,
+	},
+	{
+		name: "read_local_file",
+		displayName: "Read local file",
+		description: "Read the contents of any file on the local filesystem by its absolute path. Use this to inspect source code, config files, or any text file outside the vault — for example, another plugin you are developing.",
+		parameters: {
+			type: "object",
+			properties: {
+				file_path: { type: "string", description: "Absolute path to the file (e.g. '/Users/you/projects/my-plugin/src/main.ts')." },
+				max_bytes: { type: "string", description: "Maximum number of bytes to read from the start of the file (default 200000, max 500000). Useful for large files." },
+			},
+			required: ["file_path"],
+		},
+		risk: "safe",
+	},
+	{
+		name: "list_local_folder",
+		displayName: "List local folder",
+		description: "List files and subdirectories in any folder on the local filesystem. Optionally recurse into subdirectories and filter by file extension.",
+		parameters: {
+			type: "object",
+			properties: {
+				folder_path: { type: "string", description: "Absolute path to the folder to list (e.g. '/Users/you/projects/my-plugin/src')." },
+				recursive: { type: "string", description: "'true' to recurse into subdirectories (default 'false')." },
+				extension: { type: "string", description: "Optional file extension filter without leading dot (e.g. 'ts', 'md'). Only files with this extension are returned." },
+				max_entries: { type: "string", description: "Maximum number of entries to return (1–500, default 200)." },
+			},
+			required: ["folder_path"],
+		},
+		risk: "safe",
+	},
+	{
+		name: "run_shell_command",
+		displayName: "Run shell command",
+		description: "Execute an arbitrary shell command and return its stdout/stderr output. CAUTION: this tool can read, write, or delete any file on your system and run any program. Only enable it if you understand the risks and trust the prompts you send to the agent.",
+		parameters: {
+			type: "object",
+			properties: {
+				command: { type: "string", description: "The shell command to run (executed via /bin/sh -c on macOS/Linux, cmd /c on Windows)." },
+				cwd: { type: "string", description: "Optional working directory for the command (absolute path). Defaults to the vault base path." },
+				timeout_ms: { type: "string", description: "Timeout in milliseconds before the command is killed (default 15000, max 60000)." },
+			},
+			required: ["command"],
+		},
+		risk: "danger",
+		requiresShellConfirm: true,
 	},
 	{
 		name: "get_chat_history",
@@ -607,6 +662,110 @@ export class ObsidianToolRegistry {
 					}
 
 					return { success: false, error: `Unknown action: ${action}. Use 'list' or 'load'.` };
+				}
+
+				case "read_local_file": {
+					const { file_path: filePath, max_bytes: maxBytesArg } = input as { file_path: string; max_bytes?: string };
+					const maxBytes = Math.min(500000, Math.max(1, parseInt(maxBytesArg ?? "200000", 10) || 200000));
+					if (!path.isAbsolute(filePath)) {
+						return { success: false, error: `file_path must be an absolute path. Got: ${filePath}` };
+					}
+					if (!fs.existsSync(filePath)) {
+						return { success: false, error: `File not found: ${filePath}` };
+					}
+					const stat = fs.statSync(filePath);
+					if (stat.isDirectory()) {
+						return { success: false, error: `Path is a directory. Use list_local_folder to list its contents.` };
+					}
+					const fd = fs.openSync(filePath, "r");
+					const buf = Buffer.alloc(maxBytes);
+					const bytesRead = fs.readSync(fd, buf, 0, maxBytes, 0);
+					fs.closeSync(fd);
+					const content = buf.subarray(0, bytesRead).toString("utf8");
+					const truncated = bytesRead === maxBytes && stat.size > maxBytes;
+					const header = `File: ${filePath} (${stat.size} bytes${truncated ? `, showing first ${maxBytes}` : ""}):\n\n`;
+					return { success: true, result: header + content };
+				}
+
+				case "list_local_folder": {
+					const {
+						folder_path: folderPath,
+						recursive: recursiveArg,
+						extension,
+						max_entries: maxEntriesArg,
+					} = input as { folder_path: string; recursive?: string; extension?: string; max_entries?: string };
+
+					if (!path.isAbsolute(folderPath)) {
+						return { success: false, error: `folder_path must be an absolute path. Got: ${folderPath}` };
+					}
+					if (!fs.existsSync(folderPath)) {
+						return { success: false, error: `Folder not found: ${folderPath}` };
+					}
+					const stat = fs.statSync(folderPath);
+					if (!stat.isDirectory()) {
+						return { success: false, error: `Path is not a directory. Use read_local_file to read a file.` };
+					}
+
+					const recursive = recursiveArg === "true";
+					const maxEntries = Math.min(500, Math.max(1, parseInt(maxEntriesArg ?? "200", 10) || 200));
+					const extFilter = extension ? extension.replace(/^\./, "").toLowerCase() : null;
+
+					const entries: string[] = [];
+					const walk = (dir: string) => {
+						if (entries.length >= maxEntries) return;
+						let items: string[];
+						try { items = fs.readdirSync(dir); } catch { return; }
+						for (const item of items) {
+							if (entries.length >= maxEntries) break;
+							const full = path.join(dir, item);
+							let itemStat: fs.Stats;
+							try { itemStat = fs.statSync(full); } catch { continue; }
+							if (itemStat.isDirectory()) {
+								entries.push(full + "/");
+								if (recursive) walk(full);
+							} else {
+								if (!extFilter || path.extname(item).replace(/^\./, "").toLowerCase() === extFilter) {
+									entries.push(full);
+								}
+							}
+						}
+					};
+					walk(folderPath);
+
+					if (entries.length === 0) {
+						return { success: true, result: `No entries found in ${folderPath}${extFilter ? ` (filter: .${extFilter})` : ""}.` };
+					}
+					const truncated = entries.length >= maxEntries;
+					const header = `${entries.length} entr${entries.length === 1 ? "y" : "ies"} in ${folderPath}${truncated ? " (truncated)" : ""}:\n\n`;
+					return { success: true, result: header + entries.join("\n") };
+				}
+
+				case "run_shell_command": {
+					const { command, cwd: cwdArg, timeout_ms: timeoutArg } = input as { command: string; cwd?: string; timeout_ms?: string };
+					const timeoutMs = Math.min(60000, Math.max(1000, parseInt(timeoutArg ?? "15000", 10) || 15000));
+					const cwd = cwdArg ?? (this.app.vault.adapter as any).basePath ?? process.cwd();
+
+					return new Promise<ToolResult>((resolve) => {
+						child_process.exec(
+							command,
+							{ cwd, timeout: timeoutMs, maxBuffer: 2 * 1024 * 1024 },
+							(err, stdout, stderr) => {
+								const out = [
+									stdout ? `stdout:\n${stdout}` : "",
+									stderr ? `stderr:\n${stderr}` : "",
+								].filter(Boolean).join("\n\n");
+								if (err && !stdout && !stderr) {
+									resolve({ success: false, error: `Command failed (exit ${err.code ?? "?"}): ${err.message}` });
+								} else {
+									resolve({
+										success: !err || !!stdout,
+										result: out || "(no output)",
+										...(err ? { error: `Exited with code ${err.code ?? "?"}` } : {}),
+									});
+								}
+							}
+						);
+					});
 				}
 
 				default:

@@ -239,8 +239,9 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		activeAssistantId: null,
 	},
 	toolSettings: {
-		disabledTools: [],
+		disabledTools: ["run_shell_command"],
 		maxToolCalls: 10,
+		shellCommandOptedIn: false,
 	},
 	obsidianAgentSettings: {
 		enabled: false,
@@ -1366,6 +1367,14 @@ export default class LLMPlugin extends Plugin {
 				...DEFAULT_SETTINGS.toolSettings,
 				...(dataJSON.toolSettings ?? {}),
 			};
+			// run_shell_command requires explicit opt-in. On upgrades from versions that
+			// predate this tool, the saved disabledTools won't include it — force it disabled
+			// unless the user has explicitly opted in via the Settings warning dialog.
+			if (!this.settings.toolSettings.shellCommandOptedIn) {
+				if (!this.settings.toolSettings.disabledTools.includes("run_shell_command")) {
+					this.settings.toolSettings.disabledTools.push("run_shell_command");
+				}
+			}
 
 			// Deep-merge obsidianAgentSettings — nested Records need spread so new keys get defaults
 			this.settings.obsidianAgentSettings = {

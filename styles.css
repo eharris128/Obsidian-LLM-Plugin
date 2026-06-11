@@ -2022,6 +2022,23 @@ details[open] .llm-tool-calls-chevron {
 	color: var(--text-faint);
 }
 
+/* ── Shell command warning modal ─────────────────────────────────────────── */
+
+.llm-shell-warning-note {
+	font-size: var(--font-ui-small);
+	color: var(--text-muted);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-left: 3px solid var(--color-orange);
+	margin-top: var(--size-4-2);
+}
+
+.llm-shell-warning-buttons {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-4);
+}
+
 /* ── Active skill indicator (shown above an assistant message) ────────────── */
 
 .llm-skill-panel {

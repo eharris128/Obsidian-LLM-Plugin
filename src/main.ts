@@ -351,6 +351,15 @@ export default class LLMPlugin extends Plugin {
 			: new MobileOperatingSystem();
 		await this.loadSettings();
 
+		// Auto-populate the Claude Code OAuth token from the macOS Keychain if not set.
+		if (!this.settings.claudeCodeOAuthToken) {
+			const token = await this.readClaudeCodeTokenFromKeychain();
+			if (token) {
+				this.settings.claudeCodeOAuthToken = token;
+				await this.saveSettings();
+			}
+		}
+
 		// Show a one-time welcome Notice on first load (new installs and upgraders alike).
 		if (!this.settings.hasOnboarded) {
 			new Notice(
@@ -1417,6 +1426,32 @@ export default class LLMPlugin extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+	}
+
+	/**
+	 * Reads the Claude Code OAuth access token from the macOS Keychain.
+	 * Returns the token string on success, or null if unavailable/unsupported.
+	 * Also checks expiry — returns null (and logs a warning) if the token is expired.
+	 */
+	async readClaudeCodeTokenFromKeychain(): Promise<string | null> {
+		if (typeof process === "undefined" || process.platform !== "darwin") return null;
+		try {
+			const { execSync } = require("child_process") as typeof import("child_process");
+			const raw = execSync(
+				`security find-generic-password -s "Claude Code-credentials" -w`,
+				{ timeout: 5000, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }
+			).trim();
+			const data = JSON.parse(raw);
+			const oauth = data?.claudeAiOauth;
+			if (!oauth?.accessToken) return null;
+			if (oauth.expiresAt && Date.now() > oauth.expiresAt) {
+				console.warn("[LLM Plugin] Claude Code OAuth token is expired. Re-authenticate via `claude` in your terminal.");
+				return null;
+			}
+			return oauth.accessToken as string;
+		} catch {
+			return null;
+		}
 	}
 
 	async validateActiveModelsAPIKeys() {

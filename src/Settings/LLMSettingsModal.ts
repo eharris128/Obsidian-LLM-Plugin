@@ -5,6 +5,7 @@ import {
 	DropdownComponent,
 	Modal,
 	Notice,
+	requestUrl,
 	Setting,
 	setIcon,
 	TFile,
@@ -825,9 +826,47 @@ export class LLMSettingsModal extends Modal {
 		const apiItems = this.addSettingGroup(el);
 		this.renderApiKeyField(apiItems, this.apiKeyConfigs.claude);
 
+		// Test Claude API key button + status
+		const apiTestSetting = new Setting(apiItems)
+			.setName("Test Claude API key")
+			.setDesc("Verify your API key is valid and can reach the Anthropic API.");
+		let apiStatusEl: HTMLElement | null = null;
+		apiTestSetting.addButton((btn) => {
+			btn.setButtonText("Test");
+			btn.onClick(async () => {
+				if (apiStatusEl) apiStatusEl.remove();
+				apiStatusEl = apiTestSetting.descEl.createDiv({ cls: "llm-api-test-status llm-api-test-running", text: "Testing…" });
+				btn.setDisabled(true);
+				try {
+					const key = this.plugin.settings.claudeAPIKey?.trim();
+					if (!key) throw new Error("No API key configured.");
+					const resp = await requestUrl({
+						url: "https://api.anthropic.com/v1/models",
+						headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
+						throw: false,
+					});
+					if (resp.status < 400) {
+						apiStatusEl.className = "llm-api-test-status llm-api-test-ok";
+						apiStatusEl.setText("✓ API key is valid.");
+					} else {
+						const msg = resp.json?.error?.message ?? resp.text ?? String(resp.status);
+						apiStatusEl.className = "llm-api-test-status llm-api-test-fail";
+						apiStatusEl.setText(`✗ ${resp.status}: ${msg}`);
+					}
+				} catch (e: any) {
+					if (apiStatusEl) {
+						apiStatusEl.className = "llm-api-test-status llm-api-test-fail";
+						apiStatusEl.setText(`✗ ${e.message ?? "Unknown error"}`);
+					}
+				} finally {
+					btn.setDisabled(false);
+				}
+			});
+		});
+
 		// Claude Code
 		const authItems = this.addSettingGroup(el, "Claude Code");
-		new Setting(authItems)
+		const oauthSetting = new Setting(authItems)
 			.setName("Claude Code OAuth token")
 			.setDesc("OAuth token for authenticating with Claude Code (CLAUDE_CODE_OAUTH_TOKEN).")
 			.addText((text) => {
@@ -837,8 +876,64 @@ export class LLMSettingsModal extends Modal {
 					this.plugin.settings.claudeCodeOAuthToken = value;
 					void this.plugin.saveSettings();
 				});
+			})
+			.addButton((btn) => {
+				btn.setButtonText("Sync from Keychain").setTooltip("Read token from macOS Keychain (requires Claude Code desktop app to be installed and authenticated)");
+				btn.onClick(async () => {
+					btn.setDisabled(true);
+					btn.setButtonText("Syncing…");
+					const token = await this.plugin.readClaudeCodeTokenFromKeychain();
+					btn.setDisabled(false);
+					btn.setButtonText("Sync from Keychain");
+					if (token) {
+						this.plugin.settings.claudeCodeOAuthToken = token;
+						await this.plugin.saveSettings();
+						// Re-render to show updated value in the password field
+						this.renderTab("anthropic");
+						new Notice("✓ Claude Code token synced from Keychain.");
+					} else {
+						new Notice("Could not read token from Keychain. Make sure Claude Code is installed and you've run `claude` to authenticate.", 8000);
+					}
+				});
 			});
 
+		// Test OAuth token button + status
+		const oauthTestSetting = new Setting(authItems)
+			.setName("Test OAuth token")
+			.setDesc("Verify your Claude Code OAuth token is valid.");
+		let oauthStatusEl: HTMLElement | null = null;
+		oauthTestSetting.addButton((btn) => {
+			btn.setButtonText("Test");
+			btn.onClick(async () => {
+				if (oauthStatusEl) oauthStatusEl.remove();
+				oauthStatusEl = oauthTestSetting.descEl.createDiv({ cls: "llm-api-test-status llm-api-test-running", text: "Testing…" });
+				btn.setDisabled(true);
+				try {
+					const token = this.plugin.settings.claudeCodeOAuthToken?.trim();
+					if (!token) throw new Error("No OAuth token configured.");
+					const resp = await requestUrl({
+						url: "https://api.anthropic.com/v1/models",
+						headers: { "Authorization": `Bearer ${token}`, "anthropic-version": "2023-06-01" },
+						throw: false,
+					});
+					if (resp.status < 400) {
+						oauthStatusEl.className = "llm-api-test-status llm-api-test-ok";
+						oauthStatusEl.setText("✓ OAuth token is valid.");
+					} else {
+						const msg = resp.json?.error?.message ?? resp.text ?? String(resp.status);
+						oauthStatusEl.className = "llm-api-test-status llm-api-test-fail";
+						oauthStatusEl.setText(`✗ ${resp.status}: ${msg}`);
+					}
+				} catch (e: any) {
+					if (oauthStatusEl) {
+						oauthStatusEl.className = "llm-api-test-status llm-api-test-fail";
+						oauthStatusEl.setText(`✗ ${e.message ?? "Unknown error"}`);
+					}
+				} finally {
+					btn.setDisabled(false);
+				}
+			});
+		});
 	}
 
 	private renderConnectors() {

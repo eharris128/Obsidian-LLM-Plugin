@@ -116,6 +116,12 @@ export class WidgetView extends ItemView {
 			// the model/assistant used in this conversation (not the current default).
 			this.chatContainer.isObsidianAgent = !!meta.agent;
 
+			// Restore attached local paths (from /attach slash command)
+			if (meta.localPaths?.length) {
+				this.chatContainer.localContextPaths = meta.localPaths;
+				this.chatContainer.syncChips();
+			}
+
 			// Track the file path so subsequent sends update the right file
 			setHistoryFilePath(this.plugin, "widget", filePath);
 			this.chatContainer.currentHistoryFilePath = filePath;
@@ -261,6 +267,12 @@ export class WidgetView extends ItemView {
 		if (pendingFilePath) {
 			this.plugin.pendingWidgetFilePath = null;
 			await this.loadChatFile(pendingFilePath);
+		} else if (!pendingIndex || pendingIndex < 0) {
+			// Restore last open chat file from settings (persisted across reloads)
+			const lastFilePath = this.plugin.settings.widgetSettings.historyFilePath;
+			if (lastFilePath && this.plugin.app.vault.getFileByPath(lastFilePath)) {
+				await this.loadChatFile(lastFilePath);
+			}
 		}
 	}
 

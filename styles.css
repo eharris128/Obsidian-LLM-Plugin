@@ -315,14 +315,16 @@ button.llm-send-button:disabled {
 
 /* Stop mode — shown while the model is generating */
 button.llm-send-button.llm-stop-mode {
-	background-color: var(--color-red);
-	color: white;
+	background-color: var(--background-primary);
+	color: var(--text-muted);
+	border: var(--border-width) solid var(--background-modifier-border);
 }
 
 button.llm-send-button.llm-stop-mode:hover {
-	background-color: var(--color-red);
-	opacity: 0.8;
-	color: white;
+	background-color: var(--background-modifier-hover);
+	color: var(--text-normal);
+	border-color: var(--background-modifier-border-hover);
+	opacity: 1;
 }
 
 .llm-modal-send-button,
@@ -2038,6 +2040,18 @@ details[open] .llm-tool-calls-chevron {
 	gap: var(--size-4-2);
 	margin-top: var(--size-4-4);
 }
+
+/* ── API key test status ──────────────────────────────────────────────────── */
+
+.llm-api-test-status {
+	margin-top: var(--size-4-1);
+	font-size: var(--font-ui-smaller);
+	font-weight: var(--font-medium);
+}
+
+.llm-api-test-running { color: var(--text-muted); }
+.llm-api-test-ok      { color: var(--color-green); }
+.llm-api-test-fail    { color: var(--color-red); }
 
 /* ── Active skill indicator (shown above an assistant message) ────────────── */
 

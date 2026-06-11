@@ -5,6 +5,7 @@ import {
 	DropdownComponent,
 	Modal,
 	Notice,
+	requestUrl,
 	Setting,
 	setIcon,
 	TFile,
@@ -825,9 +826,47 @@ export class LLMSettingsModal extends Modal {
 		const apiItems = this.addSettingGroup(el);
 		this.renderApiKeyField(apiItems, this.apiKeyConfigs.claude);
 
+		// Test Claude API key button + status
+		const apiTestSetting = new Setting(apiItems)
+			.setName("Test Claude API key")
+			.setDesc("Verify your API key is valid and can reach the Anthropic API.");
+		let apiStatusEl: HTMLElement | null = null;
+		apiTestSetting.addButton((btn) => {
+			btn.setButtonText("Test");
+			btn.onClick(async () => {
+				if (apiStatusEl) apiStatusEl.remove();
+				apiStatusEl = apiTestSetting.descEl.createDiv({ cls: "llm-api-test-status llm-api-test-running", text: "Testing…" });
+				btn.setDisabled(true);
+				try {
+					const key = this.plugin.settings.claudeAPIKey?.trim();
+					if (!key) throw new Error("No API key configured.");
+					const resp = await requestUrl({
+						url: "https://api.anthropic.com/v1/models",
+						headers: { "x-api-key": key, "anthropic-version": "2023-06-01" },
+						throw: false,
+					});
+					if (resp.status < 400) {
+						apiStatusEl.className = "llm-api-test-status llm-api-test-ok";
+						apiStatusEl.setText("✓ API key is valid.");
+					} else {
+						const msg = resp.json?.error?.message ?? resp.text ?? String(resp.status);
+						apiStatusEl.className = "llm-api-test-status llm-api-test-fail";
+						apiStatusEl.setText(`✗ ${resp.status}: ${msg}`);
+					}
+				} catch (e: any) {
+					if (apiStatusEl) {
+						apiStatusEl.className = "llm-api-test-status llm-api-test-fail";
+						apiStatusEl.setText(`✗ ${e.message ?? "Unknown error"}`);
+					}
+				} finally {
+					btn.setDisabled(false);
+				}
+			});
+		});
+
 		// Claude Code
 		const authItems = this.addSettingGroup(el, "Claude Code");
-		new Setting(authItems)
+		const oauthSetting = new Setting(authItems)
 			.setName("Claude Code OAuth token")
 			.setDesc("OAuth token for authenticating with Claude Code (CLAUDE_CODE_OAUTH_TOKEN).")
 			.addText((text) => {
@@ -837,8 +876,64 @@ export class LLMSettingsModal extends Modal {
 					this.plugin.settings.claudeCodeOAuthToken = value;
 					void this.plugin.saveSettings();
 				});
+			})
+			.addButton((btn) => {
+				btn.setButtonText("Sync from Keychain").setTooltip("Read token from macOS Keychain (requires Claude Code desktop app to be installed and authenticated)");
+				btn.onClick(async () => {
+					btn.setDisabled(true);
+					btn.setButtonText("Syncing…");
+					const token = await this.plugin.readClaudeCodeTokenFromKeychain();
+					btn.setDisabled(false);
+					btn.setButtonText("Sync from Keychain");
+					if (token) {
+						this.plugin.settings.claudeCodeOAuthToken = token;
+						await this.plugin.saveSettings();
+						// Re-render to show updated value in the password field
+						this.renderTab("anthropic");
+						new Notice("✓ Claude Code token synced from Keychain.");
+					} else {
+						new Notice("Could not read token from Keychain. Make sure Claude Code is installed and you've run `claude` to authenticate.", 8000);
+					}
+				});
 			});
 
+		// Test OAuth token button + status
+		const oauthTestSetting = new Setting(authItems)
+			.setName("Test OAuth token")
+			.setDesc("Verify your Claude Code OAuth token is valid.");
+		let oauthStatusEl: HTMLElement | null = null;
+		oauthTestSetting.addButton((btn) => {
+			btn.setButtonText("Test");
+			btn.onClick(async () => {
+				if (oauthStatusEl) oauthStatusEl.remove();
+				oauthStatusEl = oauthTestSetting.descEl.createDiv({ cls: "llm-api-test-status llm-api-test-running", text: "Testing…" });
+				btn.setDisabled(true);
+				try {
+					const token = this.plugin.settings.claudeCodeOAuthToken?.trim();
+					if (!token) throw new Error("No OAuth token configured.");
+					const resp = await requestUrl({
+						url: "https://api.anthropic.com/v1/models",
+						headers: { "Authorization": `Bearer ${token}`, "anthropic-version": "2023-06-01" },
+						throw: false,
+					});
+					if (resp.status < 400) {
+						oauthStatusEl.className = "llm-api-test-status llm-api-test-ok";
+						oauthStatusEl.setText("✓ OAuth token is valid.");
+					} else {
+						const msg = resp.json?.error?.message ?? resp.text ?? String(resp.status);
+						oauthStatusEl.className = "llm-api-test-status llm-api-test-fail";
+						oauthStatusEl.setText(`✗ ${resp.status}: ${msg}`);
+					}
+				} catch (e: any) {
+					if (oauthStatusEl) {
+						oauthStatusEl.className = "llm-api-test-status llm-api-test-fail";
+						oauthStatusEl.setText(`✗ ${e.message ?? "Unknown error"}`);
+					}
+				} finally {
+					btn.setDisabled(false);
+				}
+			});
+		});
 	}
 
 	private renderConnectors() {
@@ -1167,7 +1262,7 @@ export class LLMSettingsModal extends Modal {
 
 		// Ensure toolSettings exists (deep-merge guard for existing installs)
 		if (!this.plugin.settings.toolSettings) {
-			this.plugin.settings.toolSettings = { disabledTools: [], maxToolCalls: 10 };
+			this.plugin.settings.toolSettings = { disabledTools: ["run_shell_command"], maxToolCalls: 10, shellCommandOptedIn: false };
 		}
 
 		// ── Agent behaviour ───────────────────────────────────────────────────
@@ -1258,6 +1353,21 @@ export class LLMSettingsModal extends Modal {
 			setting.addToggle((toggle) => {
 				toggle.setValue(!disabledTools.includes(tool.name));
 				toggle.onChange(async (enabled) => {
+					if (enabled && tool.requiresShellConfirm) {
+						// Revert the toggle immediately; only commit after user confirms
+						toggle.setValue(false);
+						new ShellCommandWarningModal(this.app, async () => {
+							this.plugin.settings.toolSettings.shellCommandOptedIn = true;
+							const idx = this.plugin.settings.toolSettings.disabledTools.indexOf(tool.name);
+							if (idx !== -1) this.plugin.settings.toolSettings.disabledTools.splice(idx, 1);
+							await this.plugin.saveSettings();
+							toggle.setValue(true);
+						}).open();
+						return;
+					}
+					if (!enabled && tool.requiresShellConfirm) {
+						this.plugin.settings.toolSettings.shellCommandOptedIn = false;
+					}
 					const idx = this.plugin.settings.toolSettings.disabledTools.indexOf(tool.name);
 					if (enabled && idx !== -1) {
 						this.plugin.settings.toolSettings.disabledTools.splice(idx, 1);
@@ -2516,5 +2626,42 @@ class GuidanceEditorOverlay {
 	close() {
 		this.overlayEl?.remove();
 		this.overlayEl = null;
+	}
+}
+
+class ShellCommandWarningModal extends Modal {
+	constructor(app: App, private onConfirm: () => void) {
+		super(app);
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.createEl("h2", { text: "⚠ Enable Shell Command Tool?" });
+		contentEl.createEl("p", {
+			text: "The run_shell_command tool lets the AI execute arbitrary shell commands on your computer — it can read, write, or delete any file and run any program.",
+		});
+		contentEl.createEl("p", {
+			text: "Only enable this if you understand the risks and trust the prompts you send to the agent. A rogue or poorly-worded prompt could cause irreversible damage.",
+		});
+		contentEl.createEl("p", {
+			cls: "llm-shell-warning-note",
+			text: "Tip: use it for read-only tasks like 'git log' or 'grep' — avoid prompts that ask the agent to write or delete files via the shell.",
+		});
+
+		const btnRow = contentEl.createDiv({ cls: "llm-shell-warning-buttons" });
+		new ButtonComponent(btnRow)
+			.setButtonText("Cancel")
+			.onClick(() => this.close());
+		new ButtonComponent(btnRow)
+			.setButtonText("Yes, enable shell commands")
+			.setWarning()
+			.onClick(() => {
+				this.close();
+				this.onConfirm();
+			});
+	}
+
+	onClose() {
+		this.contentEl.empty();
 	}
 }

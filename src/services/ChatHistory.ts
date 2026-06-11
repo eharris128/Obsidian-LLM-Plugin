@@ -15,6 +15,8 @@ export interface ChatFileMeta {
 	project?: string;
 	/** True when this conversation was conducted through the Obsidian Agent. */
 	agent?: boolean;
+	/** Local filesystem paths attached via /attach slash command. */
+	localPaths?: { label: string; absPath: string; isDir: boolean }[];
 }
 
 export interface LoadedChat {
@@ -169,6 +171,14 @@ export class ChatHistory {
 			lines.push("context:");
 			for (const link of meta.context) {
 				lines.push(`  - "${link}"`);
+			}
+		}
+		if (meta.localPaths?.length) {
+			lines.push("localPaths:");
+			for (const p of meta.localPaths) {
+				lines.push(`  - label: "${p.label.replace(/"/g, '\\"')}"`);
+				lines.push(`    absPath: "${p.absPath.replace(/"/g, '\\"')}"`);
+				lines.push(`    isDir: ${p.isDir}`);
 			}
 		}
 		return lines.join("\n");
@@ -331,7 +341,8 @@ export class ChatHistory {
 		isAgent?: boolean,
 		modelsByTurn?: Map<number, string>,
 		/** Override the folder for new file creation (e.g. a project's chats folder). */
-		saveFolder?: string
+		saveFolder?: string,
+		localPaths?: { label: string; absPath: string; isDir: boolean }[]
 	): Promise<string> {
 		const targetFolder = saveFolder ?? this.folder;
 		await this.ensureFolderPath(targetFolder);
@@ -351,6 +362,7 @@ export class ChatHistory {
 				...existing.meta,
 				updated: now,
 				...(contextLinks.length ? { context: contextLinks } : {}),
+				...(localPaths?.length ? { localPaths } : {}),
 			};
 			await this.plugin.app.vault.modify(
 				file,
@@ -372,6 +384,7 @@ export class ChatHistory {
 				...(projectName ? { project: projectName } : {}),
 				...(isAgent ? { agent: true } : {}),
 				...(contextLinks.length ? { context: contextLinks } : {}),
+				...(localPaths?.length ? { localPaths } : {}),
 			};
 			await this.plugin.app.vault.create(
 				newPath,

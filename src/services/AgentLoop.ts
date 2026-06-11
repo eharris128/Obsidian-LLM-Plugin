@@ -31,8 +31,12 @@ export interface AgentCallbacks {
 	onChunk: (text: string) => void;
 	/** Called between tool execution and the next API request — re-show thinking. */
 	onThinking: () => void;
+	/** Optional — called just before a tool executes so the UI can show which tool is running. */
+	onToolStart?: (toolName: string, input: Record<string, any>) => void;
 	/** Optional — called after each successful tool execution with the tool name, input, and result text. */
 	onToolResult?: (toolName: string, input: Record<string, any>, result: string) => void;
+	/** Optional — called with cumulative token counts after each model turn. */
+	onUsage?: (inputTokens: number, outputTokens: number) => void;
 }
 
 export class AgentLoop {
@@ -125,6 +129,8 @@ export class AgentLoop {
 		let firstCall = true;
 		const toolSummaries: string[] = [];
 		let toolCallCount = 0;
+		let totalInputTokens = 0;
+		let totalOutputTokens = 0;
 
 		while (true) {
 			if (signal?.aborted) break;
@@ -176,8 +182,18 @@ export class AgentLoop {
 					}
 				} else if (event.type === "message_delta") {
 					stopReason = event.delta.stop_reason ?? null;
+					if ((event as any).usage) {
+						totalOutputTokens += (event as any).usage.output_tokens ?? 0;
+					}
+				} else if (event.type === "message_start") {
+					if ((event as any).message?.usage) {
+						totalInputTokens += (event as any).message.usage.input_tokens ?? 0;
+						totalOutputTokens += (event as any).message.usage.output_tokens ?? 0;
+					}
 				}
 			}
+
+			callbacks.onUsage?.(totalInputTokens, totalOutputTokens);
 
 			// Build typed content array for the assistant turn
 			const assistantContent: Anthropic.ContentBlockParam[] = [];
@@ -213,6 +229,7 @@ export class AgentLoop {
 				let input: Record<string, any> = {};
 				try { input = JSON.parse(block.inputJson || "{}"); } catch { /* ignore */ }
 
+				callbacks.onToolStart?.(block.name, input);
 				const allowed = await this.checkPermission(block.name, input);
 				let resultText: string;
 				if (allowed) {

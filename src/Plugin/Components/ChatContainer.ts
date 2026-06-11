@@ -192,6 +192,11 @@ export class ChatContainer extends Component {
 	 * prevents other views' generateChatContainer calls from removing it.
 	 */
 	private slashMenuEl: HTMLElement | null = null;
+	/**
+	 * Local filesystem paths (files or folders) attached via the /attach slash
+	 * command. Injected as context at send time. Cleared on newChat().
+	 */
+	localContextPaths: { label: string; absPath: string; isDir: boolean }[] = [];
 
 	/**
 	 * When true, memories are recalled before each send and (if extraction
@@ -983,6 +988,83 @@ export class ChatContainer extends Component {
 				}
 			} catch (error) {
 				console.error("Error reading active file for context:", error);
+			}
+		}
+
+		// Local filesystem context from /attach slash command
+		if (this.localContextPaths.length > 0 && modelEndpoint !== images) {
+			try {
+				const nodeFs = require("fs") as typeof import("fs");
+				const nodePath = require("path") as typeof import("path");
+				const MAX_FILE_BYTES = 200_000;
+				const MAX_DIR_ENTRIES = 200;
+				const blocks: string[] = [];
+
+				for (const entry of this.localContextPaths) {
+					if (entry.isDir) {
+						// Directory: inject a recursive listing of source/text files
+						const walk = (dir: string, depth: number): string[] => {
+							if (depth > 6) return [];
+							let items: string[];
+							try { items = nodeFs.readdirSync(dir); } catch { return []; }
+							const result: string[] = [];
+							for (const item of items) {
+								if (item.startsWith(".") || item === "node_modules") continue;
+								const full = nodePath.join(dir, item);
+								let st: import("fs").Stats;
+								try { st = nodeFs.statSync(full); } catch { continue; }
+								if (st.isDirectory()) {
+									result.push(...walk(full, depth + 1));
+								} else {
+									result.push(full);
+								}
+							}
+							return result;
+						};
+						const allFiles = walk(entry.absPath, 0).slice(0, MAX_DIR_ENTRIES);
+						const listing = allFiles.map((f) => "  " + nodePath.relative(entry.absPath, f)).join("\n");
+						const TEXT_EXTS = new Set(["ts", "tsx", "js", "jsx", "mjs", "cjs", "json", "md", "css", "html", "yaml", "yml", "toml", "txt", "py", "sh", "swift", "kt", "java", "go", "rs", "c", "cpp", "h"]);
+						const fileBlocks: string[] = [];
+						for (const f of allFiles) {
+							const ext = nodePath.extname(f).replace(/^\./, "").toLowerCase();
+							if (!TEXT_EXTS.has(ext)) continue;
+							try {
+								const fd = nodeFs.openSync(f, "r");
+								const buf = Buffer.alloc(MAX_FILE_BYTES);
+								const read = nodeFs.readSync(fd, buf, 0, MAX_FILE_BYTES, 0);
+								nodeFs.closeSync(fd);
+								const rel = nodePath.relative(entry.absPath, f);
+								fileBlocks.push(`### ${rel}\n\`\`\`${ext}\n${buf.subarray(0, read).toString("utf8")}\n\`\`\``);
+							} catch { continue; }
+						}
+						blocks.push(
+							`# Attached folder: ${entry.label} (${entry.absPath})\n\n## File listing\n\`\`\`\n${listing}\n\`\`\`\n\n## File contents\n\n` +
+							(fileBlocks.length > 0 ? fileBlocks.join("\n\n") : "(no readable text files found)")
+						);
+					} else {
+						// Single file
+						try {
+							const fd = nodeFs.openSync(entry.absPath, "r");
+							const buf = Buffer.alloc(MAX_FILE_BYTES);
+							const st = nodeFs.statSync(entry.absPath);
+							const read = nodeFs.readSync(fd, buf, 0, MAX_FILE_BYTES, 0);
+							nodeFs.closeSync(fd);
+							const ext = nodePath.extname(entry.absPath).replace(/^\./, "").toLowerCase();
+							const truncNote = read === MAX_FILE_BYTES && st.size > MAX_FILE_BYTES ? ` (truncated to first ${MAX_FILE_BYTES} bytes)` : "";
+							blocks.push(`# Attached file: ${entry.label} (${entry.absPath})${truncNote}\n\n\`\`\`${ext}\n${buf.subarray(0, read).toString("utf8")}\n\`\`\``);
+						} catch (e) {
+							blocks.push(`# Attached file: ${entry.label}\n\n(Error reading file: ${e})`);
+						}
+					}
+				}
+
+				if (blocks.length > 0) {
+					const localContext = blocks.join("\n\n---\n\n");
+					this.pendingContextString = localContext +
+						(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
+				}
+			} catch (err) {
+				console.error("[LLM] Error reading local context paths:", err);
 			}
 		}
 
@@ -2546,8 +2628,9 @@ export class ChatContainer extends Component {
 		const hasAdditional = this.plugin.settings.enableFileContext && contextSettings.selectedFiles.length > 0;
 		const hasPinned = pinnedNotes.length > 0;
 		const hasProject = !!activeProject;
+		const hasLocalPaths = this.localContextPaths.length > 0;
 
-		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject) {
+		if (!hasActiveFile && !hasAdditional && !hasPinned && !hasProject && !hasLocalPaths) {
 			this.chipContainer.style.display = "none";
 			return;
 		}
@@ -2587,6 +2670,19 @@ export class ChatContainer extends Component {
 					void this.plugin.saveSettings();
 					this.syncChips();
 				});
+			}
+		}
+
+		// Local filesystem path chips (from /attach slash command)
+		for (const entry of [...this.localContextPaths]) {
+			const chip = this.buildChip(this.chipContainer, entry.label, () => {
+				this.localContextPaths = this.localContextPaths.filter((p) => p.absPath !== entry.absPath);
+				this.syncChips();
+			});
+			// Swap the file icon for a folder icon when the entry is a directory
+			if (entry.isDir) {
+				const iconEl = chip.querySelector<HTMLElement>(".llm-context-chip-icon");
+				if (iconEl) setIcon(iconEl, "folder");
 			}
 		}
 	}
@@ -2790,19 +2886,47 @@ export class ChatContainer extends Component {
 		});
 		cleanupObserver.observe(document.body, { childList: true, subtree: false });
 
-		const renderSlashMenu = (skills: ParsedSkill[]) => {
+		// "Attach local path" is a built-in slash command that opens the OS file picker.
+		// It matches /attach (and any prefix like /att, /a, /).
+		const LOCAL_PATH_COMMAND = { id: "attach", name: "Attach local file or folder", description: "Open your file system to pick a file or folder to add as context" };
+		const localPathMatchesQuery = (query: string) => LOCAL_PATH_COMMAND.id.startsWith(query) || LOCAL_PATH_COMMAND.name.toLowerCase().startsWith(query);
+
+		const renderSlashMenu = (skills: ParsedSkill[], query: string) => {
 			slashMenu.empty();
 			slashMenuSkills = skills;
+			// Total items = local-path entry (if visible) + skills
+			const showLocalPath = localPathMatchesQuery(query);
+			// Index mapping: 0 = local path item (if shown), then skills
 			slashMenuIndex = 0;
-			if (skills.length === 0) { slashMenu.style.display = "none"; return; }
+			const totalItems = (showLocalPath ? 1 : 0) + skills.length;
+			if (totalItems === 0) { slashMenu.style.display = "none"; return; }
 
-			// Header label
-			slashMenu.createDiv({ cls: "llm-slash-menu-header", text: "Skills" });
+			if (showLocalPath) {
+				if (skills.length > 0) {
+					slashMenu.createDiv({ cls: "llm-slash-menu-header", text: "Actions" });
+				}
+				const item = slashMenu.createDiv({ cls: "llm-slash-menu-item llm-slash-menu-item-selected" });
+				const iconEl = item.createSpan({ cls: "llm-slash-menu-item-icon" });
+				setIcon(iconEl, "folder-open");
+				const textEl = item.createDiv({ cls: "llm-slash-menu-item-text" });
+				const nameRow = textEl.createDiv({ cls: "llm-slash-menu-item-name-row" });
+				nameRow.createSpan({ cls: "llm-slash-menu-item-name", text: LOCAL_PATH_COMMAND.name });
+				textEl.createDiv({ cls: "llm-slash-menu-item-desc", text: LOCAL_PATH_COMMAND.description });
+				item.addEventListener("mousedown", (e: MouseEvent) => {
+					e.preventDefault();
+					selectLocalPathFromMenu();
+				});
+			}
+
+			if (skills.length > 0) {
+				slashMenu.createDiv({ cls: "llm-slash-menu-header", text: "Skills" });
+			}
 
 			for (let i = 0; i < skills.length; i++) {
 				const skill = skills[i];
+				const globalIdx = (showLocalPath ? 1 : 0) + i;
 				const item = slashMenu.createDiv({ cls: "llm-slash-menu-item" });
-				if (i === 0) item.addClass("llm-slash-menu-item-selected");
+				if (!showLocalPath && i === 0) item.addClass("llm-slash-menu-item-selected");
 
 				const iconEl = item.createSpan({ cls: "llm-slash-menu-item-icon" });
 				setIcon(iconEl, "scroll-text");
@@ -2841,10 +2965,57 @@ export class ChatContainer extends Component {
 					e.preventDefault(); // keep textarea focused
 					selectSkillFromMenu(skill);
 				});
+
+				// Store globalIdx on the element so updateSlashMenuHighlight can compare
+				item.dataset.menuIndex = String(globalIdx);
 			}
 
 			slashMenu.style.display = "flex";
 			positionSlashMenu();
+		};
+
+		const selectLocalPathFromMenu = () => {
+			hideSlashMenu();
+			// Clear the typed /attach prefix from the input so the user can keep typing
+			const raw = promptField.getValue();
+			const cleaned = raw.replace(/^\/[a-zA-Z0-9_-]*\s*/, "");
+			promptField.setValue(cleaned);
+			this.prompt = cleaned;
+			syncMirror(cleaned);
+			updateSendButton(cleaned);
+			promptField.inputEl.focus();
+
+			// Open native OS file/folder picker via Electron
+			try {
+				const { remote } = require("electron") as any;
+				const nodePath = require("path") as typeof import("path");
+				const lastDir = (this.plugin.settings as any).lastLocalPickerDirectory || undefined;
+				remote.dialog.showOpenDialog({
+					title: "Attach file or folder",
+					defaultPath: lastDir,
+					buttonLabel: "Attach",
+					properties: ["openFile", "openDirectory"],
+				}).then((result: { canceled: boolean; filePaths: string[] }) => {
+					if (result.canceled || result.filePaths.length === 0) return;
+					const absPath = result.filePaths[0];
+
+					// Persist last-used directory
+					const nodeFs = require("fs") as typeof import("fs");
+					const isDir = nodeFs.statSync(absPath).isDirectory();
+					(this.plugin.settings as any).lastLocalPickerDirectory = isDir ? absPath : nodePath.dirname(absPath);
+					void this.plugin.saveSettings();
+
+					const label = nodePath.basename(absPath);
+					// Avoid duplicates
+					if (this.localContextPaths.some((p) => p.absPath === absPath)) return;
+					this.localContextPaths.push({ label, absPath, isDir });
+					this.syncChips();
+				}).catch((err: Error) => {
+					console.error("[LLM] File picker error:", err);
+				});
+			} catch (err) {
+				console.error("[LLM] Electron dialog unavailable:", err);
+			}
 		};
 
 		const hideSlashMenu = () => {
@@ -2859,6 +3030,22 @@ export class ChatContainer extends Component {
 				el.toggleClass("llm-slash-menu-item-selected", i === slashMenuIndex);
 				if (i === slashMenuIndex) el.scrollIntoView({ block: "nearest" });
 			});
+		};
+
+		// Returns total items currently rendered in the slash menu
+		const slashMenuTotalItems = () => slashMenu.querySelectorAll<HTMLElement>(".llm-slash-menu-item").length;
+
+		const selectCurrentSlashMenuItem = () => {
+			const items = slashMenu.querySelectorAll<HTMLElement>(".llm-slash-menu-item");
+			const selectedEl = items[slashMenuIndex];
+			if (!selectedEl) return;
+			// Local path item has no data-menu-index; skill items do
+			if (selectedEl.dataset.menuIndex === undefined) {
+				selectLocalPathFromMenu();
+			} else {
+				const skillIdx = parseInt(selectedEl.dataset.menuIndex, 10) - (items[0]?.dataset.menuIndex === undefined ? 1 : 0);
+				if (slashMenuSkills[skillIdx]) selectSkillFromMenu(slashMenuSkills[skillIdx]);
+			}
 		};
 
 		const selectSkillFromMenu = (skill: ParsedSkill) => {
@@ -3362,7 +3549,7 @@ export class ChatContainer extends Component {
 							s.name.toLowerCase().startsWith(query)
 					  )
 					: allSkills;
-				renderSlashMenu(filtered);
+				renderSlashMenu(filtered, query);
 			} else {
 				hideSlashMenu();
 			}
@@ -3384,7 +3571,7 @@ export class ChatContainer extends Component {
 			if (slashMenu.style.display !== "none") {
 				if (event.key === "ArrowDown") {
 					event.preventDefault();
-					slashMenuIndex = Math.min(slashMenuIndex + 1, slashMenuSkills.length - 1);
+					slashMenuIndex = Math.min(slashMenuIndex + 1, slashMenuTotalItems() - 1);
 					updateSlashMenuHighlight();
 					return;
 				}
@@ -3396,10 +3583,8 @@ export class ChatContainer extends Component {
 				}
 				if (event.key === "Tab" || event.key === "Enter") {
 					event.preventDefault();
-					if (slashMenuSkills[slashMenuIndex]) {
-						selectSkillFromMenu(slashMenuSkills[slashMenuIndex]);
-					}
-					return; // Tab/Enter selects skill; Enter does NOT send
+					selectCurrentSlashMenuItem();
+					return; // Tab/Enter selects item; Enter does NOT send
 				}
 				if (event.key === "Escape") {
 					event.preventDefault();
@@ -4586,6 +4771,7 @@ export class ChatContainer extends Component {
 		// Without this, toggling the setting or switching chats left stale chip state.
 		this.useActiveFileContext = false;
 		this.activeFileForChip = null;
+		this.localContextPaths = [];
 		this.scanButton?.buttonEl.removeClass("is-active");
 
 		const settingType = getSettingType(this.viewType);

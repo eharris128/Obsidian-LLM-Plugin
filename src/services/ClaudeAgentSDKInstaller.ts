@@ -65,8 +65,11 @@ function resolveNpmPath(): string {
 			`${homedir}/.volta/bin/npm`,
 			`${homedir}/.local/share/fnm/aliases/default/bin/npm`,
 			`${homedir}/.asdf/shims/npm`,
+			`${homedir}/.nodenv/shims/npm`,
 			`${homedir}/.local/bin/npm`,
-			"/usr/local/bin/npm",
+			"/opt/homebrew/bin/npm",    // Homebrew on Apple Silicon
+			"/usr/local/bin/npm",        // Homebrew on Intel / nodejs.org installer
+			"/opt/local/bin/npm",        // MacPorts
 			"/usr/bin/npm",
 			"/snap/bin/npm",
 		);
@@ -149,8 +152,11 @@ function resolveNodePath(): string {
 			`${homedir}/.volta/bin/node`,
 			`${homedir}/.local/share/fnm/aliases/default/bin/node`,
 			`${homedir}/.asdf/shims/node`,
+			`${homedir}/.nodenv/shims/node`,
 			`${homedir}/.local/bin/node`,
-			"/usr/local/bin/node",
+			"/opt/homebrew/bin/node",   // Homebrew on Apple Silicon
+			"/usr/local/bin/node",       // Homebrew on Intel / nodejs.org installer
+			"/opt/local/bin/node",       // MacPorts
 			"/usr/bin/node",
 			"/snap/bin/node",
 		);

@@ -117,6 +117,54 @@ function ensurePackageJson(pluginDir: string): void {
 	}
 }
 
+function resolveNodePath(): string {
+	if (!Platform.isDesktop) return "node";
+	const fs = require("fs");
+	const homedir = require("os").homedir();
+	const isWin = process.platform === "win32";
+	const candidates: string[] = [];
+
+	// nvm — pick the latest installed version
+	if (!isWin) {
+		const nvmDir = `${homedir}/.nvm/versions/node`;
+		try {
+			if (fs.existsSync(nvmDir)) {
+				const versions = fs.readdirSync(nvmDir).sort().reverse();
+				if (versions.length > 0) {
+					candidates.push(`${nvmDir}/${versions[0]}/bin/node`);
+				}
+			}
+		} catch { /* ignore */ }
+	}
+
+	if (isWin) {
+		const appData = process.env.APPDATA || `${homedir}\\AppData\\Roaming`;
+		candidates.push(
+			`${appData}\\nvm\\node.exe`,
+			`${homedir}\\.volta\\bin\\node.exe`,
+			"C:\\Program Files\\nodejs\\node.exe",
+		);
+	} else {
+		candidates.push(
+			`${homedir}/.volta/bin/node`,
+			`${homedir}/.local/share/fnm/aliases/default/bin/node`,
+			`${homedir}/.asdf/shims/node`,
+			`${homedir}/.local/bin/node`,
+			"/usr/local/bin/node",
+			"/usr/bin/node",
+			"/snap/bin/node",
+		);
+	}
+
+	for (const candidate of candidates) {
+		try {
+			if (fs.existsSync(candidate)) return candidate;
+		} catch { /* ignore */ }
+	}
+
+	return isWin ? "node.exe" : "node";
+}
+
 function doInstall(pluginDir: string): Promise<void> {
 	if (!Platform.isDesktop) return Promise.resolve();
 	const path = require("path");
@@ -126,9 +174,15 @@ function doInstall(pluginDir: string): Promise<void> {
 	// Derive the node binary from the same bin/ directory as npm.
 	// This avoids the #!/usr/bin/env node shebang issue in Electron entirely —
 	// we spawn node directly and pass the npm script as an argument.
+	// If npmPath is a full path, co-locate node; otherwise fall back to resolveNodePath.
 	const isWin = process.platform === "win32";
 	const nodeBin = isWin ? "node.exe" : "node";
-	const nodePath = path.join(path.dirname(npmPath), nodeBin);
+	const npmDir = path.dirname(npmPath);
+	const colocatedNode = path.join(npmDir, nodeBin);
+	const fs = require("fs");
+	const nodePath = (npmDir !== "." && fs.existsSync(colocatedNode))
+		? colocatedNode
+		: resolveNodePath();
 
 	// Release builds don't ship package.json — without one npm walks up the
 	// directory tree and installs into a parent node_modules instead.

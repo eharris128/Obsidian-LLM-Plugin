@@ -33,6 +33,9 @@ Create a new release for the Obsidian LLM Plugin.
    git push origin main
    ```
 
-7. **Create the GitHub release** with `gh release create`. Upload 3 assets: `main.js`, `manifest.json`, `styles.css`. This also creates the git tag automatically. Use the tag format `X.Y.Z` (no `v` prefix) to match previous releases. Include a changelog in the release notes.
+7. **Create the GitHub release** with `gh release create`. Upload 3 assets — **IMPORTANT: esbuild outputs to `../large-language-models/main.js`, NOT `./main.js`**. Always use the path `../large-language-models/main.js` for the `main.js` asset. `manifest.json` and `styles.css` are in the repo root as usual. This also creates the git tag automatically. Use the tag format `X.Y.Z` (no `v` prefix) to match previous releases. Include a changelog in the release notes.
+   ```
+   gh release create X.Y.Z "../large-language-models/main.js" manifest.json styles.css --title "X.Y.Z" --notes "..."
+   ```
 
 8. Share the release URL with the user.

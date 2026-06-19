@@ -7,6 +7,7 @@ import {
 	WorkspaceLeaf,
 	setIcon,
 } from "obsidian";
+import { logger } from "../../utils/logger";
 import LLMPlugin from "main";
 import { CHATS_VIEW_TYPE } from "utils/constants";
 import { attachChatRowMenu } from "Plugin/Components/ChatRowMenuHelper";
@@ -115,7 +116,7 @@ export class ChatsView extends ItemView {
 		try {
 			this.allFiles = await this.plugin.chatHistory.list();
 		} catch (e) {
-			console.error("[ChatsView] Failed to list chat files:", e);
+			logger.error("[ChatsView] Failed to list chat files:", e);
 			this.allFiles = [];
 		}
 		this.applyFilter();

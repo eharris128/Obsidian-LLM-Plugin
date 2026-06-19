@@ -13,6 +13,7 @@
  */
 
 import { Notice, TFile } from "obsidian";
+import { logger } from "../../utils/logger";
 import LLMPlugin from "main";
 import { ObsidianToolRegistry } from "services/ObsidianToolRegistry";
 
@@ -129,7 +130,7 @@ export class ObsidianAgent {
 					}
 				}
 			} catch (e) {
-				console.warn("[ObsidianAgent] Could not read agent guidance file:", e);
+				logger.warn("[ObsidianAgent] Could not read agent guidance file:", e);
 			}
 		}
 

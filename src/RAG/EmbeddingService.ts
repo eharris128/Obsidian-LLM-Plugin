@@ -1,6 +1,6 @@
 import OpenAI from "openai";
+import { logger } from "../utils/logger";
 import { GoogleGenAI } from "@google/genai";
-import { join } from "path";
 
 export type EmbeddingProvider = "onnx" | "openai" | "gemini" | "ollama" | "lmStudio";
 
@@ -70,7 +70,7 @@ function downloadFile(
 					res.on("data", (c: Buffer) => { done += c.length; onBytes?.(done, total); });
 					res.pipe(ws);
 					ws.on("finish", resolve);
-					ws.on("error", (e: Error) => { try { fs.unlinkSync(destPath); } catch (_) {} reject(e); });
+					ws.on("error", (e: Error) => { try { fs.unlinkSync(destPath); } catch { /* ignore */ } reject(e); });
 					res.on("error", reject);
 				},
 			).on("error", reject).end();
@@ -106,6 +106,7 @@ class WordPieceTokenizer {
 	}
 
 	encode(text: string, maxLen = 512): { input_ids: number[]; attention_mask: number[] } {
+		// eslint-disable-next-line no-control-regex -- intentionally strips ASCII control chars
 		let t = text.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, "").replace(/\s+/g, " ").trim();
 		if (this.lowercase) {
 			t = t.toLowerCase();
@@ -257,7 +258,7 @@ export class EmbeddingService {
 
 	static configure(pluginDir: string): void {
 		_pluginDir = pluginDir;
-		console.log("[RAG] EmbeddingService configured, pluginDir:", pluginDir);
+		logger.log("[RAG] EmbeddingService configured, pluginDir:", pluginDir);
 	}
 
 	static async loadOnnx(onProgress?: (pct: number) => void): Promise<void> {
@@ -277,32 +278,31 @@ export class EmbeddingService {
 			const modelDir = path.join(_pluginDir, "onnx-models", "Xenova", "all-mpnet-base-v2");
 			const tokJson  = JSON.parse(fs.readFileSync(path.join(modelDir, "tokenizer.json"), "utf8"));
 			_tokenizer = new WordPieceTokenizer(tokJson);
-			console.log("[RAG] Tokenizer loaded");
+			logger.log("[RAG] Tokenizer loaded");
 
 			// ── 3. Load onnxruntime-node (same require that works in the banner) ──
 			onProgress?.(80);
-			const ortPath = path.join(_pluginDir, "..", "Obsidian-LLM-Plugin", "node_modules", "onnxruntime-node");
 			// Prefer the banner-injected instance (already required, no double-load)
 			const ortSymbol = Symbol.for("onnxruntime");
 			if ((globalThis as any)[ortSymbol]) {
 				_ort = (globalThis as any)[ortSymbol] as OrtLike;
-				console.log("[RAG] Using banner-injected onnxruntime-node");
+				logger.log("[RAG] Using banner-injected onnxruntime-node");
 			} else {
 				// Derive ORT path from the plugin's own location
 				// _pluginDir = .../large-language-models  → ../Obsidian-LLM-Plugin/node_modules/onnxruntime-node
 				// We embed the absolute path at build time via __ORT_ABS_PATH__ below.
 				_ort = require("__ORT_ABS_PATH__") as OrtLike;
-				console.log("[RAG] Loaded onnxruntime-node directly");
+				logger.log("[RAG] Loaded onnxruntime-node directly");
 			}
 
 			// ── 4. Create inference session ───────────────────────────────
 			onProgress?.(85);
 			const onnxPath = path.join(modelDir, "onnx", "model_quantized.onnx");
-			console.log("[RAG] Creating InferenceSession from", onnxPath);
+			logger.log("[RAG] Creating InferenceSession from", onnxPath);
 			_session = await _ort.InferenceSession.create(onnxPath, {
 				executionProviders: ["cpu"],
 			});
-			console.log("[RAG] Session ready. Inputs:", _session.inputNames, "Outputs:", _session.outputNames);
+			logger.log("[RAG] Session ready. Inputs:", _session.inputNames, "Outputs:", _session.outputNames);
 			onProgress?.(100);
 		})().catch(e => { _loadPromise = null; throw e; });
 
@@ -327,11 +327,11 @@ export class EmbeddingService {
 			if (fs.existsSync(dest)) {
 				completedBytes += FILE_SIZES[file] ?? 0;
 				onProgress?.((completedBytes / totalEstimated) * 100);
-				console.log("[RAG] Already cached:", file);
+				logger.log("[RAG] Already cached:", file);
 				continue;
 			}
 			const url = `${BASE_URL}/${file}`;
-			console.log("[RAG] Downloading:", file);
+			logger.log("[RAG] Downloading:", file);
 			const est  = FILE_SIZES[file] ?? 0;
 			const base = completedBytes;
 			await downloadFile(url, dest, (dl, total) => {
@@ -341,7 +341,7 @@ export class EmbeddingService {
 			});
 			completedBytes += est;
 			onProgress?.((completedBytes / totalEstimated) * 100);
-			console.log("[RAG] Downloaded:", file);
+			logger.log("[RAG] Downloaded:", file);
 		}
 	}
 

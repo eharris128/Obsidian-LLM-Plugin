@@ -29,6 +29,7 @@
  */
 
 import { App, Notice } from "obsidian";
+import { logger } from "../utils/logger";
 import { VaultIndexer } from "RAG/VaultIndexer";
 import { EmbeddingService } from "RAG/EmbeddingService";
 import { Message } from "Types/types";
@@ -146,7 +147,7 @@ export class MemoryService {
 		// Still check for duplicates so repeated /remember calls don't pile up
 		const isDuplicate = await this.isDuplicate(content, folder);
 		if (isDuplicate) {
-			console.log(`[Memory] /remember duplicate skipped: "${content.slice(0, 60)}"`);
+			logger.log(`[Memory] /remember duplicate skipped: "${content.slice(0, 60)}"`);
 			return null;
 		}
 
@@ -156,7 +157,7 @@ export class MemoryService {
 		const fileContent = `---\ncreated: ${created}\nsource: ${source}\ntype: ${type}\n---\n\n${content}\n`;
 		const filePath = `${folder}/${id}.md`;
 		await this.app.vault.adapter.write(filePath, fileContent);
-		console.log(`[Memory] Direct save: ${filePath}`);
+		logger.log(`[Memory] Direct save: ${filePath}`);
 		return filePath;
 	}
 
@@ -191,7 +192,7 @@ export class MemoryService {
 		for (const mem of extracted) {
 			const isDuplicate = await this.isDuplicate(mem.content, folder);
 			if (isDuplicate) {
-				console.log(`[Memory] Skipping duplicate: "${mem.content.slice(0, 60)}…"`);
+				logger.log(`[Memory] Skipping duplicate: "${mem.content.slice(0, 60)}…"`);
 				continue;
 			}
 			await this.writeMemory(folder, scope, scopeName, mem);
@@ -242,7 +243,7 @@ Keep each content item to one clear, standalone sentence.`;
 		try {
 			raw = await callModel(system, user);
 		} catch (e) {
-			console.error("[Memory] Extraction model call failed:", e);
+			logger.error("[Memory] Extraction model call failed:", e);
 			new Notice("Memory extraction failed — model call error.");
 			return [];
 		}
@@ -263,7 +264,7 @@ Keep each content item to one clear, standalone sentence.`;
 					["fact", "preference", "context"].includes(item.type)
 			);
 		} catch (e) {
-			console.error("[Memory] Failed to parse extraction JSON:", cleaned, e);
+			logger.error("[Memory] Failed to parse extraction JSON:", cleaned, e);
 			return [];
 		}
 	}
@@ -283,7 +284,7 @@ Keep each content item to one clear, standalone sentence.`;
 			newVector = await this.embedding.embed(content);
 		} catch (e) {
 			// If embedding fails we can't check — allow the write
-			console.warn("[Memory] Embedding failed during dedup check:", e);
+			logger.warn("[Memory] Embedding failed during dedup check:", e);
 			return false;
 		}
 
@@ -326,7 +327,7 @@ ${mem.content}
 
 		const filePath = `${folder}/${id}.md`;
 		await this.app.vault.adapter.write(filePath, fileContent);
-		console.log(`[Memory] Wrote memory: ${filePath}`);
+		logger.log(`[Memory] Wrote memory: ${filePath}`);
 	}
 
 	// ── Recall ───────────────────────────────────────────────────────────────────
@@ -369,7 +370,7 @@ ${mem.content}
 			queryVec = await this.embedding.embed(query);
 		} catch (e) {
 			// Embedding failed — fall back to returning all memories up to topK
-			console.warn("[Memory] Query embedding failed during recall, using all memories:", e);
+			logger.warn("[Memory] Query embedding failed during recall, using all memories:", e);
 			const fallback = allMemories.slice(0, topK);
 			return {
 				context: formatMemoriesAsContext(fallback.map(m => m.content)),
@@ -394,7 +395,7 @@ ${mem.content}
 		scored.sort((a, b) => b.score - a.score);
 		const top = scored.slice(0, topK);
 
-		console.log(`[Memory] Recalled ${top.length} memories (best score: ${top[0]?.score.toFixed(3)})`);
+		logger.log(`[Memory] Recalled ${top.length} memories (best score: ${top[0]?.score.toFixed(3)})`);
 		return {
 			context: formatMemoriesAsContext(top.map(s => s.content)),
 			memories: top.map(s => ({ content: s.content, filePath: s.filePath })),
@@ -423,7 +424,7 @@ ${mem.content}
 				const parsed = parseMemoryFile(raw, filePath);
 				if (parsed) records.push(parsed);
 			} catch (e) {
-				console.warn(`[Memory] Failed to read ${filePath}:`, e);
+				logger.warn(`[Memory] Failed to read ${filePath}:`, e);
 			}
 		}
 		return records;

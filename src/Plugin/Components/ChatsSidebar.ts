@@ -1,4 +1,5 @@
 import { Component, ExtraButtonComponent, Menu, SearchComponent, TFile, setIcon } from "obsidian";
+import { logger } from "../../utils/logger";
 import LLMPlugin from "main";
 import { attachChatRowMenu } from "./ChatRowMenuHelper";
 
@@ -126,7 +127,7 @@ export class ChatsSidebar extends Component {
 		try {
 			this.allFiles = await this.plugin.chatHistory.list();
 		} catch (e) {
-			console.error("[ChatsSidebar] Failed to list chat files:", e);
+			logger.error("[ChatsSidebar] Failed to list chat files:", e);
 			this.allFiles = [];
 		}
 		this.applyFilter();

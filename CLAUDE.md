@@ -7,6 +7,7 @@ Guidance for Claude Code when working in this repository — an Obsidian plugin 
 ```bash
 npm run dev      # watch mode (esbuild)
 npm run build    # production build (tsc type-check + esbuild bundle)
+npm run lint     # eslint src  (lint:fix to autofix) — prefer-const/eqeqeq/no-console are warnings
 npm run version  # bump manifest.json and versions.json
 npm run test:e2e # E2E suite — real sandboxed Obsidian via wdio-obsidian-service (see test/README.md)
 ```
@@ -96,6 +97,7 @@ Each feature has a path-scoped rules file under `.claude/rules/` that loads auto
 | Chats Panel — `ChatsView` + `ChatsSidebar`, row menu | `src/Plugin/ChatsView/` | `chats-panel.md` |
 | Chat Details Panel — live context sidebar | `src/Plugin/ChatDetailsView/` | `chat-details.md` |
 | Feature gates — `featureSettings` toggles in settings modal | `src/Settings/` | `feature-gates.md` |
+| DOM visibility & inline styles — `.llm-hidden`, native hide/show, dynamic-only `style.*` | `src/Plugin/`, `src/Settings/`, `styles.css` | `obsidian-styling.md` |
 
 Shared conventions across features: Skills/Projects/Assistants/Memories folders all derive from `rootVaultFolder` (default `"AI"`); managers (`SkillRegistry`, `ProjectManager`, `AssistantManager`) follow the same discovery/parsing/hot-reload pattern and have `reinit*()` methods called on `rootVaultFolder` change; all settings sub-objects are deep-merged in `loadSettings()`.
 
@@ -117,6 +119,15 @@ Always use `getSettingType("floating-action-button") as "fabSettings"` for a typ
 
 `ChatContainer.slashMenuEl` (floating menu on `document.body`, `position: fixed`) is an instance variable so each container removes only its own menu. Do NOT `document.querySelectorAll(".llm-slash-menu").forEach(el => el.remove())` — that destroys other views' menus. Cleaned up in `destroy()`.
 
+## Obsidian Compliance Conventions
+
+Keep the plugin aligned with Obsidian's community-plugin review. `npm run lint` guards what it can; the rest is convention.
+
+- **Logging** — never call `console.*` directly. Use the singleton `logger` from `src/utils/logger.ts`: `logger.debug/log/info` are stripped from production builds (gated on the esbuild-injected `__DEV__`), `logger.warn/error` always emit with an `[LLM]` prefix. ESLint's `no-console: warn` flags raw console; `logger.ts` is the only exemption.
+- **DOM visibility & inline styles** — toggle visibility with the `.llm-hidden` class, never `el.style.display`; reserve inline `el.style.*` for genuinely dynamic values. Full rules in `.claude/rules/obsidian-styling.md` (auto-loads for `src/Plugin/**`, `src/Settings/**`, `styles.css`).
+- **Vault paths** — wrap user-supplied / derived vault paths in `normalizePath()` (the `rootVaultFolder` folder getters in `main.ts` do this).
+- **`as any`** — acceptable for undocumented Obsidian internals (`app.plugins`, `vault.adapter`, `workspace`, `globalThis`) and `Menu.setSubmenu()`, which lack public types; don't add it for typeable code (prefer `instanceof TFile` over `(file as any).extension`).
+
 ## Obsidian Core Styling — Use Native Before Custom
 
 Always prefer Obsidian's built-in components and CSS classes; native gets theming, accessibility, and hover/focus states for free.
@@ -135,7 +146,7 @@ Always prefer Obsidian's built-in components and CSS classes; native gets themin
 
 When custom CSS is unavoidable:
 - Always use Obsidian CSS variables (`--text-muted`, `--interactive-accent`, `--font-ui-small`, `--icon-s`, `--size-4-2`, …) — never hardcoded colours/px/font sizes. Use `--icon-xs`/`--icon-s` for icons.
-- Custom classes go in `styles.css` with the `llm-` prefix. Never inline `element.style.*` in TypeScript — use `.addClass()` with a named class.
+- Custom classes go in `styles.css` with the `llm-` prefix. Never inline `element.style.*` in TypeScript — use `.addClass()` with a named class; toggle visibility via the `.llm-hidden` utility (not `style.display`). Inline `el.style.*` is for genuinely dynamic values only (computed sizes/positions). See `.claude/rules/obsidian-styling.md`.
 - Writing hover/focus/active states for a list row? Stop — use `tree-item-self`, which already has them.
 
 ## Key Files

@@ -1,4 +1,5 @@
-import { Plugin, WorkspaceLeaf, Platform, addIcon, Notice } from "obsidian";
+import { Plugin, WorkspaceLeaf, Platform, addIcon, Notice, normalizePath, TFile } from "obsidian";
+import { logger } from "./utils/logger";
 import {
 	AssistantSettings,
 	FeatureSettings,
@@ -381,7 +382,7 @@ export default class LLMPlugin extends Plugin {
 		this.initVaultIndexer();
 		if (this.settings.ragSettings?.enabled && this.settings.ragSettings?.modelCached
 				&& (this.settings.ragSettings?.embeddingProvider ?? "onnx") === "onnx") {
-			EmbeddingService.loadOnnx().catch(e => console.error("[RAG] Failed to warm up ONNX model:", e));
+			EmbeddingService.loadOnnx().catch(e => logger.error("[RAG] Failed to warm up ONNX model:", e));
 		}
 		this.initMemoryService();
 		this.initWhisperService();
@@ -624,7 +625,7 @@ export default class LLMPlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("modify", (file) => {
 				if (!this.vaultIndexer || !this.settings.ragSettings?.enabled) return;
-				if (!(file as any).extension || (file as any).extension !== "md") return;
+				if (!(file instanceof TFile) || file.extension !== "md") return;
 
 				const path = file.path;
 				const existing = this.ragDebounceTimers.get(path);
@@ -633,14 +634,14 @@ export default class LLMPlugin extends Plugin {
 				const timer = activeWindow.setTimeout(async () => {
 					this.ragDebounceTimers.delete(path);
 					try {
-						await this.vaultIndexer!.indexFile(file as import("obsidian").TFile);
+						await this.vaultIndexer!.indexFile(file);
 						await this.vaultIndexer!.save();
 						this.settings.ragSettings.lastIndexed = Date.now();
 						this.settings.ragSettings.indexedFileCount = this.vaultIndexer!.indexedFileCount;
 						await this.saveSettings();
-						console.log("[RAG] Auto-reindexed:", path);
+						logger.log("[RAG] Auto-reindexed:", path);
 					} catch (e) {
-						console.error("[RAG] Auto-reindex failed for", path, e);
+						logger.error("[RAG] Auto-reindex failed for", path, e);
 					}
 				}, DEBOUNCE_MS);
 
@@ -651,7 +652,7 @@ export default class LLMPlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("delete", (file) => {
 				if (!this.vaultIndexer || !this.settings.ragSettings?.enabled) return;
-				if ((file as any).extension !== "md") return;
+				if (!(file instanceof TFile) || file.extension !== "md") return;
 
 				// Cancel any pending reindex for this file
 				const timer = this.ragDebounceTimers.get(file.path);
@@ -666,7 +667,7 @@ export default class LLMPlugin extends Plugin {
 						await this.saveSettings();
 					})
 					.catch((e) => {
-						console.error("[RAG] Failed to remove deleted file from index:", file.path, e);
+						logger.error("[RAG] Failed to remove deleted file from index:", file.path, e);
 					});
 			})
 		);
@@ -674,18 +675,18 @@ export default class LLMPlugin extends Plugin {
 		this.registerEvent(
 			this.app.vault.on("rename", (file, oldPath) => {
 				if (!this.vaultIndexer || !this.settings.ragSettings?.enabled) return;
-				if ((file as any).extension !== "md") return;
+				if (!(file instanceof TFile) || file.extension !== "md") return;
 
 				// Remove old path, re-index under new path
 				this.vaultIndexer.removeFile(oldPath).catch(() => {});
-				this.vaultIndexer.indexFile(file as import("obsidian").TFile)
+				this.vaultIndexer.indexFile(file)
 					.then(async () => {
 						await this.vaultIndexer!.save();
 						this.settings.ragSettings.lastIndexed = Date.now();
 						this.settings.ragSettings.indexedFileCount = this.vaultIndexer!.indexedFileCount;
 						await this.saveSettings();
 					})
-					.catch((e) => console.error("[RAG] Failed to reindex renamed file:", e));
+					.catch((e) => logger.error("[RAG] Failed to reindex renamed file:", e));
 			})
 		);
 	}
@@ -719,7 +720,7 @@ export default class LLMPlugin extends Plugin {
 	 */
 	get skillsFolder(): string {
 		return this.settings.rootVaultFolder
-			? this.settings.rootVaultFolder + "/Skills"
+			? normalizePath(this.settings.rootVaultFolder + "/Skills")
 			: "";
 	}
 
@@ -728,7 +729,7 @@ export default class LLMPlugin extends Plugin {
 	 */
 	get memoriesFolder(): string {
 		return this.settings.rootVaultFolder
-			? this.settings.rootVaultFolder + "/Memories"
+			? normalizePath(this.settings.rootVaultFolder + "/Memories")
 			: "";
 	}
 
@@ -737,7 +738,7 @@ export default class LLMPlugin extends Plugin {
 	 */
 	get projectsFolder(): string {
 		return this.settings.rootVaultFolder
-			? this.settings.rootVaultFolder + "/Projects"
+			? normalizePath(this.settings.rootVaultFolder + "/Projects")
 			: "";
 	}
 
@@ -746,7 +747,7 @@ export default class LLMPlugin extends Plugin {
 	 */
 	get assistantsFolder(): string {
 		return this.settings.rootVaultFolder
-			? this.settings.rootVaultFolder + "/Assistants"
+			? normalizePath(this.settings.rootVaultFolder + "/Assistants")
 			: "";
 	}
 

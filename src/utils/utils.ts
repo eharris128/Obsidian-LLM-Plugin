@@ -1,4 +1,5 @@
 import LLMPlugin from "main";
+import { logger } from "./logger";
 import { Editor, Platform, requestUrl, RequestUrlParam } from "obsidian";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
@@ -250,7 +251,7 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 		}
 	} catch (error) {
 		if (error.status === 401) {
-			console.error(`Invalid API key for ${providerKeyPair.provider}.`);
+			logger.error(`Invalid API key for ${providerKeyPair.provider}.`);
 			SingletonNotice.show(
 				`Invalid API key for ${upperCaseFirst(
 					providerKeyPair.provider
@@ -296,6 +297,44 @@ export async function geminiMessage(
 
 // Resolve the absolute path to `node` by checking common install locations.
 // Electron's renderer process has a limited PATH, so we check the filesystem directly.
+function resolveNodePath(): string {
+	if (!Platform.isDesktop) return "";
+	const fs = require("fs");
+	const homedir = require("os").homedir();
+	const candidates: string[] = [];
+
+	// nvm — pick the latest installed version
+	const nvmDir = `${homedir}/.nvm/versions/node`;
+	try {
+		if (fs.existsSync(nvmDir)) {
+			const versions = fs.readdirSync(nvmDir).sort().reverse();
+			if (versions.length > 0) {
+				candidates.push(`${nvmDir}/${versions[0]}/bin/node`);
+			}
+		}
+	} catch { /* ignore */ }
+
+	candidates.push(
+		`${homedir}/.volta/bin/node`,                       // volta
+		`${homedir}/.local/share/fnm/aliases/default/bin/node`, // fnm
+		`${homedir}/.asdf/shims/node`,                      // asdf
+		`${homedir}/.local/bin/node`,
+		"/usr/local/bin/node",
+		"/usr/bin/node",
+		"/snap/bin/node",
+	);
+
+	for (const candidate of candidates) {
+		try {
+			if (fs.existsSync(candidate)) {
+				return candidate;
+			}
+		} catch { /* ignore */ }
+	}
+
+	logger.warn("[Claude Code] Could not find node binary, falling back to 'node'");
+	return "node";
+}
 
 export async function claudeCodeMessage(
 	prompt: string,

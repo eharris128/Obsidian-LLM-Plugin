@@ -283,6 +283,38 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	},
 };
 
+/**
+ * Merges saved settings with defaults, ensuring every object-typed key at
+ * up to two levels of nesting gets new default fields rather than being
+ * silently dropped when a key is added to DEFAULT_SETTINGS in a future release.
+ * Arrays and primitives are taken from saved data as-is (saved wins).
+ */
+function mergeSettingsWithDefaults(
+	defaults: LLMPluginSettings,
+	saved: Record<string, unknown>,
+): LLMPluginSettings {
+	const result = { ...defaults, ...saved } as LLMPluginSettings;
+	for (const key of Object.keys(defaults) as (keyof LLMPluginSettings)[]) {
+		const def = defaults[key];
+		const sav = saved[key];
+		if (def === null || typeof def !== "object" || Array.isArray(def)) continue;
+		// One level deep
+		const merged = { ...def, ...(sav as object ?? {}) };
+		// Two levels deep — handles nested records and sub-setting objects
+		for (const nestedKey of Object.keys(def)) {
+			const nestedDef = (def as Record<string, unknown>)[nestedKey];
+			const nestedSav = (sav as Record<string, unknown> | undefined)?.[nestedKey];
+			if (nestedDef === null || typeof nestedDef !== "object" || Array.isArray(nestedDef)) continue;
+			(merged as Record<string, unknown>)[nestedKey] = {
+				...nestedDef,
+				...(nestedSav as object ?? {}),
+			};
+		}
+		(result as unknown as Record<string, unknown>)[key] = merged;
+	}
+	return result;
+}
+
 export default class LLMPlugin extends Plugin {
 	fileSystem: FileSystem;
 	os: OperatingSystem;
@@ -1273,145 +1305,39 @@ export default class LLMPlugin extends Plugin {
 	async loadSettings() {
 		const dataJSON = await this.loadData();
 		if (dataJSON) {
-			this.settings = Object.assign({}, DEFAULT_SETTINGS, dataJSON);
+			this.settings = mergeSettingsWithDefaults(DEFAULT_SETTINGS, dataJSON);
 
-			// Deep-merge view settings so nested defaults (e.g. contextSettings) are preserved
-			const viewKeys = ["modalSettings", "widgetSettings", "fabSettings"] as const;
-			for (const key of viewKeys) {
-				this.settings[key] = {
-					...defaultSettings,
-					...dataJSON[key],
-					contextSettings: {
-						...defaultSettings.contextSettings,
-						...(dataJSON[key]?.contextSettings),
-					},
-					chatSettings: {
-						...defaultSettings.chatSettings,
-						...(dataJSON[key]?.chatSettings),
-					},
-					imageSettings: {
-						...defaultSettings.imageSettings,
-						...(dataJSON[key]?.imageSettings),
-					},
-					agentSettings: {
-						...defaultSettings.agentSettings,
-						...(dataJSON[key]?.agentSettings),
-					},
-				};
-			}
-
+			// historyIndex is session-only — never restore from disk
 			this.settings.fabSettings.historyIndex = -1;
 			this.settings.widgetSettings.historyIndex = -1;
 
-			// Deep-merge ragSettings so new fields get defaults if missing from saved data
-			this.settings.ragSettings = {
-				...DEFAULT_SETTINGS.ragSettings,
-				...(dataJSON.ragSettings ?? {}),
-			};
-
-			// Deep-merge skillsSettings (folder field removed — path now derived from rootVaultFolder)
-			this.settings.skillsSettings = {
-				...DEFAULT_SETTINGS.skillsSettings,
-				enabledSkills: {
-					...DEFAULT_SETTINGS.skillsSettings.enabledSkills,
-					...(dataJSON.skillsSettings?.enabledSkills ?? {}),
-				},
-			};
-
-			// Migrate old skillsSettings.folder → rootVaultFolder.
-			// The old system stored the skills folder path directly (e.g. "LLM-Skills" or "AI/Skills").
-			// The new system derives it from rootVaultFolder as "<root>/Skills".
-			const oldSkillsFolder: string | undefined = (dataJSON.skillsSettings)?.folder;
-			if (oldSkillsFolder && !this.settings.rootVaultFolder) {
-				if (oldSkillsFolder.endsWith("/Skills")) {
-					// e.g. "AI/Skills" → rootVaultFolder = "AI"
-					this.settings.rootVaultFolder = oldSkillsFolder.slice(0, -"/Skills".length);
-					await this.saveSettings();
-				} else {
-					// e.g. old default "LLM-Skills" — can't infer root safely; warn the user.
-					new Notice(
-						`⚠️ Skills location has changed. Your skills were in '${oldSkillsFolder}/'. ` +
-						`Please move them into '[Root vault folder]/Skills/' and set 'Root vault folder' ` +
-						`in Settings → Large Language Models → General.`,
-						0 // stay until dismissed
-					);
-				}
-			}
-
-			// Deep-merge memorySettings so new fields get defaults if missing from saved data
-			this.settings.memorySettings = {
-				...DEFAULT_SETTINGS.memorySettings,
-				...(dataJSON.memorySettings ?? {}),
-			};
-
-			// Deep-merge projectSettings so new fields get defaults if missing from saved data
-			this.settings.projectSettings = {
-				...DEFAULT_SETTINGS.projectSettings,
-				...(dataJSON.projectSettings ?? {}),
-			};
-
-			// Deep-merge assistantSettings so new fields get defaults if missing from saved data
-			this.settings.assistantSettings = {
-				...DEFAULT_SETTINGS.assistantSettings,
-				...(dataJSON.assistantSettings ?? {}),
-			};
-
-			// Deep-merge whisperSettings so new fields get defaults if missing from saved data
-			this.settings.whisperSettings = {
-				...DEFAULT_SETTINGS.whisperSettings,
-				...(dataJSON.whisperSettings ?? {}),
-			};
-
-			// Deep-merge searxngSettings so new fields get defaults if missing from saved data
-			this.settings.searxngSettings = {
-				...DEFAULT_SETTINGS.searxngSettings,
-				...(dataJSON.searxngSettings ?? {}),
-			};
-
-			// Deep-merge featureSettings so new gates default to false if absent from saved data
-			this.settings.featureSettings = {
-				...DEFAULT_SETTINGS.featureSettings,
-				...(dataJSON.featureSettings ?? {}),
-			};
-
-			// Deep-merge toolSettings so new fields get defaults if missing from saved data
-			this.settings.toolSettings = {
-				...DEFAULT_SETTINGS.toolSettings,
-				...(dataJSON.toolSettings ?? {}),
-			};
-			// run_shell_command requires explicit opt-in. On upgrades from versions that
-			// predate this tool, the saved disabledTools won't include it — force it disabled
-			// unless the user has explicitly opted in via the Settings warning dialog.
+			// run_shell_command requires explicit opt-in
 			if (!this.settings.toolSettings.shellCommandOptedIn) {
 				if (!this.settings.toolSettings.disabledTools.includes("run_shell_command")) {
 					this.settings.toolSettings.disabledTools.push("run_shell_command");
 				}
 			}
 
-			// Deep-merge obsidianAgentSettings — nested Records need spread so new keys get defaults
-			this.settings.obsidianAgentSettings = {
-				...DEFAULT_SETTINGS.obsidianAgentSettings,
-				...(dataJSON.obsidianAgentSettings ?? {}),
-				availableSkills: {
-					...DEFAULT_SETTINGS.obsidianAgentSettings.availableSkills,
-					...(dataJSON.obsidianAgentSettings?.availableSkills ?? {}),
-				},
-				availableAssistants: {
-					...DEFAULT_SETTINGS.obsidianAgentSettings.availableAssistants,
-					...(dataJSON.obsidianAgentSettings?.availableAssistants ?? {}),
-				},
-			};
-
-			// Ensure rootVaultFolder is a string (new field — may be absent in old saves)
-			if (this.settings.rootVaultFolder === undefined || this.settings.rootVaultFolder === null) {
-				this.settings.rootVaultFolder = DEFAULT_SETTINGS.rootVaultFolder;
-			}
-
-			// Ensure emptyChatAvatar is a valid known value; fall back to default
-			// if the saved value is missing or was corrupted (e.g. from a partial write).
+			// Ensure emptyChatAvatar is a valid known value
 			const validAvatars = ["llm-gal", "llm-guy", "zen-kid", "ninja-cat"];
 			if (!validAvatars.includes(this.settings.emptyChatAvatar)) {
 				this.settings.emptyChatAvatar = DEFAULT_SETTINGS.emptyChatAvatar;
+			}
+
+			// Migrate skillsSettings.folder → rootVaultFolder
+			const oldSkillsFolder: string | undefined = (dataJSON.skillsSettings)?.folder;
+			if (oldSkillsFolder && !this.settings.rootVaultFolder) {
+				if (oldSkillsFolder.endsWith("/Skills")) {
+					this.settings.rootVaultFolder = oldSkillsFolder.slice(0, -"/Skills".length);
+					await this.saveSettings();
+				} else {
+					new Notice(
+						`⚠️ Skills location has changed. Your skills were in '${oldSkillsFolder}/'. ` +
+						`Please move them into '[Root vault folder]/Skills/' and set 'Root vault folder' ` +
+						`in Settings → Large Language Models → General.`,
+						0
+					);
+				}
 			}
 
 			// Migrate linearApiKey → linearWorkspaces

@@ -129,7 +129,7 @@ export class HistoryContainer {
 			containerToShow.show();
 			chat.setMessages(true);
 			const messages = chat.getMessages();
-			chat.generateIMLikeMessages(messages);
+			void chat.generateIMLikeMessages(messages);
 			containerToShow.querySelector(".messages-div")?.scroll(0, 9999);
 			const index = this.historyIndex;
 			this.plugin.settings.currentIndex = index;
@@ -374,7 +374,7 @@ export class HistoryContainer {
 
 						// Restore messages into the store
 						chat.messageStore.setMessages(messages);
-						chat.generateIMLikeMessages(messages);
+						void chat.generateIMLikeMessages(messages);
 
 						parentElement.hide();
 						containerToShow.show();

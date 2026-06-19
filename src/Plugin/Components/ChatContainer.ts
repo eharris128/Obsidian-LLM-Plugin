@@ -188,7 +188,7 @@ export class ChatContainer extends Component {
 	 */
 	private activeSkillId: string | null = null;
 	/**
-	 * The floating slash-command menu element mounted on document.body.
+	 * The floating slash-command menu element mounted on activeDocument.body.
 	 * Stored here so each ChatContainer instance manages only its own menu —
 	 * prevents other views' generateChatContainer calls from removing it.
 	 */
@@ -857,7 +857,7 @@ export class ChatContainer extends Component {
 		if (modelType === GPT4All) {
 			this.plugin.settings.GPT4AllStreaming = true;
 			this.setDiv(false);
-			messageGPT4AllServer(params as ChatParams, endpointURL).then(
+			void messageGPT4AllServer(params as ChatParams, endpointURL).then(
 				(response: Message) => {
 					this.streamingDiv.textContent = response.content;
 					this.messageStore.addMessage(response);
@@ -1600,7 +1600,7 @@ export class ChatContainer extends Component {
 			this.activeAssistantNameThisTurn = null;
 			errorMessages(error, params);
 			if (this.getMessages().length > 0) {
-				activeWindow.setTimeout(() => {
+				window.setTimeout(() => {
 					this.removeMessage(header, modelName);
 				}, 1000);
 			}
@@ -2701,8 +2701,8 @@ export class ChatContainer extends Component {
 
 		// Project chip — icon-only at rest, name revealed on hover
 		if (hasProject && activeProject) {
-			this.buildProjectChip(this.chipContainer, activeProject.name, () => {
-				this.setActiveProject(null);
+			void this.buildProjectChip(this.chipContainer, activeProject.name, () => {
+				void this.setActiveProject(null);
 			});
 		}
 
@@ -2814,7 +2814,7 @@ export class ChatContainer extends Component {
 		if (file) {
 			chip.addClass("llm-context-chip--clickable");
 			chip.addEventListener("click", () => {
-				this.plugin.app.workspace.getLeaf(false).openFile(file);
+				void this.plugin.app.workspace.getLeaf(false).openFile(file);
 			});
 		}
 		return chip;
@@ -2908,12 +2908,12 @@ export class ChatContainer extends Component {
 			this.auto_height(promptField, parentElement);
 		});
 
-		// Slash command picker menu — mounted on document.body with position:fixed
+		// Slash command picker menu — mounted on activeDocument.body with position:fixed
 		// so it is never clipped by overflow:hidden/auto on any ancestor container.
 		// Each ChatContainer instance manages only its own menu via this.slashMenuEl,
 		// so other views' menus are not accidentally removed.
 		this.slashMenuEl?.remove();
-		this.slashMenuEl = document.body.createDiv({ cls: "llm-slash-menu" });
+		this.slashMenuEl = activeDocument.body.createDiv({ cls: "llm-slash-menu" });
 		const slashMenu = this.slashMenuEl;
 		slashMenu.addClass("llm-hidden");
 		let slashMenuIndex = 0;
@@ -2947,13 +2947,13 @@ export class ChatContainer extends Component {
 
 		// Clean up the body-mounted menu if the prompt container leaves the DOM.
 		const cleanupObserver = new MutationObserver(() => {
-			if (!document.contains(promptContainer)) {
+			if (!activeDocument.contains(promptContainer)) {
 				slashMenu.remove();
 				window.removeEventListener("resize", repositionHandler);
 				cleanupObserver.disconnect();
 			}
 		});
-		cleanupObserver.observe(document.body, { childList: true, subtree: false });
+		cleanupObserver.observe(activeDocument.body, { childList: true, subtree: false });
 
 		// "Attach local path" is a built-in slash command that opens the OS file picker.
 		// It matches /attach (and any prefix like /att, /a, /).
@@ -3026,7 +3026,7 @@ export class ChatContainer extends Component {
 					hideSlashMenu();
 					const file = this.plugin.app.vault.getAbstractFileByPath(skill.filePath);
 					if (file instanceof TFile) {
-						this.plugin.app.workspace.getLeaf(false).openFile(file);
+						void this.plugin.app.workspace.getLeaf(false).openFile(file);
 					}
 				});
 
@@ -3180,14 +3180,14 @@ export class ChatContainer extends Component {
 		modelDropdown.selectEl.addClass("llm-model-select");
 
 		// ── Models optgroup ───────────────────────────────────────────────────
-		const modelsGroup = document.createElement("optgroup");
+		const modelsGroup = activeDocument.createElement("optgroup");
 		modelsGroup.label = "Models";
 		const { openAIAPIKey, claudeAPIKey, geminiAPIKey, mistralAPIKey } = this.plugin.settings;
 		for (const modelDisplayName of Object.keys(models)) {
 			const type = models[modelDisplayName].type;
 			// Local providers: always show
 			if (type === ollama || type === lmStudio) {
-				const opt = document.createElement("option");
+				const opt = activeDocument.createElement("option");
 				opt.value = models[modelDisplayName].model;
 				opt.text = modelDisplayName;
 				modelsGroup.appendChild(opt);
@@ -3198,7 +3198,7 @@ export class ChatContainer extends Component {
 				const gpt4AllPath = getGpt4AllPath(this.plugin);
 				const fullPath = `${gpt4AllPath}/${models[modelDisplayName].model}`;
 				if (this.plugin.fileSystem.existsSync(fullPath)) {
-					const opt = document.createElement("option");
+					const opt = activeDocument.createElement("option");
 					opt.value = models[modelDisplayName].model;
 					opt.text = modelDisplayName;
 					modelsGroup.appendChild(opt);
@@ -3210,7 +3210,7 @@ export class ChatContainer extends Component {
 			if ((type === claude || type === claudeCode) && !claudeAPIKey) continue;
 			if (type === gemini && !geminiAPIKey) continue;
 			if (type === mistral && !mistralAPIKey) continue;
-			const opt = document.createElement("option");
+			const opt = activeDocument.createElement("option");
 			opt.value = models[modelDisplayName].model;
 			opt.text = modelDisplayName;
 			modelsGroup.appendChild(opt);
@@ -3220,18 +3220,18 @@ export class ChatContainer extends Component {
 		// ── Assistants optgroup ──────────────────────────────────────────────
 		// Includes the built-in "Obsidian Agent" entry (pinned at top) when enabled.
 		const buildAssistantsGroup = (): HTMLOptGroupElement => {
-			const group = document.createElement("optgroup");
+			const group = activeDocument.createElement("optgroup");
 			group.label = "Assistants";
 			// Built-in agent entry — pinned first
 			if (this.plugin.settings.obsidianAgentSettings?.enabled) {
-				const agentOpt = document.createElement("option");
+				const agentOpt = activeDocument.createElement("option");
 				agentOpt.value = "agent:obsidian";
 				agentOpt.text = "Obsidian Agent";
 				group.appendChild(agentOpt);
 			}
 			const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
 			for (const assistant of assistants) {
-				const opt = document.createElement("option");
+				const opt = activeDocument.createElement("option");
 				opt.value = `assistant:${assistant.id}`;
 				opt.text = assistant.name;
 				group.appendChild(opt);
@@ -3942,7 +3942,7 @@ export class ChatContainer extends Component {
 						link.getAttribute("data-href") ??
 						link.getAttribute("href") ??
 						"";
-					this.plugin.app.workspace.openLinkText(
+					void this.plugin.app.workspace.openLinkText(
 						href,
 						sourcePath,
 						e.ctrlKey || e.metaKey
@@ -3972,14 +3972,14 @@ export class ChatContainer extends Component {
 		const WIKI_RE = /\[\[([^\]]+)\]\]/g;
 
 		const makeLink = (target: string): HTMLAnchorElement => {
-			const a = document.createElement("a");
+			const a = activeDocument.createElement("a");
 			a.className = "internal-link";
 			a.setAttribute("data-href", target);
 			a.setAttribute("href", target);
 			a.textContent = target;
 			a.addEventListener("click", (e: MouseEvent) => {
 				e.preventDefault();
-				this.plugin.app.workspace.openLinkText(
+				void this.plugin.app.workspace.openLinkText(
 					target,
 					sourcePath,
 					e.ctrlKey || e.metaKey
@@ -4003,7 +4003,7 @@ export class ChatContainer extends Component {
 		// Case 2: plain text nodes that still contain [[...]] patterns.
 		// (These can appear when the model outputs [[file]] without backticks
 		// but MarkdownRenderer left them as literal text for any reason.)
-		const walker = document.createTreeWalker(
+		const walker = activeDocument.createTreeWalker(
 			container,
 			NodeFilter.SHOW_TEXT,
 			{
@@ -4035,21 +4035,21 @@ export class ChatContainer extends Component {
 			if (!parent) continue;
 
 			const text = textNode.textContent ?? "";
-			const fragment = document.createDocumentFragment();
+			const fragment = activeDocument.createDocumentFragment();
 			let lastIndex = 0;
 			let m: RegExpExecArray | null;
 			WIKI_RE.lastIndex = 0;
 
 			while ((m = WIKI_RE.exec(text)) !== null) {
 				if (m.index > lastIndex) {
-					fragment.appendChild(document.createTextNode(text.slice(lastIndex, m.index)));
+					fragment.appendChild(activeDocument.createTextNode(text.slice(lastIndex, m.index)));
 				}
 				fragment.appendChild(makeLink(m[1]));
 				lastIndex = m.index + m[0].length;
 			}
 
 			if (lastIndex < text.length) {
-				fragment.appendChild(document.createTextNode(text.slice(lastIndex)));
+				fragment.appendChild(activeDocument.createTextNode(text.slice(lastIndex)));
 			}
 
 			parent.replaceChild(fragment, textNode);
@@ -4401,14 +4401,14 @@ export class ChatContainer extends Component {
 		if (!selected) return;
 
 		// Measure the rendered text width using a temporary off-screen span.
-		const ruler = document.createElement("span");
+		const ruler = activeDocument.createElement("span");
 		ruler.style.cssText =
 			"visibility:hidden;position:absolute;white-space:nowrap;pointer-events:none;";
 		ruler.style.font = window.getComputedStyle(select).font;
 		ruler.textContent = selected.text;
-		document.body.appendChild(ruler);
+		activeDocument.body.appendChild(ruler);
 		const textWidth = ruler.getBoundingClientRect().width;
-		document.body.removeChild(ruler);
+		activeDocument.body.removeChild(ruler);
 
 		// Left pad (~4px) + text + right pad + chevron room (~22px) = ~26px total.
 		// Add a small buffer so the text never clips.
@@ -4430,18 +4430,18 @@ export class ChatContainer extends Component {
 		}
 
 		// Rebuild — includes Obsidian Agent entry at top when enabled
-		const group = document.createElement("optgroup");
+		const group = activeDocument.createElement("optgroup");
 		group.label = "Assistants";
 		const agentEnabled = this.plugin.settings.obsidianAgentSettings?.enabled;
 		if (agentEnabled) {
-			const agentOpt = document.createElement("option");
+			const agentOpt = activeDocument.createElement("option");
 			agentOpt.value = "agent:obsidian";
 			agentOpt.text = "Obsidian Agent";
 			group.appendChild(agentOpt);
 		}
 		const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
 		for (const assistant of assistants) {
-			const opt = document.createElement("option");
+			const opt = activeDocument.createElement("option");
 			opt.value = `assistant:${assistant.id}`;
 			opt.text = assistant.name;
 			group.appendChild(opt);
@@ -4750,7 +4750,7 @@ export class ChatContainer extends Component {
 				e.preventDefault();
 				const file = this.plugin.app.vault.getAbstractFileByPath(path);
 				if (file) {
-					this.plugin.app.workspace.getLeaf(false).openFile(file as import("obsidian").TFile);
+					void this.plugin.app.workspace.getLeaf(false).openFile(file as import("obsidian").TFile);
 				}
 			});
 		}

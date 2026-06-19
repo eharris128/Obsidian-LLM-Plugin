@@ -470,12 +470,12 @@ export default class LLMPlugin extends Plugin {
 		this.recentChatsButton = new RecentChatsButton(this, this.statusBarButton);
 		this.addSettingTab(new SettingsView(this.app, this, this.fab));
 		if (this.settings.showFAB) {
-			activeWindow.setTimeout(() => {
+			window.setTimeout(() => {
 				this.fab.regenerateFAB();
 			}, 500);
 		}
 		if (this.settings.showStatusBarButton) {
-			activeWindow.setTimeout(() => {
+			window.setTimeout(() => {
 				this.statusBarButton.generate();
 				this.recentChatsButton.generate();
 			}, 500);
@@ -543,7 +543,7 @@ export default class LLMPlugin extends Plugin {
 						// The user clicked the button in a specific tab — the natural expectation
 						// is that THAT tab becomes the chat widget, not some other open tab.
 						await leaf.setViewState({ type: TAB_VIEW_TYPE, active: true });
-						this.app.workspace.revealLeaf(leaf);
+						void this.app.workspace.revealLeaf(leaf);
 						// leaf.view is now a WidgetView; load the chat file directly.
 						await (leaf.view as WidgetView).loadChatFile(path);
 					}
@@ -616,19 +616,20 @@ export default class LLMPlugin extends Plugin {
 			if (this.lastFocusedWidgetLeaf && tabs.includes(this.lastFocusedWidgetLeaf)) {
 				leaf = this.lastFocusedWidgetLeaf;
 			} else {
-				const activeLeaf = workspace.activeLeaf;
-				leaf = (activeLeaf && activeLeaf.view instanceof WidgetView && tabs.includes(activeLeaf))
+				const activeWidgetView = workspace.getActiveViewOfType(WidgetView);
+				const activeLeaf = activeWidgetView?.leaf;
+				leaf = (activeLeaf && tabs.includes(activeLeaf))
 					? activeLeaf
 					: tabs[0];
 			}
-			workspace.revealLeaf(leaf);
+			void workspace.revealLeaf(leaf);
 			await (leaf.view as WidgetView).loadChatFile(filePath);
 		} else {
 			// No widget open — set pending path and open a new tab; onOpen() will load it
 			this.pendingWidgetFilePath = filePath;
 			const leaf = workspace.getLeaf("tab");
 			await leaf.setViewState({ type: TAB_VIEW_TYPE, active: true });
-			workspace.revealLeaf(leaf);
+			void workspace.revealLeaf(leaf);
 		}
 	}
 
@@ -663,9 +664,9 @@ export default class LLMPlugin extends Plugin {
 
 				const path = file.path;
 				const existing = this.ragDebounceTimers.get(path);
-				if (existing) activeWindow.clearTimeout(existing);
+				if (existing) window.clearTimeout(existing);
 
-				const timer = activeWindow.setTimeout(async () => {
+				const timer = window.setTimeout(async () => {
 					this.ragDebounceTimers.delete(path);
 					try {
 						await this.vaultIndexer!.indexFile(file);
@@ -691,7 +692,7 @@ export default class LLMPlugin extends Plugin {
 				// Cancel any pending reindex for this file
 				const timer = this.ragDebounceTimers.get(file.path);
 				if (timer) {
-					activeWindow.clearTimeout(timer);
+					window.clearTimeout(timer);
 					this.ragDebounceTimers.delete(file.path);
 				}
 
@@ -1034,7 +1035,7 @@ export default class LLMPlugin extends Plugin {
 		// Cancel any pending RAG debounce timers so they don't fire after the
 		// plugin is torn down and try to write to a null vaultIndexer.
 		for (const timer of this.ragDebounceTimers.values()) {
-			activeWindow.clearTimeout(timer);
+			window.clearTimeout(timer);
 		}
 		this.ragDebounceTimers.clear();
 
@@ -1059,7 +1060,7 @@ export default class LLMPlugin extends Plugin {
 			id: "open-LLM-widget-tab",
 			name: "Open chat in tab",
 			callback: () => {
-				this.activateTab();
+				void this.activateTab();
 			},
 		});
 
@@ -1069,7 +1070,7 @@ export default class LLMPlugin extends Plugin {
 			callback: async () => {
 				const leaf = this.app.workspace.getLeaf("tab");
 				await leaf.setViewState({ type: TAB_VIEW_TYPE, active: true });
-				this.app.workspace.revealLeaf(leaf);
+				void this.app.workspace.revealLeaf(leaf);
 			},
 		});
 
@@ -1166,7 +1167,7 @@ export default class LLMPlugin extends Plugin {
 		const leaves = workspace.getLeavesOfType(CHAT_DETAILS_VIEW_TYPE);
 
 		if (leaves.length > 0) {
-			workspace.revealLeaf(leaves[0]);
+			void workspace.revealLeaf(leaves[0]);
 			(leaves[0].view as ChatDetailsView).refreshFromPlugin();
 			return;
 		}
@@ -1174,7 +1175,7 @@ export default class LLMPlugin extends Plugin {
 		const leaf = workspace.getRightLeaf(false);
 		if (!leaf) return;
 		await leaf.setViewState({ type: CHAT_DETAILS_VIEW_TYPE, active: true });
-		workspace.revealLeaf(leaf);
+		void workspace.revealLeaf(leaf);
 	}
 
 	/**
@@ -1203,7 +1204,7 @@ export default class LLMPlugin extends Plugin {
 			// Bring the Chat Details tab to front in case other panels are also open
 			const detailsLeaves = workspace.getLeavesOfType(CHAT_DETAILS_VIEW_TYPE);
 			if (detailsLeaves.length > 0) {
-				workspace.revealLeaf(detailsLeaves[0]);
+				void workspace.revealLeaf(detailsLeaves[0]);
 				(detailsLeaves[0].view as ChatDetailsView).refreshFromPlugin();
 			}
 			return true;
@@ -1231,7 +1232,7 @@ export default class LLMPlugin extends Plugin {
 		const leaves = workspace.getLeavesOfType(CHATS_VIEW_TYPE);
 
 		if (leaves.length > 0) {
-			workspace.revealLeaf(leaves[0]);
+			void workspace.revealLeaf(leaves[0]);
 			const view = leaves[0].view as ChatsView;
 			await view.refresh();
 			return;
@@ -1240,7 +1241,7 @@ export default class LLMPlugin extends Plugin {
 		const leaf = workspace.getLeftLeaf(false);
 		if (!leaf) return;
 		await leaf.setViewState({ type: CHATS_VIEW_TYPE, active: true });
-		workspace.revealLeaf(leaf);
+		void workspace.revealLeaf(leaf);
 	}
 
 	async activateTab() {
@@ -1269,7 +1270,7 @@ export default class LLMPlugin extends Plugin {
 			await tab.setViewState({ type: TAB_VIEW_TYPE, active: true });
 			// onOpen will handle auto-loading via pendingWidgetHistoryIndex / pendingWidgetFilePath.
 		}
-		workspace.revealLeaf(tab);
+		void workspace.revealLeaf(tab);
 	}
 
 	async activateSidebar() {
@@ -1299,7 +1300,7 @@ export default class LLMPlugin extends Plugin {
 			await leaf.setViewState({ type: TAB_VIEW_TYPE, active: true });
 			// onOpen will handle auto-loading via pendingWidgetHistoryIndex / pendingWidgetFilePath.
 		}
-		workspace.revealLeaf(leaf);
+		void workspace.revealLeaf(leaf);
 	}
 
 	async loadSettings() {

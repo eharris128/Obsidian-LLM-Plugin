@@ -24,7 +24,7 @@ export class RecentChatsButton {
 		iconEl.addClass("llm-status-bar-icon");
 		setIcon(iconEl, "clock");
 
-		this.popoverEl = document.body.createDiv();
+		this.popoverEl = activeDocument.body.createDiv();
 		this.popoverEl.addClass("llm-recent-chats-popover");
 		this.popoverEl.addClass("llm-hidden");
 
@@ -255,9 +255,9 @@ export class RecentChatsButton {
 					this.hidePopover();
 				}
 			};
-			activeWindow.setTimeout(() => {
-				document.addEventListener("click", this.clickOutsideHandler!);
-				document.addEventListener("keydown", this.keydownHandler!);
+			window.setTimeout(() => {
+				activeDocument.addEventListener("click", this.clickOutsideHandler!);
+				activeDocument.addEventListener("keydown", this.keydownHandler!);
 			}, 0);
 		} else {
 			this.hidePopover();
@@ -267,11 +267,11 @@ export class RecentChatsButton {
 	private hidePopover() {
 		if (this.popoverEl) this.popoverEl.addClass("llm-hidden");
 		if (this.clickOutsideHandler) {
-			document.removeEventListener("click", this.clickOutsideHandler);
+			activeDocument.removeEventListener("click", this.clickOutsideHandler);
 			this.clickOutsideHandler = null;
 		}
 		if (this.keydownHandler) {
-			document.removeEventListener("keydown", this.keydownHandler);
+			activeDocument.removeEventListener("keydown", this.keydownHandler);
 			this.keydownHandler = null;
 		}
 	}

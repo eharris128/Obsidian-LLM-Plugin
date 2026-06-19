@@ -153,7 +153,7 @@ export class FAB {
 			classNames["floating-action-button"]["title-border"];
 		chatContainerDiv.addClass("fab-chat-container", "llm-flex");
 
-		chatContainer.generateChatContainer(chatContainerDiv, header);
+		void chatContainer.generateChatContainer(chatContainerDiv, header);
 		historyContainer.generateHistoryContainer(
 			chatHistoryContainer,
 			history,
@@ -161,7 +161,7 @@ export class FAB {
 			chatContainer,
 			header
 		);
-		settingsContainer.generateSettingsContainer(settingsContainerDiv);
+		void settingsContainer.generateSettingsContainer(settingsContainerDiv);
 
 		const button = new ButtonComponent(fabContainer);
 		button
@@ -264,7 +264,7 @@ export class FAB {
 				this.chatContainer!.setSkillsByTurn(skillsByTurn);
 				this.chatContainer!.setModelsByTurn(modelsByTurn);
 				this.chatContainer!.messageStore.setMessages(messages);
-				this.chatContainer!.generateIMLikeMessages(messages);
+				void this.chatContainer!.generateIMLikeMessages(messages);
 
 				this.fabChatHistoryContainer!.hide();
 				this.fabChatContainerDiv!.show();

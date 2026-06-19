@@ -152,8 +152,8 @@ export class LLMSettingsModal extends Modal {
 		const appSetting = (this.app as any).setting;
 		this.coreModalEl =
 			appSetting?.containerEl?.closest?.(".modal") ??
-			document.querySelector<HTMLElement>(".modal-container.mod-settings .modal") ??
-			Array.from(document.querySelectorAll<HTMLElement>(".modal-container .modal"))
+			activeDocument.querySelector<HTMLElement>(".modal-container.mod-settings .modal") ??
+			Array.from(activeDocument.querySelectorAll<HTMLElement>(".modal-container .modal"))
 				.find((el) => el !== modalEl && !el.contains(modalEl)) ??
 			null;
 
@@ -174,8 +174,8 @@ export class LLMSettingsModal extends Modal {
 				this.close();
 			}
 		};
-		activeWindow.setTimeout(() => {
-			document.addEventListener("mousedown", this.outsideClickHandler!);
+		window.setTimeout(() => {
+			activeDocument.addEventListener("mousedown", this.outsideClickHandler!);
 		}, 0);
 
 		// mod-sidebar-layout tells Obsidian's CSS to apply the two-column layout.
@@ -201,7 +201,7 @@ export class LLMSettingsModal extends Modal {
 			this.resizeHandler = null;
 		}
 		if (this.outsideClickHandler) {
-			document.removeEventListener("mousedown", this.outsideClickHandler);
+			activeDocument.removeEventListener("mousedown", this.outsideClickHandler);
 			this.outsideClickHandler = null;
 		}
 		this.contentEl.empty();
@@ -304,12 +304,12 @@ export class LLMSettingsModal extends Modal {
 				const allModelNames = { ...modelNames, ...ollamaBuilt.names, ...lmStudioBuilt.names };
 
 				// ── Models optgroup ───────────────────────────────────────────
-				const modelsGroup = document.createElement("optgroup");
+				const modelsGroup = activeDocument.createElement("optgroup");
 				modelsGroup.label = "Models";
 				for (const model of Object.keys(allModels)) {
 					const type = allModels[model].type;
 					if (type === ollama || type === lmStudio) {
-						const opt = document.createElement("option");
+						const opt = activeDocument.createElement("option");
 						opt.value = allModels[model].model;
 						opt.text = model;
 						modelsGroup.appendChild(opt);
@@ -318,14 +318,14 @@ export class LLMSettingsModal extends Modal {
 					if (type === GPT4All) {
 						const fullPath = `${getGpt4AllPath(this.plugin)}/${allModels[model].model}`;
 						if (this.plugin.fileSystem.existsSync(fullPath)) {
-							const opt = document.createElement("option");
+							const opt = activeDocument.createElement("option");
 							opt.value = allModels[model].model;
 							opt.text = model;
 							modelsGroup.appendChild(opt);
 						}
 						continue;
 					}
-					const opt = document.createElement("option");
+					const opt = activeDocument.createElement("option");
 					opt.value = allModels[model].model;
 					opt.text = model;
 					modelsGroup.appendChild(opt);
@@ -336,17 +336,17 @@ export class LLMSettingsModal extends Modal {
 				const assistants = this.plugin.assistantManager?.getAssistants() ?? [];
 				const agentEnabled = this.plugin.settings.obsidianAgentSettings?.enabled;
 				if (agentEnabled || assistants.length > 0) {
-					const assistantsGroup = document.createElement("optgroup");
+					const assistantsGroup = activeDocument.createElement("optgroup");
 					assistantsGroup.label = "Assistants";
 					// Obsidian Agent pinned first, only when the feature is enabled
 					if (agentEnabled) {
-						const agentOpt = document.createElement("option");
+						const agentOpt = activeDocument.createElement("option");
 						agentOpt.value = "agent:obsidian";
 						agentOpt.text = "Obsidian Agent";
 						assistantsGroup.appendChild(agentOpt);
 					}
 					for (const assistant of assistants) {
-						const opt = document.createElement("option");
+						const opt = activeDocument.createElement("option");
 						opt.value = `assistant:${assistant.id}`;
 						opt.text = assistant.name;
 						assistantsGroup.appendChild(opt);
@@ -758,7 +758,7 @@ export class LLMSettingsModal extends Modal {
 					if (!correct && this.plugin.settings.useSpecialAnimation) {
 						this.plugin.settings.useSpecialAnimation = false;
 						toggleComponent.setValue(false);
-						this.plugin.saveSettings();
+						void this.plugin.saveSettings();
 					}
 				});
 			})
@@ -823,7 +823,7 @@ export class LLMSettingsModal extends Modal {
 				}
 				// Render the editor as an overlay inside the parent modal's own box
 				// (modalEl) — avoids triggering the parent modal's close handlers.
-				new GuidanceEditorOverlay(this.plugin, this.modalEl, path, template).open();
+				void new GuidanceEditorOverlay(this.plugin, this.modalEl, path, template).open();
 			});
 		});
 	}
@@ -1273,7 +1273,7 @@ export class LLMSettingsModal extends Modal {
 					.setDesc("Clears the old in-settings chat history only. Your saved markdown chat files in your vault are not affected.")
 					.addButton((button: ButtonComponent) => {
 						button.setButtonText("Reset history");
-						button.setWarning();
+						button.setDestructive();
 						button.onClick(() => {
 							this.plugin.history.reset();
 						});
@@ -1391,13 +1391,13 @@ export class LLMSettingsModal extends Modal {
 			const setting = new Setting(toolsItems);
 
 			// Build the name element: risk badge + display name
-			const nameFragment = document.createDocumentFragment();
+			const nameFragment = activeDocument.createDocumentFragment();
 			const badge = nameFragment.createEl("span", {
 				cls: `llm-tool-badge llm-tool-badge-${tool.risk}`,
 				text: tool.risk,
 			});
 			nameFragment.appendChild(badge);
-			nameFragment.appendChild(document.createTextNode(" " + tool.displayName));
+			nameFragment.appendChild(activeDocument.createTextNode(" " + tool.displayName));
 			setting.nameEl.appendChild(nameFragment);
 
 			// Description: tool description + optional dependency notes
@@ -1659,7 +1659,7 @@ export class LLMSettingsModal extends Modal {
 			});
 			// Registry may not have loaded yet (onLayoutReady race). Reload once and
 			// re-render only if skills are actually found, to avoid a flash loop.
-			this.plugin.skillRegistry?.reloadAll().then(() => {
+			void this.plugin.skillRegistry?.reloadAll().then(() => {
 				if (
 					this.activeTab === "skills" &&
 					(this.plugin.skillRegistry?.getSkills().length ?? 0) > 0
@@ -1831,7 +1831,7 @@ export class LLMSettingsModal extends Modal {
 						if (filePath) {
 							new Notice(`✓ Project "${name}" created.`);
 							this.renderTab("projects");
-							new GuidanceEditorOverlay(this.plugin, this.modalEl, filePath, "").open();
+							void new GuidanceEditorOverlay(this.plugin, this.modalEl, filePath, "").open();
 						} else {
 							new Notice("Failed to create project.");
 						}
@@ -1860,7 +1860,7 @@ export class LLMSettingsModal extends Modal {
 				btn.setIcon("pencil")
 					.setTooltip("Edit PROJECT.md")
 					.onClick(() => {
-						new GuidanceEditorOverlay(this.plugin, this.modalEl, project.filePath, "").open();
+						void new GuidanceEditorOverlay(this.plugin, this.modalEl, project.filePath, "").open();
 					});
 			});
 
@@ -1868,7 +1868,7 @@ export class LLMSettingsModal extends Modal {
 			setting.addButton((btn) => {
 				btn.setIcon("trash")
 					.setTooltip("Delete project")
-					.setWarning()
+					.setDestructive()
 					.onClick(async () => {
 						await this.plugin.projectManager.deleteProject(project.id);
 						new Notice(`Project "${project.name}" deleted.`);
@@ -1970,7 +1970,7 @@ export class LLMSettingsModal extends Modal {
 				btn.setIcon("pencil")
 					.setTooltip("Edit ASSISTANT.md")
 					.onClick(() => {
-						new GuidanceEditorOverlay(this.plugin, this.modalEl, assistant.filePath, "").open();
+						void new GuidanceEditorOverlay(this.plugin, this.modalEl, assistant.filePath, "").open();
 					});
 			});
 
@@ -1978,7 +1978,7 @@ export class LLMSettingsModal extends Modal {
 			setting.addButton((btn) => {
 				btn.setIcon("trash")
 					.setTooltip("Delete assistant")
-					.setWarning()
+					.setDestructive()
 					.onClick(async () => {
 						await this.plugin.assistantManager.deleteAssistant(assistant.id);
 						new Notice(`Assistant "${assistant.name}" deleted.`);
@@ -2419,7 +2419,7 @@ export class LLMSettingsModal extends Modal {
 						serverBtn.setButtonText("Stop server");
 						serverBtn.onClick(async () => {
 							this.plugin.sidecarManager.stopServer();
-							await new Promise((r) => activeWindow.setTimeout(r, 800));
+							await new Promise((r) => window.setTimeout(r, 800));
 							await refreshStatus();
 						});
 					} else {
@@ -2435,7 +2435,7 @@ export class LLMSettingsModal extends Modal {
 							// Give the server 2 s to spin up then re-check
 							serverBtn!.setButtonText("Starting…");
 							serverBtn!.setDisabled(true);
-							await new Promise((r) => activeWindow.setTimeout(r, 2500));
+							await new Promise((r) => window.setTimeout(r, 2500));
 							await refreshStatus();
 						});
 					}
@@ -2451,7 +2451,7 @@ export class LLMSettingsModal extends Modal {
 			this.registerSidecarPollCleanup(stopPolling);
 
 			// Kick off the initial check
-			refreshStatus();
+			void refreshStatus();
 		}
 
 		// ── Test Connection ──────────────────────────────────────────────────
@@ -2748,7 +2748,7 @@ class ShellCommandWarningModal extends Modal {
 			.onClick(() => this.close());
 		new ButtonComponent(btnRow)
 			.setButtonText("Yes, enable shell commands")
-			.setWarning()
+			.setDestructive()
 			.onClick(() => {
 				this.close();
 				this.onConfirm();

@@ -84,7 +84,7 @@ export class StatusBarButton {
 	}
 
 	private buildPopover() {
-		this.popoverEl = document.body.createDiv();
+		this.popoverEl = activeDocument.body.createDiv();
 		this.popoverEl.addClass("llm-status-bar-popover");
 		this.popoverEl.addClass("llm-hidden");
 
@@ -155,7 +155,7 @@ export class StatusBarButton {
 		chatContainerDiv.addClass("fab-chat-container", "llm-flex");
 
 		const history = this.plugin.settings.promptHistory;
-		this.chatContainer.generateChatContainer(chatContainerDiv, this.header);
+		void this.chatContainer.generateChatContainer(chatContainerDiv, this.header);
 		historyContainer.generateHistoryContainer(
 			chatHistoryContainer,
 			history,
@@ -163,7 +163,7 @@ export class StatusBarButton {
 			this.chatContainer,
 			this.header
 		);
-		settingsContainer.generateSettingsContainer(settingsContainerDiv);
+		void settingsContainer.generateSettingsContainer(settingsContainerDiv);
 
 		// Resize handle — same logic as FAB, but repositions after each drag
 		// so the popover stays anchored above the status bar.
@@ -333,7 +333,7 @@ export class StatusBarButton {
 		this.chatContainerDiv.show();
 		this.chatContainer.setMessages(true);
 		const messages = this.chatContainer.getMessages();
-		this.chatContainer.generateIMLikeMessages(messages);
+		void this.chatContainer.generateIMLikeMessages(messages);
 		this.chatContainerDiv.querySelector(".messages-div")?.scroll(0, 9999);
 		this.header?.setHeader(historyItem?.modelName ?? "");
 		this.header?.resetHistoryButton();
@@ -381,7 +381,7 @@ export class StatusBarButton {
 				this.chatContainer!.setSkillsByTurn(skillsByTurn);
 				this.chatContainer!.setModelsByTurn(modelsByTurn);
 				this.chatContainer!.messageStore.setMessages(messages);
-				this.chatContainer!.generateIMLikeMessages(messages);
+				void this.chatContainer!.generateIMLikeMessages(messages);
 
 				this.chatHistoryContainer!.hide();
 				this.chatContainerDiv!.show();

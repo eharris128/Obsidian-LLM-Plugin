@@ -57,7 +57,7 @@ async function retryWithBackoff<T>(
 			if (status === 429 && attempt < maxRetries) {
 				const delay = baseDelayMs * Math.pow(2, attempt);
 				const jitter = Math.random() * delay * 0.5;
-				await new Promise((r) => activeWindow.setTimeout(r, delay + jitter));
+				await new Promise((r) => window.setTimeout(r, delay + jitter));
 				continue;
 			}
 			if (status === 429) {
@@ -118,12 +118,14 @@ export async function fetchOllamaContextWindows(
 	const result: Record<string, number> = {};
 	for (const name of modelNames) {
 		try {
-			const res = await fetch(`${host}/api/show`, {
+			const res = await requestUrl({
+				url: `${host}/api/show`,
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ name }),
+				throw: false,
 			});
-			const response = await res.json();
+			const response = res.json;
 			const fromInfo = response?.model_info?.["llm.context_length"];
 			const fromParams = response?.parameters
 				? parseInt(
@@ -143,15 +145,15 @@ export async function fetchOllamaContextWindows(
 }
 
 export async function fetchOllamaModels(host: string): Promise<string[]> {
-	const res = await fetch(`${host}/api/tags`);
-	const response = await res.json();
+	const res = await requestUrl({ url: `${host}/api/tags`, throw: false });
+	const response = res.json;
 	return (response.models || []).map((m: { name: string }) => m.name);
 }
 
 /** Fetches the list of models currently loaded in LM Studio via its OpenAI-compatible /v1/models endpoint. */
 export async function fetchLMStudioModels(host: string): Promise<string[]> {
-	const res = await fetch(`${host}/v1/models`);
-	const response = await res.json();
+	const res = await requestUrl({ url: `${host}/v1/models`, throw: false });
+	const response = res.json;
 	return (response.data || []).map((m: { id: string }) => m.id);
 }
 
@@ -198,7 +200,7 @@ export async function mistralMessage(params: ChatParams, mistralAPIKey: string) 
 					}
 				}
 			}
-			return activeWindow.fetch(url, init);
+			return window.fetch(url, init);
 		},
 	});
 

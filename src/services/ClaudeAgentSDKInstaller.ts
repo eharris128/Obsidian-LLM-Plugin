@@ -154,20 +154,20 @@ function doInstall(pluginDir: string): Promise<void> {
 			stdio: ["ignore", "pipe", "pipe"],
 		});
 
-		const timeout = activeWindow.setTimeout(() => {
+		const timeout = window.setTimeout(() => {
 			child.kill();
 			notice.hide();
 			reject(new Error("SDK installation failed: timed out after 2 minutes"));
 		}, INSTALL_TIMEOUT_MS);
 
 		child.on("error", (err: Error) => {
-			activeWindow.clearTimeout(timeout);
+			window.clearTimeout(timeout);
 			notice.hide();
 			reject(new Error("SDK installation failed: " + err.message));
 		});
 
 		child.on("close", (code: number) => {
-			activeWindow.clearTimeout(timeout);
+			window.clearTimeout(timeout);
 			notice.hide();
 
 			if (code !== 0) {

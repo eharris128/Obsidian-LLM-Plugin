@@ -541,7 +541,7 @@ export class ChatHistory {
 	async delete(filePath: string): Promise<void> {
 		const file = this.plugin.app.vault.getFileByPath(filePath);
 		if (file) {
-			await this.plugin.app.vault.trash(file, true);
+			await this.plugin.app.fileManager.trashFile(file);
 			return;
 		}
 		// Fallback: bypass the file cache and remove directly via the adapter.

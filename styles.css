@@ -1478,6 +1478,32 @@ button.llm-permission-allow {
 	padding: var(--size-4-1) var(--size-4-3);
 }
 
+/* PERMISSION DENIED NOTICE (Claude Code auto-block) */
+
+.llm-permission-denied-notice {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2) var(--size-4-3);
+	border-radius: var(--radius-s);
+	background-color: var(--background-modifier-error-hover);
+	border: var(--border-width) solid var(--background-modifier-error);
+	color: var(--text-error);
+	font-size: var(--font-ui-small);
+	margin: var(--size-4-2) 0;
+}
+
+.llm-permission-denied-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+}
+
+.llm-permission-denied-icon svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+
 /* MEMORY SCOPE PICKER (extends permission card) */
 
 .llm-memory-content-preview {

@@ -11,7 +11,7 @@ import {
 	gemini2FlashStableModel,
 	images,
 } from "utils/constants";
-import { query as claudeCodeQuery } from "@anthropic-ai/claude-agent-sdk";
+import { query as claudeCodeQuery, CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 import { ensureSDKInstalled, getNativeBinaryPath } from "services/ClaudeAgentSDKInstaller";
 
 // Patch events.setMaxListeners for Electron compatibility.
@@ -303,7 +303,8 @@ export async function claudeCodeMessage(
 	linearWorkspaces: Array<{ name: string; apiKey: string }>,
 	cwd: string,
 	pluginDir: string,
-	sessionId?: string
+	sessionId?: string,
+	canUseTool?: CanUseTool
 ) {
 	if (!Platform.isDesktop) throw new Error("Claude Code is only available on desktop.");
 	await ensureSDKInstalled(pluginDir);
@@ -343,7 +344,8 @@ export async function claudeCodeMessage(
 			...(Object.keys(mcpServers).length > 0
 				? { mcpServers, allowedTools }
 				: {}),
-			permissionMode: "acceptEdits",
+			permissionMode: "default",
+			...(canUseTool ? { canUseTool } : {}),
 			cwd,
 			env: {
 				...process.env,

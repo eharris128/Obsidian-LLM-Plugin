@@ -519,7 +519,8 @@ export class ChatContainer extends Component {
 				this.plugin.settings.linearWorkspaces,
 				vaultPath,
 				pluginDir,
-				this.claudeCodeSessionId ?? undefined
+				this.claudeCodeSessionId ?? undefined,
+				this.claudeCodeCanUseTool.bind(this)
 			);
 
 			let firstText = true;
@@ -550,6 +551,15 @@ export class ChatContainer extends Component {
 				} else if (msg.type === "tool_use_summary") {
 					// After tool batch completes, resume "Thinking…"
 					this.showThinkingAnimation();
+					firstText = true;
+				} else if (msg.type === "system" && msg.subtype === "permission_denied") {
+					// Auto-denied tool (e.g. classifier block, dontAsk mode) — surface inline
+					const toolLabel = (msg.tool_name as string).replace(/_/g, " ");
+					const notice = this.historyMessages.createDiv({ cls: "llm-permission-denied-notice" });
+					notice.createSpan({ cls: "llm-permission-denied-icon" });
+					setIcon(notice.querySelector(".llm-permission-denied-icon") as HTMLElement, "shield-x");
+					notice.createSpan({ text: `Action blocked: ${toolLabel}`, cls: "llm-permission-denied-text" });
+					this.historyMessages.scroll(0, 9999);
 					firstText = true;
 				} else if (msg.type === "result" && msg.usage) {
 					// Final result message — capture token usage
@@ -1722,10 +1732,20 @@ export class ChatContainer extends Component {
 		});
 	}
 
-	/**
-	 * Render an inline approval card in the chat history and return a Promise
-	 * that resolves to true (Allow) or false (Deny) when the user clicks.
-	 */
+	private async claudeCodeCanUseTool(
+		toolName: string,
+		input: Record<string, unknown>,
+		options: { title?: string; displayName?: string; description?: string; toolUseID: string }
+	): Promise<import("@anthropic-ai/claude-agent-sdk").PermissionResult> {
+		const label = options.title ?? `Claude wants to use: ${toolName.replace(/_/g, " ")}`;
+		const desc = options.description ?? options.displayName ?? "";
+		const allowed = await this.showPermissionUI(toolName, label + (desc ? `\n${desc}` : ""), input as Record<string, any>);
+		if (allowed) {
+			return { behavior: "allow", updatedInput: input };
+		}
+		return { behavior: "deny", message: "Action denied by user." };
+	}
+
 	private showPermissionUI(
 		toolName: string,
 		toolDescription: string,

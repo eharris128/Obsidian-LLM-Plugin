@@ -84,7 +84,7 @@ export class StatusBarButton {
 	}
 
 	private buildPopover() {
-		this.popoverEl = activeDocument.body.createDiv();
+		this.popoverEl = document.body.createDiv();
 		this.popoverEl.addClass("llm-status-bar-popover");
 		this.popoverEl.addClass("llm-hidden");
 

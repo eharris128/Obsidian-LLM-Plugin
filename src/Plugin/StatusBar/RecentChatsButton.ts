@@ -24,7 +24,7 @@ export class RecentChatsButton {
 		iconEl.addClass("llm-status-bar-icon");
 		setIcon(iconEl, "clock");
 
-		this.popoverEl = activeDocument.body.createDiv();
+		this.popoverEl = document.body.createDiv();
 		this.popoverEl.addClass("llm-recent-chats-popover");
 		this.popoverEl.addClass("llm-hidden");
 

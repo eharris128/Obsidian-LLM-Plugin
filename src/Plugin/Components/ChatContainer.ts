@@ -3849,6 +3849,27 @@ export class ChatContainer extends Component {
 			const dot = dots.createSpan({ cls: "streaming-dot" });
 			dot.textContent = ".";
 		}
+		if (this.plugin.settings.useSpecialAnimation) {
+			const svgWrap = this.streamingDiv.createDiv({ cls: "llm-special-animation" });
+			svgWrap.innerHTML = `<svg width="45" height="30" viewBox="0 0 30 20" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+  <g id="f1">
+    <path d="M18 19H17V18H18V19ZM24 7H25V8H22V10H21V11H20V13H19V14H18V16H17V18H16V16H13V15H17V14H16V13H13V12H12V13H10V15H9V13H8V12H10V11H9V10H8V11H6V10H7V9H11V8H13V9H18V8H20V7H21V5H22V6H24V7ZM7 16H6V15H7V16ZM11 16H10V15H11V16ZM8 15H7V13H8V15ZM6 12H5V11H6V12ZM5 11H4V10H5V11Z" fill="var(--interactive-accent)"/>
+    <animate attributeName="display" values="inline;none;none;none" keyTimes="0;0.25;0.5;0.75" calcMode="discrete" dur="0.5s" repeatCount="indefinite"/>
+  </g>
+  <g id="f2" display="none">
+    <path d="M15 16H16V17H13V16H14V15H15V16ZM24 7H25V8H22V10H21V11H20V15H19V14H18V15H19V16H16V15H17V14H16V13H15V12H13V14H14V15H13V16H12V15H11V14H12V13H11V12H10V11H9V10H8V9H11V8H19V7H20V6H21V5H22V6H24V7ZM11 14H10V13H11V14ZM5 11H6V12H4V10H5V11ZM8 11H6V10H8V11Z" fill="var(--interactive-accent)"/>
+    <animate attributeName="display" values="none;inline;none;none" keyTimes="0;0.25;0.5;0.75" calcMode="discrete" dur="0.5s" repeatCount="indefinite"/>
+  </g>
+  <g id="f3" display="none">
+    <path d="M25 7H26V8H23V10H22V13H23V15H22V14H21V13H20V14H19V16H16V15H18V13H16V12H15V14H16V15H12V13H13V14H14V13H13V12H11V10H10V11H7V10H9V9H12V8H20V7H21V6H22V5H23V6H25V7ZM22 16H20V15H22V16ZM7 12H5V11H7V12Z" fill="var(--interactive-accent)"/>
+    <animate attributeName="display" values="none;none;inline;none" keyTimes="0;0.25;0.5;0.75" calcMode="discrete" dur="0.5s" repeatCount="indefinite"/>
+  </g>
+  <g id="f4" display="none">
+    <path d="M16 18H15V17H16V18ZM24 7H25V8H22V9H21V12H23V16H22V13H20V14H19V15H20V16H18V14H17V13H15V12H14V14H16V15H14V16H15V17H13V16H12V13H11V12H10V10H9V11H6V12H4V11H5V10H8V9H11V8H19V7H20V6H21V5H22V6H24V7ZM17 16H16V15H17V16ZM21 15H20V14H21V15Z" fill="var(--interactive-accent)"/>
+    <animate attributeName="display" values="none;none;none;inline" keyTimes="0;0.25;0.5;0.75" calcMode="discrete" dur="0.5s" repeatCount="indefinite"/>
+  </g>
+</svg>`;
+		}
 		this.historyMessages.scroll(0, 9999);
 	}
 
@@ -4123,8 +4144,112 @@ export class ChatContainer extends Component {
 		// message when running in agent mode, mirroring how Claude shows its logo.
 		if (finalMessage && assistant && this.isObsidianAgent && this.plugin.settings.showAgentBrandIcon) {
 			const brandEl = messageWrapper.createDiv({ cls: "llm-obsidian-agent-brand" });
-			const iconEl = brandEl.createSpan({ cls: "llm-obsidian-agent-brand-icon" });
-			setIcon(iconEl, "stone");
+			if (this.plugin.settings.useSpecialAnimation) {
+				const svgEl = brandEl.createDiv({ cls: "llm-special-standing" });
+				svgEl.innerHTML = `<svg width="45" height="30" viewBox="0 0 30 20" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+<rect x="22" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="21" y="4" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="23" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="22" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="20" y="4" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="20" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="21" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="20" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="20" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="18" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="18" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="16" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="15" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="12" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="11" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="20" y="3" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="20" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="12" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="17" y="14" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="17" y="13" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="14" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="15" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="16" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="20" y="17" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="9" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="9" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="12" y="17" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="10" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="12" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="13" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="14" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="9" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="10" y="12" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="10" y="13" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="11" y="13" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="11" y="14" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="9" y="14" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="9" y="12" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="10" y="17" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="9" y="16" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="9" y="15" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="11" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="11" y="15" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="11" y="16" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="8" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="7" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="7" y="12" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="6" y="13" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="11" y="12" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="10" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="10" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="13" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="14" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="15" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="16" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="17" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="18" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="20" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="20" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="18" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="10" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="11" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="12" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="11" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="11" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="12" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="13" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="13" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="14" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="15" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="16" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="17" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="17" y="12" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="18" y="12" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="18" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="17" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="16" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="15" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="14" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="17" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="17" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="18" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="9" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="8" y="9" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="19" y="13" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="16" y="12" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="21" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="23" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="17" y="15" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="17" y="16" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="18" y="17" width="1" height="1" fill="var(--interactive-accent)"/>
+</svg>`;
+			} else {
+				const iconEl = brandEl.createSpan({ cls: "llm-obsidian-agent-brand-icon" });
+				setIcon(iconEl, "stone");
+			}
 		}
 	}
 

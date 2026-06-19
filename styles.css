@@ -1022,6 +1022,41 @@ div.im-like-message.llm-widget-chat-message > p {
 	}
 }
 
+.llm-egg-passphrase {
+	width: 100%;
+}
+
+.llm-egg-error {
+	animation: llm-egg-shake 0.4s ease;
+	border-color: var(--color-red) !important;
+}
+
+@keyframes llm-egg-shake {
+	0%, 100% { transform: translateX(0); }
+	20%       { transform: translateX(-4px); }
+	40%       { transform: translateX(4px); }
+	60%       { transform: translateX(-4px); }
+	80%       { transform: translateX(4px); }
+}
+
+.llm-special-standing {
+	display: flex;
+	align-items: center;
+}
+
+.llm-special-standing svg {
+	image-rendering: pixelated;
+}
+
+.llm-special-animation {
+	display: flex;
+	margin-top: 0.4em;
+}
+
+.llm-special-animation svg {
+	image-rendering: pixelated;
+}
+
 .llm-icon-wrapper {
 	display: flex;
 	flex-direction: column;

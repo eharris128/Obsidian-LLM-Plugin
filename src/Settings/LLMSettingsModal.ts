@@ -654,6 +654,7 @@ export class LLMSettingsModal extends Modal {
 
 	private renderInterface() {
 		const el = this.mainContentEl;
+		el.empty();
 		const items = this.addSettingGroup(el);
 
 		new Setting(items)
@@ -738,6 +739,42 @@ export class LLMSettingsModal extends Modal {
 						await this.plugin.saveSettings();
 					});
 			});
+
+		// Easter egg — unlock with passphrase
+		let unlocked = this.plugin.settings.useSpecialAnimation;
+		const eggSetting = new Setting(items)
+			.setName("Custom loading animation")
+			.setDesc("Replace the default thinking animation with a special one.");
+
+		if (unlocked) {
+			eggSetting.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.settings.useSpecialAnimation)
+					.onChange(async (value) => {
+						this.plugin.settings.useSpecialAnimation = value;
+						await this.plugin.saveSettings();
+						if (!value) this.renderInterface();
+					});
+			});
+		} else {
+			eggSetting.addText((text) => {
+				text.setPlaceholder("Enter passphrase to unlock")
+					.inputEl.addClass("llm-egg-passphrase");
+				text.inputEl.type = "password";
+				text.inputEl.addEventListener("keydown", async (e) => {
+					if (e.key !== "Enter") return;
+					if (text.getValue().trim() === "frontier") {
+						this.plugin.settings.useSpecialAnimation = true;
+						await this.plugin.saveSettings();
+						this.renderInterface();
+					} else {
+						text.inputEl.addClass("llm-egg-error");
+						setTimeout(() => text.inputEl.removeClass("llm-egg-error"), 600);
+						text.setValue("");
+					}
+				});
+			});
+		}
 	}
 
 	/**

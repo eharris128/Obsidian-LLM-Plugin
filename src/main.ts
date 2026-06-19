@@ -293,7 +293,7 @@ function mergeSettingsWithDefaults(
 	defaults: LLMPluginSettings,
 	saved: Record<string, unknown>,
 ): LLMPluginSettings {
-	const result = { ...defaults, ...saved } as LLMPluginSettings;
+	const result = { ...defaults, ...saved };
 	for (const key of Object.keys(defaults) as (keyof LLMPluginSettings)[]) {
 		const def = defaults[key];
 		const sav = saved[key];
@@ -307,7 +307,7 @@ function mergeSettingsWithDefaults(
 			if (nestedDef === null || typeof nestedDef !== "object" || Array.isArray(nestedDef)) continue;
 			(merged as Record<string, unknown>)[nestedKey] = {
 				...nestedDef,
-				...(nestedSav as object ?? {}),
+				...(nestedSav ?? {}),
 			};
 		}
 		(result as unknown as Record<string, unknown>)[key] = merged;
@@ -1374,7 +1374,7 @@ export default class LLMPlugin extends Plugin {
 			const oauth = data?.claudeAiOauth;
 			if (!oauth?.accessToken) return null;
 			if (oauth.expiresAt && Date.now() > oauth.expiresAt) {
-				console.warn("[LLM Plugin] Claude Code OAuth token is expired. Re-authenticate via `claude` in your terminal.");
+				logger.warn("[LLM Plugin] Claude Code OAuth token is expired. Re-authenticate via `claude` in your terminal.");
 				return null;
 			}
 			return oauth.accessToken as string;

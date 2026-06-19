@@ -485,7 +485,7 @@ export class ChatContainer extends Component {
 			modelType,
 			modelName,
 		} = getViewInfo(this.plugin, this.viewType);
-		let shouldHaveAPIKey = modelType !== GPT4All && modelType !== ollama && modelType !== lmStudio && modelType !== mistral && modelEndpoint !== claudeCodeEndpoint;
+		const shouldHaveAPIKey = modelType !== GPT4All && modelType !== ollama && modelType !== lmStudio && modelType !== mistral && modelEndpoint !== claudeCodeEndpoint;
 		if (shouldHaveAPIKey) {
 			let API_KEY: string | undefined;
 			if (modelType === openAI) API_KEY = this.plugin.settings.openAIAPIKey;
@@ -1100,7 +1100,7 @@ export class ChatContainer extends Component {
 						(this.pendingContextString ? "\n\n---\n\n" + this.pendingContextString : "");
 				}
 			} catch (err) {
-				console.error("[LLM] Error reading local context paths:", err);
+				logger.error("[LLM] Error reading local context paths:", err);
 			}
 		}
 
@@ -3056,7 +3056,7 @@ export class ChatContainer extends Component {
 
 			// Open native OS file/folder picker via Electron
 			try {
-				const { remote } = require("electron") as any;
+				const { remote } = require("electron");
 				const nodePath = require("path") as typeof import("path");
 				const lastDir = (this.plugin.settings as any).lastLocalPickerDirectory || undefined;
 				remote.dialog.showOpenDialog({
@@ -3080,10 +3080,10 @@ export class ChatContainer extends Component {
 					this.localContextPaths.push({ label, absPath, isDir });
 					this.syncChips();
 				}).catch((err: Error) => {
-					console.error("[LLM] File picker error:", err);
+					logger.error("[LLM] File picker error:", err);
 				});
 			} catch (err) {
-				console.error("[LLM] Electron dialog unavailable:", err);
+				logger.error("[LLM] Electron dialog unavailable:", err);
 			}
 		};
 

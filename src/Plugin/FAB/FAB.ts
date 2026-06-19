@@ -143,7 +143,7 @@ export class FAB {
 			resizeHandle.addEventListener("pointerup", onPointerUp);
 		});
 
-		let history = this.plugin.settings.promptHistory;
+		const history = this.plugin.settings.promptHistory;
 
 		settingsContainerDiv.hide();
 		settingsContainerDiv.addClass("fab-settings-container", "llm-flex");
@@ -163,7 +163,7 @@ export class FAB {
 		);
 		settingsContainer.generateSettingsContainer(settingsContainerDiv);
 
-		let button = new ButtonComponent(fabContainer);
+		const button = new ButtonComponent(fabContainer);
 		button
 			.setIcon("bot-message-square")
 			.setClass("buttonItem")

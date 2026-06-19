@@ -8,7 +8,7 @@ export class History {
 		// When file-based history is active, writes are handled by ChatHistory.
 		if (this.plugin.settings.chatHistoryEnabled) return true;
 		try {
-			let history = this.plugin.settings.promptHistory;
+			const history = this.plugin.settings.promptHistory;
 			history.push(message_context);
 			this.plugin.settings.promptHistory = history;
 			void this.plugin.saveSettings();

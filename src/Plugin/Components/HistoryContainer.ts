@@ -214,8 +214,8 @@ export class HistoryContainer {
 
 			item.addEventListener("mouseenter", () => {
 				if (
-					text.contentEditable == "false" ||
-					text.contentEditable == "inherit"
+					text.contentEditable === "false" ||
+					text.contentEditable === "inherit"
 				) {
 					editPrompt.buttonEl.setAttr("style", "visibility: visible");
 					deleteHistory.buttonEl.setAttr(
@@ -226,8 +226,8 @@ export class HistoryContainer {
 			});
 			item.addEventListener("mouseleave", () => {
 				if (
-					text.contentEditable == "false" ||
-					text.contentEditable == "inherit"
+					text.contentEditable === "false" ||
+					text.contentEditable === "inherit"
 				) {
 					editPrompt.buttonEl.setAttr("style", "visibility: hidden");
 					deleteHistory.buttonEl.setAttr(
@@ -243,7 +243,7 @@ export class HistoryContainer {
 				e.stopPropagation();
 				new ConfirmDeleteModal(this.plugin.app, () => {
 					this.resetHistory(parentElement);
-					let updatedHistory = this.plugin.settings.promptHistory.filter(
+					const updatedHistory = this.plugin.settings.promptHistory.filter(
 						(_item, idx) => idx !== index
 					);
 					this.plugin.settings.promptHistory = updatedHistory;

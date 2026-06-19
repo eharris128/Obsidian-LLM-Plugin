@@ -54,7 +54,7 @@ export class ChatModal2 extends Modal {
 			historyContainer,
 			settingsContainer
 		);
-		let history = this.plugin.settings.promptHistory;
+		const history = this.plugin.settings.promptHistory;
 
 		settingsContainerDiv.hide();
 		settingsContainerDiv.addClass("llm-modal-settings-container", "llm-flex");

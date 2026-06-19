@@ -145,7 +145,7 @@ async function buildUniqueNotePath(
 	baseFilename: string,
 ): Promise<string> {
 	const adapter = plugin.app.vault.adapter;
-	let candidate = `${folder}/${baseFilename}.md`;
+	const candidate = `${folder}/${baseFilename}.md`;
 	if (!(await adapter.exists(candidate))) return candidate;
 
 	let i = 2;

@@ -594,6 +594,7 @@ export class LLMSettingsModal extends Modal {
 
 		// ── Guidance (AGENTS.md) — declared early so the rootVaultFolder onChange
 		// closure can re-render it when the path is auto-updated.
+		// eslint-disable-next-line prefer-const
 		let agentsGroup: HTMLElement;
 
 		const renderAgentsPicker = () => {
@@ -900,7 +901,7 @@ export class LLMSettingsModal extends Modal {
 
 		// Claude Code
 		const authItems = this.addSettingGroup(el, "Claude Code");
-		const oauthSetting = new Setting(authItems)
+		new Setting(authItems)
 			.setName("Claude Code OAuth token")
 			.setDesc("OAuth token for authenticating with Claude Code (CLAUDE_CODE_OAUTH_TOKEN).")
 			.addText((text) => {

@@ -1022,6 +1022,29 @@ div.im-like-message.llm-widget-chat-message > p {
 	}
 }
 
+.llm-egg-passphrase {
+	width: 100%;
+}
+
+
+.llm-special-standing {
+	display: flex;
+	align-items: center;
+}
+
+.llm-special-standing svg {
+	image-rendering: pixelated;
+}
+
+.llm-special-animation {
+	display: flex;
+	margin-top: 0.4em;
+}
+
+.llm-special-animation svg {
+	image-rendering: pixelated;
+}
+
 .llm-icon-wrapper {
 	display: flex;
 	flex-direction: column;

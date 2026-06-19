@@ -738,6 +738,39 @@ export class LLMSettingsModal extends Modal {
 						await this.plugin.saveSettings();
 					});
 			});
+
+		// Easter egg — passphrase field always visible; toggle only active when correct
+		const alreadyUnlocked = this.plugin.settings.useSpecialAnimation;
+		let toggleComponent: import("obsidian").ToggleComponent;
+		const eggSetting = new Setting(items)
+			.setName("Custom loading animation")
+			.setDesc("Replace the default thinking animation with a special one.")
+			.addText((text) => {
+				text.setPlaceholder("Passphrase")
+					.inputEl.addClass("llm-egg-passphrase");
+				text.inputEl.type = "password";
+				if (alreadyUnlocked) text.setValue("frontier");
+				text.onChange((value) => {
+					const correct = value.trim() === "frontier";
+					toggleComponent.setDisabled(!correct);
+					if (!correct && this.plugin.settings.useSpecialAnimation) {
+						this.plugin.settings.useSpecialAnimation = false;
+						toggleComponent.setValue(false);
+						this.plugin.saveSettings();
+					}
+				});
+			})
+			.addToggle((toggle) => {
+				toggleComponent = toggle;
+				toggle
+					.setValue(this.plugin.settings.useSpecialAnimation)
+					.setDisabled(!alreadyUnlocked)
+					.onChange(async (value) => {
+						this.plugin.settings.useSpecialAnimation = value;
+						await this.plugin.saveSettings();
+					});
+			});
+		void eggSetting;
 	}
 
 	/**

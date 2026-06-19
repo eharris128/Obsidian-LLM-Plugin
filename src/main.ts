@@ -102,6 +102,7 @@ export interface LLMPluginSettings {
 	emptyChatAvatar: string;
 	fabViewHeight?: number;
 	showStatusBarButton: boolean;
+	useSpecialAnimation: boolean;
 	ragSettings: RAGSettings;
 	skillsSettings: SkillsSettings;
 	memorySettings: MemorySettings;
@@ -214,6 +215,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	lmStudioModels: [],
 	emptyChatAvatar: "llm-gal",
 	showStatusBarButton: false,
+	useSpecialAnimation: false,
 	ragSettings: {
 		enabled: false,
 		embeddingProvider: "onnx" as const,

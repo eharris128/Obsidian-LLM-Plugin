@@ -1573,14 +1573,41 @@ export class LLMSettingsModal extends Modal {
 
 	private renderSkills() {
 		const el = this.mainContentEl;
-
 		const skillsFolder = this.plugin.skillsFolder;
 
-		if (!skillsFolder) return;
+		if (!skillsFolder) {
+			el.createEl("p", {
+				cls: "pane-empty",
+				text: "Set a Root Vault Folder in General settings to enable skills.",
+			});
+			return;
+		}
 
-		// Show the skills discovered in the current folder
 		const skills = this.plugin.skillRegistry?.getSkills() ?? [];
-		if (skills.length === 0) return;
+
+		if (skills.length === 0) {
+			el.createEl("p", {
+				cls: "pane-empty",
+				text: `No skills found in ${skillsFolder}. Add subfolders containing a SKILL.md file.`,
+			});
+			// Registry may not have loaded yet (onLayoutReady race). Reload once and
+			// re-render only if skills are actually found, to avoid a flash loop.
+			this.plugin.skillRegistry?.reloadAll().then(() => {
+				if (
+					this.activeTab === "skills" &&
+					(this.plugin.skillRegistry?.getSkills().length ?? 0) > 0
+				) {
+					this.renderTab("skills");
+				}
+			});
+			return;
+		}
+
+		new Setting(el).setName("Skills").setHeading();
+		new Setting(el).setDesc(
+			`Enable or disable skills globally. Skills are invoked with / in the chat input or via the + menu. ` +
+			`Skill files live in ${skillsFolder}.`
+		);
 
 		for (const skill of skills) {
 			new Setting(el)

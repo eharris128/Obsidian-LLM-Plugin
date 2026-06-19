@@ -193,7 +193,7 @@ created: ${created}
 		try {
 			const file = this.app.vault.getFileByPath(project.filePath);
 			if (file) {
-				await this.app.vault.trash(file, true);
+				await this.app.fileManager.trashFile(file);
 			}
 			this.projects.delete(id);
 		} catch (e) {

@@ -72,7 +72,7 @@ export class WidgetView extends ItemView {
 		const messages = this.chatContainer.getMessages();
 		if (messages.length > 0) {
 			this.chatContainer.resetChat();
-			this.chatContainer.generateIMLikeMessages(messages);
+			void this.chatContainer.generateIMLikeMessages(messages);
 		}
 
 		// Sync header state
@@ -98,7 +98,7 @@ export class WidgetView extends ItemView {
 			this.chatContainer.setSkillsByTurn(skillsByTurn);
 			this.chatContainer.setModelsByTurn(modelsByTurn);
 			this.chatContainer.messageStore.setMessages(messages);
-			this.chatContainer.generateIMLikeMessages(messages);
+			void this.chatContainer.generateIMLikeMessages(messages);
 
 			if (this.chatContainerDiv) this.chatContainerDiv.show();
 			if (this.chatHistoryContainer) this.chatHistoryContainer.hide();
@@ -242,7 +242,7 @@ export class WidgetView extends ItemView {
 			historyContainer,
 			settingsContainer
 		);
-		chatContainer.generateChatContainer(chatContainerDiv, header);
+		void chatContainer.generateChatContainer(chatContainerDiv, header);
 		// generateChatContainer is async; schedule an initial sidebar state push
 		// so the inline sidebar has content the first time the user opens it,
 		// even if no other action (chip sync, model change) has fired yet.
@@ -254,7 +254,7 @@ export class WidgetView extends ItemView {
 			chatContainer,
 			header
 		);
-		settingsContainer.generateSettingsContainer(settingsContainerDiv);
+		void settingsContainer.generateSettingsContainer(settingsContainerDiv);
 
 		// Auto-load a conversation if one was pending (set by "Open in sidebar/tab" from the FAB).
 		const pendingIndex = this.plugin.pendingWidgetHistoryIndex;

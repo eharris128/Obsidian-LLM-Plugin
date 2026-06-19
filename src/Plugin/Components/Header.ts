@@ -210,7 +210,7 @@ export class Header {
 						const historyFilePath = this.plugin.settings.fabSettings.historyFilePath;
 						this.plugin.pendingWidgetHistoryIndex = historyIndex;
 						this.plugin.pendingWidgetFilePath = historyFilePath;
-						this.plugin.activateSidebar();
+						void this.plugin.activateSidebar();
 						closeCallback?.();
 					});
 			});
@@ -223,7 +223,7 @@ export class Header {
 						const historyFilePath = this.plugin.settings.fabSettings.historyFilePath;
 						this.plugin.pendingWidgetHistoryIndex = historyIndex;
 						this.plugin.pendingWidgetFilePath = historyFilePath;
-						this.plugin.activateTab();
+						void this.plugin.activateTab();
 						closeCallback?.();
 					});
 			});
@@ -339,7 +339,7 @@ export class Header {
 		this.settingsButton.setTooltip("Chat settings");
 		this.settingsButton.onClick(() => {
 			settingsContainer.resetSettings(settingsContainerDiv);
-			settingsContainer.generateSettingsContainer(settingsContainerDiv);
+			void settingsContainer.generateSettingsContainer(settingsContainerDiv);
 			this.clickHandler(this.settingsButton!, [this.chatHistoryButton!]);
 			if (!settingsContainerDiv.isShown()) {
 				settingsContainerDiv.show();
@@ -527,7 +527,7 @@ export class Header {
 		this.settingsButton.setTooltip("Chat settings");
 		this.settingsButton.onClick(() => {
 			settingsContainer.resetSettings(settingsContainerDiv);
-			settingsContainer.generateSettingsContainer(settingsContainerDiv);
+			void settingsContainer.generateSettingsContainer(settingsContainerDiv);
 			this.clickHandler(this.settingsButton!, [this.chatHistoryButton]);
 			if (!settingsContainerDiv.isShown()) {
 				settingsContainerDiv.show();

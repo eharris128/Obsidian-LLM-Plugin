@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { logger } from "../utils/logger";
 import { GoogleGenAI } from "@google/genai";
+import { requestUrl } from "obsidian";
 
 export type EmbeddingProvider = "onnx" | "openai" | "gemini" | "ollama" | "lmStudio";
 
@@ -381,9 +382,9 @@ export class EmbeddingService {
 		const host  = this.config.ollamaHost ?? "http://localhost:11434";
 		const model = this.config.model ?? DEFAULT_EMBEDDING_MODELS["ollama"];
 		try {
-			const res = await fetch(`${host}/api/tags`);
-			if (!res.ok) return false;
-			const data = await res.json();
+			const res = await requestUrl({ url: `${host}/api/tags`, throw: false });
+			if (res.status >= 400) return false;
+			const data = res.json;
 			const pulled    = (data.models ?? []).map((m: any) => m.name.split(":")[0]);
 			const modelBase = model.split(":")[0];
 			if (!pulled.includes(modelBase)) throw new OllamaModelNotFoundError(model, host);

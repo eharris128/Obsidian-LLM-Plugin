@@ -191,7 +191,7 @@ export class WhisperService {
 		// 60-second timeout — large files on slow hardware can take a while,
 		// but we never want to hang indefinitely if the server is unresponsive.
 		const controller = new AbortController();
-		const timeout = activeWindow.setTimeout(() => controller.abort(), 60_000);
+		const timeout = window.setTimeout(() => controller.abort(), 60_000);
 
 		let response: Response;
 		try {
@@ -213,7 +213,7 @@ export class WhisperService {
 				{ cause: err },
 			);
 		} finally {
-			activeWindow.clearTimeout(timeout);
+			window.clearTimeout(timeout);
 		}
 
 		if (!response.ok) {

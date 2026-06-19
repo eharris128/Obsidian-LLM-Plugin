@@ -219,7 +219,7 @@ ${systemPrompt || "<!-- Add your assistant's system prompt / persona instruction
 		try {
 			const file = this.app.vault.getFileByPath(assistant.filePath);
 			if (file) {
-				await this.app.vault.trash(file, true);
+				await this.app.fileManager.trashFile(file);
 			}
 			this.assistants.delete(id);
 		} catch (e) {

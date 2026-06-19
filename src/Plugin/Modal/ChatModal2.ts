@@ -54,7 +54,7 @@ export class ChatModal2 extends Modal {
 			historyContainer,
 			settingsContainer
 		);
-		let history = this.plugin.settings.promptHistory;
+		const history = this.plugin.settings.promptHistory;
 
 		settingsContainerDiv.hide();
 		settingsContainerDiv.addClass("llm-modal-settings-container", "llm-flex");
@@ -63,7 +63,7 @@ export class ChatModal2 extends Modal {
 		lineBreak.className = classNames["modal"]["title-border"];
 		chatContainerDiv.addClass("llm-modal-chat-container", "llm-flex");
 
-		chatContainer.generateChatContainer(chatContainerDiv, header);
+		void chatContainer.generateChatContainer(chatContainerDiv, header);
 		historyContainer.generateHistoryContainer(
 			chatHistoryContainer,
 			history,
@@ -71,7 +71,7 @@ export class ChatModal2 extends Modal {
 			chatContainer,
 			header
 		);
-		settingsContainer.generateSettingsContainer(settingsContainerDiv);
+		void settingsContainer.generateSettingsContainer(settingsContainerDiv);
 	}
 
 	onClose() {

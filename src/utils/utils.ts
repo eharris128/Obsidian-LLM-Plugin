@@ -57,7 +57,7 @@ async function retryWithBackoff<T>(
 			if (status === 429 && attempt < maxRetries) {
 				const delay = baseDelayMs * Math.pow(2, attempt);
 				const jitter = Math.random() * delay * 0.5;
-				await new Promise((r) => activeWindow.setTimeout(r, delay + jitter));
+				await new Promise((r) => window.setTimeout(r, delay + jitter));
 				continue;
 			}
 			if (status === 429) {
@@ -118,12 +118,14 @@ export async function fetchOllamaContextWindows(
 	const result: Record<string, number> = {};
 	for (const name of modelNames) {
 		try {
-			const res = await fetch(`${host}/api/show`, {
+			const res = await requestUrl({
+				url: `${host}/api/show`,
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ name }),
+				throw: false,
 			});
-			const response = await res.json();
+			const response = res.json;
 			const fromInfo = response?.model_info?.["llm.context_length"];
 			const fromParams = response?.parameters
 				? parseInt(
@@ -143,15 +145,15 @@ export async function fetchOllamaContextWindows(
 }
 
 export async function fetchOllamaModels(host: string): Promise<string[]> {
-	const res = await fetch(`${host}/api/tags`);
-	const response = await res.json();
+	const res = await requestUrl({ url: `${host}/api/tags`, throw: false });
+	const response = res.json;
 	return (response.models || []).map((m: { name: string }) => m.name);
 }
 
 /** Fetches the list of models currently loaded in LM Studio via its OpenAI-compatible /v1/models endpoint. */
 export async function fetchLMStudioModels(host: string): Promise<string[]> {
-	const res = await fetch(`${host}/v1/models`);
-	const response = await res.json();
+	const res = await requestUrl({ url: `${host}/v1/models`, throw: false });
+	const response = res.json;
 	return (response.data || []).map((m: { id: string }) => m.id);
 }
 
@@ -198,7 +200,7 @@ export async function mistralMessage(params: ChatParams, mistralAPIKey: string) 
 					}
 				}
 			}
-			return activeWindow.fetch(url, init);
+			return window.fetch(url, init);
 		},
 	});
 
@@ -293,47 +295,6 @@ export async function geminiMessage(
 		})
 	);
 	return stream;
-}
-
-// Resolve the absolute path to `node` by checking common install locations.
-// Electron's renderer process has a limited PATH, so we check the filesystem directly.
-function resolveNodePath(): string {
-	if (!Platform.isDesktop) return "";
-	const fs = require("fs");
-	const homedir = require("os").homedir();
-	const candidates: string[] = [];
-
-	// nvm — pick the latest installed version
-	const nvmDir = `${homedir}/.nvm/versions/node`;
-	try {
-		if (fs.existsSync(nvmDir)) {
-			const versions = fs.readdirSync(nvmDir).sort().reverse();
-			if (versions.length > 0) {
-				candidates.push(`${nvmDir}/${versions[0]}/bin/node`);
-			}
-		}
-	} catch { /* ignore */ }
-
-	candidates.push(
-		`${homedir}/.volta/bin/node`,                       // volta
-		`${homedir}/.local/share/fnm/aliases/default/bin/node`, // fnm
-		`${homedir}/.asdf/shims/node`,                      // asdf
-		`${homedir}/.local/bin/node`,
-		"/usr/local/bin/node",
-		"/usr/bin/node",
-		"/snap/bin/node",
-	);
-
-	for (const candidate of candidates) {
-		try {
-			if (fs.existsSync(candidate)) {
-				return candidate;
-			}
-		} catch { /* ignore */ }
-	}
-
-	logger.warn("[Claude Code] Could not find node binary, falling back to 'node'");
-	return "node";
 }
 
 export async function claudeCodeMessage(
@@ -469,12 +430,12 @@ export async function openAIMessage(
 		const image = await openai.images.generate({
 			model,
 			prompt,
-			size: size as Parameters<typeof openai.images.generate>[0]["size"],
-			quality: normalizedQuality as Parameters<typeof openai.images.generate>[0]["quality"],
+			size: size,
+			quality: normalizedQuality,
 			n: numberOfImages,
 			response_format: response_format ?? "url",
 		});
-		let imageURLs: string[] = [];
+		const imageURLs: string[] = [];
 		image.data?.map((image) => {
 			if (image.b64_json) {
 				imageURLs.push(`data:image/png;base64,${image.b64_json}`);

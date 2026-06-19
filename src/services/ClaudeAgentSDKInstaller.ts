@@ -83,7 +83,7 @@ function resolveNpmPath(): string {
 	return bin;
 }
 
-function isSDKInstalled(pluginDir: string): boolean {
+export function isSDKInstalled(pluginDir: string): boolean {
 	if (!Platform.isDesktop) return false;
 	const fs = require("fs");
 	return fs.existsSync(getNativeBinaryPath(pluginDir));

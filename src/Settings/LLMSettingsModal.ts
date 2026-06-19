@@ -18,6 +18,7 @@ import { FAB } from "Plugin/FAB/FAB";
 import { ChatModal2 } from "Plugin/Modal/ChatModal2";
 import { EmbeddingService, EmbeddingProvider, DEFAULT_EMBEDDING_MODELS } from "RAG/EmbeddingService";
 import { ALL_TOOL_DEFINITIONS } from "services/ObsidianToolRegistry";
+import { ensureSDKInstalled, isSDKInstalled } from "services/ClaudeAgentSDKInstaller";
 
 type APIKeyType = "claude" | "gemini" | "openai" | "mistral";
 
@@ -967,6 +968,38 @@ export class LLMSettingsModal extends Modal {
 				}
 			});
 		});
+
+		// Runtime SDK install
+		const vaultBasePath = (this.plugin.app.vault.adapter as any).getBasePath?.() ?? "";
+		const pluginDir = require("path").join(vaultBasePath, this.plugin.manifest.dir);
+		const sdkAlreadyInstalled = isSDKInstalled(pluginDir);
+		const sdkInstallSetting = new Setting(authItems)
+			.setName("Runtime SDK")
+			.setDesc(sdkAlreadyInstalled
+				? "Claude Code runtime SDK is installed."
+				: "The Claude Code runtime SDK (~69 MB) must be downloaded before use. Requires npm and an internet connection.");
+		let sdkStatusEl: HTMLElement | null = null;
+		if (!sdkAlreadyInstalled) {
+			sdkInstallSetting.addButton((btn) => {
+				btn.setButtonText("Download SDK");
+				btn.onClick(async () => {
+					if (sdkStatusEl) sdkStatusEl.remove();
+					sdkStatusEl = sdkInstallSetting.descEl.createDiv({ cls: "llm-api-test-status llm-api-test-running", text: "Downloading (~69 MB)…" });
+					btn.setDisabled(true);
+					try {
+						await ensureSDKInstalled(pluginDir);
+						sdkStatusEl.className = "llm-api-test-status llm-api-test-ok";
+						sdkStatusEl.setText("✓ Runtime SDK installed.");
+						sdkInstallSetting.setDesc("Claude Code runtime SDK is installed.");
+						btn.buttonEl.remove();
+					} catch (e: any) {
+						sdkStatusEl.className = "llm-api-test-status llm-api-test-fail";
+						sdkStatusEl.setText(`✗ ${e.message ?? "Installation failed"}`);
+						btn.setDisabled(false);
+					}
+				});
+			});
+		}
 	}
 
 	private renderConnectors() {

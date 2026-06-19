@@ -44,7 +44,7 @@ export function errorMessages(error: Error, params?: object) {
     }
 
     if(error.message.includes("SDK installation failed")) {
-        new Notice("Claude Code requires a one-time download of the runtime SDK (~69 MB). Please ensure npm is installed and you have an internet connection, then try again.")
+        new Notice("Claude Code runtime SDK installation failed. Use the 'Download SDK' button in Settings → Anthropic → Claude Code to install it.", 10000);
     }
 
     if ((error as { status?: number }).status === 429 || error.message.includes("Rate limit exceeded")) {

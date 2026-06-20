@@ -4148,16 +4148,16 @@ export class ChatContainer extends Component {
 				const svgEl = brandEl.createDiv({ cls: "llm-special-standing" });
 				svgEl.innerHTML = `<svg width="45" height="30" viewBox="0 0 30 20" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
 <rect x="22" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
-<rect x="21" y="4" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="23" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="24" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="23" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="22" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
-<rect x="20" y="4" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="21" y="4" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="20" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="21" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="20" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="20" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="19" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
-<rect x="19" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="18" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="19" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="18" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
@@ -4165,7 +4165,7 @@ export class ChatContainer extends Component {
 <rect x="15" y="8" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="12" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="11" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
-<rect x="20" y="3" width="1" height="1" fill="var(--interactive-accent)"/>
+<rect x="21" y="7" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="20" y="10" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="19" y="11" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="19" y="12" width="1" height="1" fill="var(--interactive-accent)"/>
@@ -4241,7 +4241,6 @@ export class ChatContainer extends Component {
 <rect x="19" y="13" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="16" y="12" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="21" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
-<rect x="23" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="17" y="15" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="17" y="16" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="18" y="17" width="1" height="1" fill="var(--interactive-accent)"/>

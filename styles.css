@@ -393,12 +393,13 @@ button.llm-send-button.llm-stop-mode:hover {
 }
 
 /* When the mirror is active, hide the textarea's text (keep caret visible).
-   !important retained deliberately: themes style textarea color directly and
-   any override here doubles the visible text on top of the mirror — the
-   feature only works if transparency always wins. */
-textarea.llm-input-with-mirror {
-	color: transparent !important;
-	caret-color: var(--text-normal) !important;
+   Specificity-boosted (class repeated) instead of !important — a strong
+   margin against themes that style textarea color directly, traded for a
+   hard guarantee. A losing theme would double the visible text on top of
+   the mirror. */
+textarea.llm-input-with-mirror.llm-input-with-mirror {
+	color: transparent;
+	caret-color: var(--text-normal);
 }
 
 .llm-input-toolbar {
@@ -491,19 +492,20 @@ textarea.llm-input-with-mirror {
 }
 
 /* Strip background/shadow from every element inside a completed LLM response.
-   !important retained deliberately: the targets are Obsidian's own
-   markdown-preview elements, which core/theme CSS restyles with selectors we
-   cannot reliably out-specify across themes. */
-.llm-message-wrapper.llm-flex-end,
-.llm-message-wrapper.llm-flex-end .im-like-message-container,
-.llm-message-wrapper.llm-flex-end .im-like-message,
-.llm-message-wrapper.llm-flex-end .markdown-rendered,
-.llm-message-wrapper.llm-flex-end .markdown-preview-view,
-.llm-message-wrapper.llm-flex-end .markdown-preview-section,
-.llm-message-wrapper.llm-flex-end .markdown-preview-sizer {
-	background-color: transparent !important;
-	box-shadow: none !important;
-	border: none !important;
+   Specificity-boosted (.llm-message-wrapper repeated) instead of !important:
+   the targets are Obsidian's own markdown-preview elements, which core/theme
+   CSS restyles at varying specificity, so this trades a hard guarantee for a
+   strong margin instead. */
+.llm-message-wrapper.llm-message-wrapper.llm-flex-end,
+.llm-message-wrapper.llm-message-wrapper.llm-flex-end .im-like-message-container,
+.llm-message-wrapper.llm-message-wrapper.llm-flex-end .im-like-message,
+.llm-message-wrapper.llm-message-wrapper.llm-flex-end .markdown-rendered,
+.llm-message-wrapper.llm-message-wrapper.llm-flex-end .markdown-preview-view,
+.llm-message-wrapper.llm-message-wrapper.llm-flex-end .markdown-preview-section,
+.llm-message-wrapper.llm-message-wrapper.llm-flex-end .markdown-preview-sizer {
+	background-color: transparent;
+	box-shadow: none;
+	border: none;
 }
 
 /* User messages get a visible bubble */
@@ -551,13 +553,15 @@ textarea.llm-input-with-mirror {
 }
 
 /* LLM streaming responses are plain — no background, no border (on container
-   and all children). !important retained deliberately: the * child selector
-   must beat Obsidian/theme styling of arbitrary rendered-markdown elements. */
-.llm-assistant-logo + .im-like-message-container,
-.llm-assistant-logo + .im-like-message-container * {
-	background-color: transparent !important;
-	box-shadow: none !important;
-	border: none !important;
+   and all children). Specificity-boosted (.im-like-message-container
+   repeated) instead of !important — a strong margin against Obsidian/theme
+   styling of arbitrary rendered-markdown elements, traded for a hard
+   guarantee. */
+.llm-assistant-logo + .im-like-message-container.im-like-message-container,
+.llm-assistant-logo + .im-like-message-container.im-like-message-container * {
+	background-color: transparent;
+	box-shadow: none;
+	border: none;
 }
 
 .llm-assistant-logo {
@@ -1416,9 +1420,13 @@ button.llm-scan-button.is-active:hover {
 }
 
 /* Generic visibility utility — toggle with el.toggleClass("llm-hidden", …).
-   !important so it overrides a base class's own display (flex/block). */
-.llm-hidden {
-	display: none !important;
+   Specificity-boosted (class repeated 3×) instead of !important: both sides
+   of this override live in this file, and no other selector here combines
+   more than 2 classes on a display rule, so this reliably wins without
+   !important. If a future rule ever needs 3+ combined classes on `display`,
+   bump this further. */
+.llm-hidden.llm-hidden.llm-hidden {
+	display: none;
 }
 
 /* STATUS BAR BUTTON */

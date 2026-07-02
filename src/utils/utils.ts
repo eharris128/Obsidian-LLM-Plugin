@@ -333,7 +333,7 @@ export async function claudeCodeMessage(
 	// require()s out of the plugin's load graph (KTD8).
 	const { query: claudeCodeQuery } = await import("@anthropic-ai/claude-agent-sdk");
 	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required behind the Platform.isDesktop guard at function start
-	const { spawn } = require("child_process");
+	const { spawn } = require("child_process") as typeof import("child_process");
 	const cliPath = getNativeBinaryPath(pluginDir);
 
 	// Build MCP servers and allowedTools from workspace list

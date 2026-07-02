@@ -1099,9 +1099,11 @@ export default class LLMPlugin extends Plugin {
 				const currentFABState = this.settings.showFAB;
 				this.settings.showFAB = !currentFABState;
 				void this.saveSettings();
-				this.settings.showFAB
-					? this.fab.regenerateFAB()
-					: this.fab.removeFab();
+				if (this.settings.showFAB) {
+					this.fab.regenerateFAB();
+				} else {
+					this.fab.removeFab();
+				}
 			},
 		});
 

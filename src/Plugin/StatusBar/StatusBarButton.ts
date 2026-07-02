@@ -87,7 +87,7 @@ export class StatusBarButton {
 		// Mount in the status bar's own document (the status bar only exists in
 		// the main window) so open/close/remove all act on the same document
 		// even if a popout window is focused at the time.
-		const doc = this.statusBarEl?.ownerDocument ?? document;
+		const doc = this.statusBarEl?.ownerDocument ?? activeDocument;
 		this.popoverEl = doc.body.createDiv();
 		this.popoverEl.addClass("llm-status-bar-popover");
 		this.popoverEl.addClass("llm-hidden");

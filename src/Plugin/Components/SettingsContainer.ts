@@ -332,7 +332,11 @@ export class SettingsContainer {
 						const leafContent = parentContainer.closest(".workspace-leaf-content");
 						const scope = leafContent ?? parentContainer.getRootNode() as HTMLElement;
 						scope.querySelectorAll<HTMLElement>(".llm-model-panel").forEach((el) => {
-							value ? el.show() : el.hide();
+							if (value) {
+								el.show();
+							} else {
+								el.hide();
+							}
 						});
 					});
 			});

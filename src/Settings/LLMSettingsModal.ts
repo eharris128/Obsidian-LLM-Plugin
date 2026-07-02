@@ -998,7 +998,7 @@ export class LLMSettingsModal extends Modal {
 		if (Platform.isDesktop) {
 			const vaultBasePath = (this.plugin.app.vault.adapter as unknown as AdapterWithBasePath).getBasePath?.() ?? "";
 			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required inside the Platform.isDesktop block
-			const pluginDir = require("path").join(vaultBasePath, this.plugin.manifest.dir);
+			const pluginDir = (require("path") as typeof import("path")).join(vaultBasePath, this.plugin.manifest.dir ?? "");
 			const sdkAlreadyInstalled = isSDKInstalled(pluginDir);
 			const sdkInstallSetting = new Setting(authItems)
 				.setName("Runtime SDK")

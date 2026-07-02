@@ -4,6 +4,10 @@ Guidance for Claude Code when working in this repository — an Obsidian plugin 
 
 ## Build Commands
 
+Requires **Node ≥ 24** (`package.json` `engines`; CI pins Node 24). An `.nvmrc` pins `24` — run `nvm use` (or `nvm install`) before building.
+
+**Before committing changes under `src/`, run `npm run lint`.** CI (`.github/workflows/ci.yml`) gates `lint:css` + `typecheck`, and an eslint step — keep all three green locally so scorecard regressions never reach a release. `npm run build` also runs `check-manifest.mjs` first.
+
 ```bash
 npm run dev       # watch mode (esbuild)
 npm run build     # production build (tsc type-check + esbuild bundle)
@@ -88,7 +92,7 @@ Input → `handleGenerateClick()` → message added to MessageStore (notifies su
 
 - `openai` SDK — OpenAI chat/images; also Mistral (`https://api.mistral.ai/v1`), Ollama (`http://localhost:11434/v1`, models via `/api/tags`), LM Studio (`http://localhost:1234/v1`, models via `/v1/models`, placeholder key `"lm-studio"`).
 - `@anthropic-ai/sdk` — Claude + Claude Code (agent SDK).
-- `@google/generative-ai` — Gemini.
+- `@google/genai` — Gemini (imported as `GoogleGenAI`; **not** the older `@google/generative-ai` — different API surface).
 - GPT4All — local server on port 4891.
 
 ## Feature Systems — details in `.claude/rules/`

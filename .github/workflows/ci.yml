@@ -1,9 +1,9 @@
 name: CI
 
-# Type-check and stylesheet-policy gate. Runs on every push to main and on
-# every PR so scorecard-relevant regressions (a stray `!important`, a type
-# error) fail here before a release is cut. Release builds run separately in
-# release.yml on tag pushes.
+# Type-check, lint, and stylesheet-policy gate. Runs on every push to main and
+# on every PR so scorecard-relevant regressions (a stray `!important`, a type
+# error, an eslint/obsidianmd violation) fail here before a release is cut.
+# Release builds run separately in release.yml on tag pushes.
 on:
   push:
     branches: [main]
@@ -31,3 +31,7 @@ jobs:
 
       - name: Type-check
         run: npm run typecheck
+
+      # Enforces the obsidianmd scorecard lint preset (must stay at zero warnings).
+      - name: Lint
+        run: npm run lint

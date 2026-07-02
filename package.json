@@ -6,9 +6,11 @@
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "node scripts/check-manifest.mjs && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"typecheck": "tsc --noEmit -skipLibCheck",
 		"lint": "eslint src --max-warnings=0",
 		"lint:fix": "eslint src --fix",
 		"lint:manifest": "node scripts/check-manifest.mjs",
+		"lint:css": "node scripts/check-no-important.mjs",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",
 		"test:e2e": "npm run build && tsc -noEmit -p test && node scripts/stage-plugin.mjs && wdio run ./wdio.conf.mts"
 	},

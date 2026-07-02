@@ -5,11 +5,13 @@ Guidance for Claude Code when working in this repository — an Obsidian plugin 
 ## Build Commands
 
 ```bash
-npm run dev      # watch mode (esbuild)
-npm run build    # production build (tsc type-check + esbuild bundle)
-npm run lint     # eslint src --max-warnings=0 — obsidianmd preset + type-checked rules; must stay clean (scorecard parity)
-npm run version  # bump manifest.json and versions.json
-npm run test:e2e # E2E suite — real sandboxed Obsidian via wdio-obsidian-service (see test/README.md)
+npm run dev       # watch mode (esbuild)
+npm run build     # production build (tsc type-check + esbuild bundle)
+npm run typecheck # tsc --noEmit type-check only (no bundle) — CI gate
+npm run lint      # eslint src --max-warnings=0 — obsidianmd preset + type-checked rules; must stay clean (scorecard parity)
+npm run lint:css  # fail on any !important in styles.css — CI gate (see docs/styling-important-policy.md)
+npm run version   # bump manifest.json and versions.json
+npm run test:e2e  # E2E suite — real sandboxed Obsidian via wdio-obsidian-service (see test/README.md)
 ```
 
 Output bundles to `main.js` in the root. esbuild targets CommonJS/ES2018; `obsidian`, `electron`, `@codemirror/*`, and Node builtins are external; SVGs load inline. TypeScript is `strict: true`, baseUrl `src`. The esbuild banner defines an `import.meta.url` shim (`__import_meta_url`) — `@anthropic-ai/claude-agent-sdk` calls `createRequire(import.meta.url)` at module scope, which would otherwise throw on load in CJS output. Don't remove the `define`/banner pair.
@@ -157,6 +159,7 @@ Always prefer Obsidian's built-in components and CSS classes; native gets themin
 When custom CSS is unavoidable:
 - Always use Obsidian CSS variables (`--text-muted`, `--interactive-accent`, `--font-ui-small`, `--icon-s`, `--size-4-2`, …) — never hardcoded colours/px/font sizes. Use `--icon-xs`/`--icon-s` for icons.
 - Custom classes go in `styles.css` with the `llm-` prefix. Never inline `element.style.*` in TypeScript — use `.addClass()` with a named class; toggle visibility via the `.llm-hidden` utility (not `style.display`). Inline `el.style.*` is for genuinely dynamic values only (computed sizes/positions). See `.claude/rules/obsidian-styling.md`.
+- **Never `!important`** — the review scanner flags it and it blocks theme/snippet overrides. When a rule must win, raise specificity by repeating the class selector (`.x.x` / `.x.x.x`) instead. `npm run lint:css` enforces this and CI gates it; the reasoning and trade-offs are in `docs/styling-important-policy.md`.
 - Writing hover/focus/active states for a list row? Stop — use `tree-item-self`, which already has them.
 
 ## Key Files

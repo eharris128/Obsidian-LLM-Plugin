@@ -12,6 +12,7 @@ import {
 } from "obsidian";
 import { FeatureSettings } from "Types/types";
 import { changeDefaultModel, fetchOllamaModels, fetchOllamaContextWindows, fetchLMStudioModels, getGpt4AllPath } from "utils/utils";
+import { getErrorMessage } from "utils/errorUtils";
 import { buildOllamaModels, buildLMStudioModels, modelNames, models } from "utils/models";
 import { GPT4All, ollama, lmStudio } from "utils/constants";
 import { FAB } from "Plugin/FAB/FAB";
@@ -47,7 +48,7 @@ export class LLMSettingsModal extends Modal {
 	plugin: LLMPlugin;
 	fab: FAB;
 	private activeTab = "general";
-	private mainContentEl: HTMLElement;
+	private mainContentEl!: HTMLElement;
 
 	private readonly apiKeyConfigs: Record<APIKeyType, APIKeyConfig> = {
 		claude: {
@@ -888,10 +889,10 @@ export class LLMSettingsModal extends Modal {
 						apiStatusEl.className = "llm-api-test-status llm-api-test-fail";
 						apiStatusEl.setText(`✗ ${resp.status}: ${msg}`);
 					}
-				} catch (e: any) {
+				} catch (e) {
 					if (apiStatusEl) {
 						apiStatusEl.className = "llm-api-test-status llm-api-test-fail";
-						apiStatusEl.setText(`✗ ${e.message ?? "Unknown error"}`);
+						apiStatusEl.setText(`✗ ${getErrorMessage(e) || "Unknown error"}`);
 					}
 				} finally {
 					btn.setDisabled(false);
@@ -959,10 +960,10 @@ export class LLMSettingsModal extends Modal {
 						oauthStatusEl.className = "llm-api-test-status llm-api-test-fail";
 						oauthStatusEl.setText(`✗ ${resp.status}: ${msg}`);
 					}
-				} catch (e: any) {
+				} catch (e) {
 					if (oauthStatusEl) {
 						oauthStatusEl.className = "llm-api-test-status llm-api-test-fail";
-						oauthStatusEl.setText(`✗ ${e.message ?? "Unknown error"}`);
+						oauthStatusEl.setText(`✗ ${getErrorMessage(e) || "Unknown error"}`);
 					}
 				} finally {
 					btn.setDisabled(false);
@@ -993,9 +994,9 @@ export class LLMSettingsModal extends Modal {
 						sdkStatusEl.setText("✓ Runtime SDK installed.");
 						sdkInstallSetting.setDesc("Claude Code runtime SDK is installed.");
 						btn.buttonEl.remove();
-					} catch (e: any) {
+					} catch (e) {
 						sdkStatusEl.className = "llm-api-test-status llm-api-test-fail";
-						sdkStatusEl.setText(`✗ ${e.message ?? "Installation failed"}`);
+						sdkStatusEl.setText(`✗ ${getErrorMessage(e) || "Installation failed"}`);
 						btn.setDisabled(false);
 					}
 				});
@@ -1521,8 +1522,8 @@ export class LLMSettingsModal extends Modal {
 						button.setButtonText("Loaded");
 						button.setDisabled(true);
 						new Notice("✓ Embedding model loaded successfully.");
-					} catch (e: any) {
-						new Notice(`Failed to load embedding model: ${e?.message ?? String(e)}`);
+					} catch (e) {
+						new Notice(`Failed to load embedding model: ${getErrorMessage(e)}`);
 						modelStatusSetting.setDesc("Download failed — check console for details.");
 						button.setButtonText(cached ? "Retry" : "Download & load");
 						button.setDisabled(false);
@@ -1628,8 +1629,8 @@ export class LLMSettingsModal extends Modal {
 						await this.plugin.saveSettings();
 						new Notice(`✓ Vault indexed — ${indexed} updated, ${skipped} unchanged.`);
 						this.renderTab("embeddings");
-					} catch (e: any) {
-						new Notice(`Indexing failed: ${e?.message ?? String(e)}`);
+					} catch (e) {
+						new Notice(`Indexing failed: ${getErrorMessage(e)}`);
 						indexSetting.setDesc(lastIndexedText);
 						button.setButtonText("Index now");
 						button.setDisabled(false);
@@ -2162,8 +2163,8 @@ export class LLMSettingsModal extends Modal {
 							}
 							const ok = await svc.checkHealth();
 							new Notice(ok ? "✓ SearXNG is reachable." : "✗ Could not reach SearXNG. Check the host URL.", 4000);
-						} catch (e: any) {
-							new Notice(`✗ Connection failed: ${e?.message ?? String(e)}`, 5000);
+						} catch (e) {
+							new Notice(`✗ Connection failed: ${getErrorMessage(e)}`, 5000);
 						} finally {
 							btn.setButtonText("Test connection");
 							btn.setDisabled(false);

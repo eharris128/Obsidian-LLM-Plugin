@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { logger } from "../utils/logger";
+import { getErrorMessage } from "../utils/errorUtils";
 import { GoogleGenAI } from "@google/genai";
 import { requestUrl } from "obsidian";
 
@@ -438,8 +439,8 @@ export class EmbeddingService {
 		try {
 			const r = await client.embeddings.create({ model, input: texts });
 			return r.data.sort((a, b) => a.index - b.index).map(d => d.embedding);
-		} catch (e: any) {
-			const msg = e?.message ?? String(e);
+		} catch (e) {
+			const msg = getErrorMessage(e);
 			if (msg.includes("404") || (msg.toLowerCase().includes("model") && msg.toLowerCase().includes("not found"))) {
 				throw new OllamaModelNotFoundError(model, host);
 			}

@@ -11,10 +11,10 @@ import logo from "assets/LLMgal.svg";
 
 export class HistoryContainer {
 	viewType: ViewType;
-	model: string;
-	modelName: string;
-	modelType: string;
-	historyIndex: number;
+	model!: string;
+	modelName!: string;
+	modelType!: string;
+	historyIndex!: number;
 	constructor(private plugin: LLMPlugin, viewType: ViewType) {
 		this.viewType = viewType;
 	}

@@ -3,6 +3,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as child_process from "child_process";
 import { RiskTier } from "Types/types";
+import { getErrorMessage } from "utils/errorUtils";
 import { VaultIndexer } from "RAG/VaultIndexer";
 import { ChatHistory } from "services/ChatHistory";
 import { SearxngService } from "WebSearch/SearxngService";
@@ -578,10 +579,10 @@ export class ObsidianToolRegistry {
 					try {
 						const results = await this.searxngService.search(query, numResults);
 						return { success: true, result: SearxngService.formatResults(results) };
-					} catch (e: any) {
+					} catch (e) {
 						// Surface the descriptive error message to the model so it can
 						// explain the situation to the user (e.g. 429 rate limit).
-						return { success: false, error: e?.message ?? String(e) };
+						return { success: false, error: getErrorMessage(e) };
 					}
 				}
 
@@ -771,8 +772,8 @@ export class ObsidianToolRegistry {
 				default:
 					return { success: false, error: `Unknown tool: ${name}` };
 			}
-		} catch (e: any) {
-			return { success: false, error: e?.message ?? String(e) };
+		} catch (e) {
+			return { success: false, error: getErrorMessage(e) };
 		}
 	}
 }

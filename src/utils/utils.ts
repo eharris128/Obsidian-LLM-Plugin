@@ -42,6 +42,7 @@ import {
 } from "Types/types";
 import { SingletonNotice } from "Plugin/Components/SingletonNotice";
 import { GoogleGenAI } from "@google/genai";
+import { getErrorStatus } from "utils/errorUtils";
 
 async function retryWithBackoff<T>(
 	fn: () => Promise<T>,
@@ -182,7 +183,7 @@ export async function mistralMessage(params: ChatParams, mistralAPIKey: string) 
 		apiKey: mistralAPIKey,
 		baseURL: "https://api.mistral.ai/v1",
 		dangerouslyAllowBrowser: true,
-		fetch: (url: RequestInfo, init?: RequestInit) => {
+		fetch: (url, init) => {
 			if (init?.headers) {
 				if (init.headers instanceof Headers) {
 					const keysToDelete: string[] = [];
@@ -252,7 +253,7 @@ export async function getApiKeyValidity(providerKeyPair: ProviderKeyPair) {
 			return { provider, valid: true };
 		}
 	} catch (error) {
-		if (error.status === 401) {
+		if (getErrorStatus(error) === 401) {
 			logger.error(`Invalid API key for ${providerKeyPair.provider}.`);
 			SingletonNotice.show(
 				`Invalid API key for ${upperCaseFirst(
@@ -445,19 +446,6 @@ export async function openAIMessage(
 		});
 		return imageURLs;
 	}
-}
-
-export function processReplacementTokens(prompt: string) {
-	const tokenRegex = /\{\{(.*?)\}\}/g;
-	const matches = [...prompt.matchAll(tokenRegex)];
-	matches.forEach((match) => {
-		const token = match[1] as keyof typeof this.replacementTokens;
-		if (this.replacementTokens[token]) {
-			prompt = this.replacementTokens[token](match, prompt);
-		}
-	});
-
-	return prompt;
 }
 
 export function getViewInfo(

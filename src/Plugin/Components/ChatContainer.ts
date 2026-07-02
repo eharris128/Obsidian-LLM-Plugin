@@ -67,6 +67,7 @@ import {
 	setHistoryIndex,
 	setHistoryFilePath,
 } from "utils/utils";
+import { getErrorMessage, getErrorName } from "utils/errorUtils";
 import { AgentLoop, AgentCallbacks } from "services/AgentLoop";
 import { getToolTier, effectivePermissionMode } from "Plugin/ObsidianAgent/ToolSupportTier";
 import OpenAI from "openai";
@@ -94,14 +95,14 @@ const avatarSvgs: Record<string, string> = {
 };
 
 export class ChatContainer extends Component {
-	historyMessages: HTMLElement;
-	prompt: string;
-	messages: Message[];
-	replaceChatHistory: boolean;
-	loadingDivContainer: HTMLElement;
-	streamingDiv: HTMLElement;
+	historyMessages!: HTMLElement;
+	prompt = "";
+	messages!: Message[];
+	replaceChatHistory = false;
+	loadingDivContainer!: HTMLElement;
+	streamingDiv!: HTMLElement;
 	viewType: ViewType;
-	previewText: string;
+	previewText = "";
 	messageStore: MessageStore;
 	private registry: ConversationRegistry;
 	// Stable bound reference so we can cleanly unsubscribe when switching stores.
@@ -696,7 +697,7 @@ export class ChatContainer extends Component {
 			let finalClaudeMsg: Awaited<ReturnType<typeof stream.finalMessage>> | null = null;
 			try {
 				finalClaudeMsg = await stream.finalMessage();
-			} catch (err: any) {
+			} catch (err) {
 				// Abort requested — fall through with whatever previewText we have
 				if (!this._abortController?.signal.aborted) throw err;
 			} finally {
@@ -1540,7 +1541,10 @@ export class ChatContainer extends Component {
 					this.plugin.settings.openAIAPIKey,
 					endpointURL,
 					modelEndpoint
-				).then((response: string[]) => {
+				).then((response) => {
+					// The images endpoint resolves to a string[] of URLs; the
+					// union also covers the chat-stream return this call never takes.
+					if (!Array.isArray(response)) return;
 					this.streamingDiv.empty();
 					let content = "";
 					response.map((url) => {
@@ -1575,7 +1579,7 @@ export class ChatContainer extends Component {
 			header.enableButtons();
 			// If the user deliberately stopped, render whatever partial text exists
 			// and treat the generation as complete rather than showing an error.
-			if (error?.name === "AbortError" || this._abortController?.signal.aborted) {
+			if (getErrorName(error) === "AbortError" || this._abortController?.signal.aborted) {
 				this.exitStopMode(sendButton);
 				if (this.previewText) {
 					this.streamingDiv.empty();
@@ -1986,8 +1990,8 @@ export class ChatContainer extends Component {
 									name
 								);
 								results.push(filePath ? `✓ ${label}` : `Already in memory (${label})`);
-							} catch (e: any) {
-								results.push(`✗ ${label}: ${e?.message ?? String(e)}`);
+							} catch (e) {
+								results.push(`✗ ${label}: ${getErrorMessage(e)}`);
 							}
 						}
 						return { success: true, result: results.join("\n") };
@@ -4566,13 +4570,14 @@ export class ChatContainer extends Component {
 
 		try {
 			stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-		} catch (err: any) {
+		} catch (err) {
+			const errName = getErrorName(err);
 			const msg =
-				err?.name === "NotAllowedError"
+				errName === "NotAllowedError"
 					? "Microphone access denied. Open System Settings → Privacy & Security → Microphone and enable Obsidian."
-					: err?.name === "NotFoundError"
+					: errName === "NotFoundError"
 					? "No microphone found. Please connect one and try again."
-					: `Microphone error: ${err?.name} — ${err?.message ?? err}`;
+					: `Microphone error: ${errName} — ${getErrorMessage(err)}`;
 			new Notice(msg, 7000);
 			logger.error("[LLM Plugin] getUserMedia failed:", err);
 			return;

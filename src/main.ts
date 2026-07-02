@@ -316,16 +316,16 @@ function mergeSettingsWithDefaults(
 }
 
 export default class LLMPlugin extends Plugin {
-	fileSystem: FileSystem;
-	os: OperatingSystem;
-	settings: LLMPluginSettings;
-	history: History;
-	chatHistory: ChatHistory;
-	fab: FAB;
-	conversationRegistry: ConversationRegistry;
+	fileSystem!: FileSystem;
+	os!: OperatingSystem;
+	settings!: LLMPluginSettings;
+	history!: History;
+	chatHistory!: ChatHistory;
+	fab!: FAB;
+	conversationRegistry!: ConversationRegistry;
 	ribbonIconEl: HTMLElement | null = null;
-	statusBarButton: StatusBarButton;
-	recentChatsButton: RecentChatsButton;
+	statusBarButton!: StatusBarButton;
+	recentChatsButton!: RecentChatsButton;
 	/** Transient — set before opening the widget so it can auto-load the right conversation. */
 	pendingWidgetHistoryIndex: number = -1;
 	/** Transient — set before opening the widget to auto-load a chat file by vault path. */
@@ -337,13 +337,13 @@ export default class LLMPlugin extends Plugin {
 	/** Debounce timers keyed by file path — prevents hammering the embedding API on rapid saves. */
 	private ragDebounceTimers: Map<string, number> = new Map();
 	/** Skills registry — always initialized; folder is configurable in settings. */
-	skillRegistry: SkillRegistry;
+	skillRegistry!: SkillRegistry;
 	/** Projects registry — always initialized; folder derived from rootVaultFolder. */
-	projectManager: ProjectManager;
+	projectManager!: ProjectManager;
 	/** Assistants registry — always initialized; folder derived from rootVaultFolder. */
-	assistantManager: AssistantManager;
+	assistantManager!: AssistantManager;
 	/** Obsidian Agent — always initialized; active when obsidianAgentSettings.enabled is true. */
-	obsidianAgent: ObsidianAgent;
+	obsidianAgent!: ObsidianAgent;
 	/** Whisper transcription service — null if whisperSettings.enabled is false. */
 	whisperService: WhisperService | null = null;
 	/** Manages the local Python sidecar server lifecycle and dependency detection. */

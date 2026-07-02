@@ -96,8 +96,8 @@ export class SettingsContainer {
 				imageSizes.map((size) => {
 					dropdown.addOption(size, size);
 				});
-				dropdown.onChange((change: ImageSize) => {
-					viewSettings.imageSettings.size = change;
+				dropdown.onChange((change) => {
+					viewSettings.imageSettings.size = change as ImageSize;
 					void this.plugin.saveSettings();
 				});
 			});
@@ -112,8 +112,11 @@ export class SettingsContainer {
 				dropdown.addOption("low", "Low");
 				dropdown.addOption("medium", "Medium");
 				dropdown.addOption("high", "High");
-				dropdown.onChange((change: "low" | "medium" | "high") => {
-					viewSettings.imageSettings.quality = change;
+				dropdown.onChange((change) => {
+					viewSettings.imageSettings.quality = change as
+						| "low"
+						| "medium"
+						| "high";
 					void this.plugin.saveSettings();
 				});
 			});

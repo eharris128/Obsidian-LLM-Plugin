@@ -12,6 +12,7 @@
 import OpenAI from "openai";
 import { Platform, requestUrl } from "obsidian";
 import type LLMPlugin from "main";
+import { getErrorMessage, getErrorName } from "utils/errorUtils";
 
 // ── Shared result type ──────────────────────────────────────────────────────
 
@@ -200,8 +201,8 @@ export class WhisperService {
 				body:   formData,
 				signal: controller.signal,
 			});
-		} catch (err: any) {
-			if (err?.name === "AbortError") {
+		} catch (err) {
+			if (getErrorName(err) === "AbortError") {
 				throw new Error(
 					"Transcription timed out after 60 s. " +
 					"The server may still be loading the model — try again in a moment.",
@@ -209,7 +210,7 @@ export class WhisperService {
 				);
 			}
 			throw new Error(
-				`Whisper server not reachable. Is whisper-server.py running? (${err?.message ?? err})`,
+				`Whisper server not reachable. Is whisper-server.py running? (${getErrorMessage(err)})`,
 				{ cause: err },
 			);
 		} finally {

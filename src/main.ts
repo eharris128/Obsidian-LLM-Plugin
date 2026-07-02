@@ -1,5 +1,6 @@
 import { Plugin, WorkspaceLeaf, Platform, addIcon, Notice, normalizePath, TFile } from "obsidian";
 import { logger } from "./utils/logger";
+import { AdapterWithBasePath, WorkspaceWithRightSplit } from "./Types/obsidian-internals";
 import {
 	AssistantSettings,
 	FeatureSettings,
@@ -414,7 +415,7 @@ export default class LLMPlugin extends Plugin {
 		// local ONNX embeddings need Node and the vault's OS base path, and a
 		// desktop-synced data.json must not arm embedding attempts on mobile.
 		if (Platform.isDesktop) {
-			const vaultBasePath = (this.app.vault.adapter as any).basePath;
+			const vaultBasePath = (this.app.vault.adapter as unknown as AdapterWithBasePath).basePath ?? "";
 			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required inside the Platform.isDesktop block
 			const pluginOsDir = require("path").join(vaultBasePath, this.manifest.dir);
 			EmbeddingService.configure(pluginOsDir);
@@ -517,9 +518,15 @@ export default class LLMPlugin extends Plugin {
 		const attachAll = () => {
 			// 1. Iterate every open leaf; add/update buttons as needed.
 			this.app.workspace.iterateAllLeaves((leaf) => {
-				const view = leaf.view as any;
+				// Structural view: MarkdownView's file/containerEl/addAction
+				// without importing the concrete view class.
+				const view = leaf.view as {
+					file?: TFile;
+					containerEl?: HTMLElement;
+					addAction?: (icon: string, title: string, callback: (evt: MouseEvent) => unknown) => HTMLElement;
+				};
 				const file = view?.file;
-				const path = file?.extension === "md" ? (file.path as string) : null;
+				const path = file?.extension === "md" ? file.path : null;
 
 				const existing = leafButtons.get(leaf);
 
@@ -540,8 +547,8 @@ export default class LLMPlugin extends Plugin {
 				// survives hot-reloads; the leafButtons Map is fresh each load and
 				// won't find the old element, so we must scrub it from the DOM first
 				// or we'll end up with duplicate buttons.
-				const stale = (view.containerEl as HTMLElement | undefined)
-					?.querySelector?.(".llm-open-in-widget-action") as HTMLElement | null;
+				const stale = view.containerEl
+					?.querySelector?.(".llm-open-in-widget-action");
 				stale?.remove();
 
 				const btn: HTMLElement = view.addAction(
@@ -675,18 +682,20 @@ export default class LLMPlugin extends Plugin {
 				const existing = this.ragDebounceTimers.get(path);
 				if (existing) window.clearTimeout(existing);
 
-				const timer = window.setTimeout(async () => {
+				const timer = window.setTimeout(() => {
 					this.ragDebounceTimers.delete(path);
-					try {
-						await this.vaultIndexer!.indexFile(file);
-						await this.vaultIndexer!.save();
-						this.settings.ragSettings.lastIndexed = Date.now();
-						this.settings.ragSettings.indexedFileCount = this.vaultIndexer!.indexedFileCount;
-						await this.saveSettings();
-						logger.log("[RAG] Auto-reindexed:", path);
-					} catch (e) {
-						logger.error("[RAG] Auto-reindex failed for", path, e);
-					}
+					void (async () => {
+						try {
+							await this.vaultIndexer!.indexFile(file);
+							await this.vaultIndexer!.save();
+							this.settings.ragSettings.lastIndexed = Date.now();
+							this.settings.ragSettings.indexedFileCount = this.vaultIndexer!.indexedFileCount;
+							await this.saveSettings();
+							logger.log("[RAG] Auto-reindexed:", path);
+						} catch (e) {
+							logger.error("[RAG] Auto-reindex failed for", path, e);
+						}
+					})();
 				}, DEBOUNCE_MS);
 
 				this.ragDebounceTimers.set(path, timer);
@@ -1196,7 +1205,7 @@ export default class LLMPlugin extends Plugin {
 	 */
 	async toggleChatDetailsPanel(): Promise<boolean> {
 		const { workspace } = this.app;
-		const rightSplit = (workspace as any).rightSplit;
+		const rightSplit = (workspace as unknown as WorkspaceWithRightSplit).rightSplit;
 
 		const isCollapsed: boolean = rightSplit?.collapsed ?? false;
 
@@ -1355,7 +1364,7 @@ export default class LLMPlugin extends Plugin {
 				this.settings.linearWorkspaces = [
 					{ name: "Linear", apiKey: dataJSON.linearApiKey },
 				];
-				delete (this.settings as any).linearApiKey;
+				delete (this.settings as { linearApiKey?: string }).linearApiKey;
 				await this.saveSettings();
 			}
 		} else {

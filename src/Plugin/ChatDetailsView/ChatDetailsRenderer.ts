@@ -1,6 +1,7 @@
-import { setIcon } from "obsidian";
+import { setIcon, TFile } from "obsidian";
 import type { App } from "obsidian";
 import type { ChatDetailsState } from "./ChatDetailsView";
+import type { AppWithInternalPlugins } from "Types/obsidian-internals";
 
 /**
  * Pure DOM renderer for Chat Details state.
@@ -112,7 +113,7 @@ function renderProjectSection(
 	});
 	fileRow.addEventListener("click", () => {
 		const tfile = app.vault.getAbstractFileByPath(proj.filePath);
-		if (tfile) void app.workspace.getLeaf(false).openFile(tfile as any);
+		if (tfile instanceof TFile) void app.workspace.getLeaf(false).openFile(tfile);
 	});
 
 	// ── Project folder row ─────────────────────────────────────────────────
@@ -130,7 +131,7 @@ function renderProjectSection(
 	folderRow.addEventListener("click", () => {
 		const folder = app.vault.getAbstractFileByPath(proj.folderPath);
 		if (folder) {
-			(app as any).internalPlugins
+			(app as unknown as AppWithInternalPlugins).internalPlugins
 				?.getPluginById("file-explorer")
 				?.instance?.revealInFolder(folder);
 		}
@@ -173,7 +174,7 @@ function renderMemoriesSection(
 
 		row.addEventListener("click", () => {
 			const tfile = app.vault.getAbstractFileByPath(memory.filePath);
-			if (tfile) void app.workspace.getLeaf(false).openFile(tfile as any);
+			if (tfile instanceof TFile) void app.workspace.getLeaf(false).openFile(tfile);
 		});
 	}
 }
@@ -213,7 +214,7 @@ function renderGuidanceSection(
 
 		row.addEventListener("click", () => {
 			const tfile = app.vault.getAbstractFileByPath(file.path);
-			if (tfile) void app.workspace.getLeaf(false).openFile(tfile as any);
+			if (tfile instanceof TFile) void app.workspace.getLeaf(false).openFile(tfile);
 		});
 	}
 }
@@ -249,7 +250,7 @@ function renderContextFilesSection(
 
 		row.addEventListener("click", () => {
 			const tfile = app.vault.getAbstractFileByPath(file.path);
-			if (tfile) void app.workspace.getLeaf(false).openFile(tfile as any);
+			if (tfile instanceof TFile) void app.workspace.getLeaf(false).openFile(tfile);
 		});
 	}
 }

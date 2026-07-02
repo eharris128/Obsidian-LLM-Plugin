@@ -14,6 +14,7 @@ import {
 import { FeatureSettings } from "Types/types";
 import { changeDefaultModel, fetchOllamaModels, fetchOllamaContextWindows, fetchLMStudioModels, getGpt4AllPath } from "utils/utils";
 import { getErrorMessage } from "utils/errorUtils";
+import { AdapterWithBasePath, AppWithSetting } from "Types/obsidian-internals";
 import { buildOllamaModels, buildLMStudioModels, modelNames, models } from "utils/models";
 import { GPT4All, ollama, lmStudio } from "utils/constants";
 import { FAB } from "Plugin/FAB/FAB";
@@ -151,7 +152,7 @@ export class LLMSettingsModal extends Modal {
 		modalEl.addClass("llm-dedicated-settings-modal");
 
 		// Resolve the core settings modal element once.
-		const appSetting = (this.app as any).setting;
+		const appSetting = (this.app as unknown as AppWithSetting).setting;
 		this.coreModalEl =
 			appSetting?.containerEl?.closest?.(".modal") ??
 			activeDocument.querySelector<HTMLElement>(".modal-container.mod-settings .modal") ??
@@ -596,7 +597,7 @@ export class LLMSettingsModal extends Modal {
 
 		// ── Guidance (AGENTS.md) — declared early so the rootVaultFolder onChange
 		// closure can re-render it when the path is auto-updated.
-		// eslint-disable-next-line prefer-const
+		// eslint-disable-next-line prefer-const -- assigned below after renderAgentsPicker is defined; const would break the mutual reference
 		let agentsGroup: HTMLElement;
 
 		const renderAgentsPicker = () => {
@@ -975,7 +976,7 @@ export class LLMSettingsModal extends Modal {
 		// Runtime SDK install — desktop-only: the installer needs Node (fs/npm)
 		// and Claude Code itself never runs on mobile.
 		if (Platform.isDesktop) {
-			const vaultBasePath = (this.plugin.app.vault.adapter as any).getBasePath?.() ?? "";
+			const vaultBasePath = (this.plugin.app.vault.adapter as unknown as AdapterWithBasePath).getBasePath?.() ?? "";
 			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required inside the Platform.isDesktop block
 			const pluginDir = require("path").join(vaultBasePath, this.plugin.manifest.dir);
 			const sdkAlreadyInstalled = isSDKInstalled(pluginDir);
@@ -2379,12 +2380,14 @@ export class LLMSettingsModal extends Modal {
 					setRow(serverRow, "⏳", "Server starting… (model may be downloading)", "checking");
 					// Auto-poll every 5 s until the health endpoint responds
 					if (pollTimer === null) {
-						pollTimer = setInterval(async () => {
-							const s = await this.plugin.sidecarManager.getServerStatus();
-							if (s.running) {
-								stopPolling();
-								await refreshStatus();
-							}
+						pollTimer = setInterval(() => {
+							void (async () => {
+								const s = await this.plugin.sidecarManager.getServerStatus();
+								if (s.running) {
+									stopPolling();
+									await refreshStatus();
+								}
+							})();
 						}, 5000);
 					}
 				} else {
@@ -2660,8 +2663,11 @@ class GuidanceEditorOverlay {
 		const app = this.plugin.app;
 
 		// ── Ensure file exists ────────────────────────────────────────────────
-		let tfile = app.vault.getAbstractFileByPath(this.filePath);
-		if (!(tfile instanceof TFile)) {
+		let tfile: TFile;
+		const existing = app.vault.getAbstractFileByPath(this.filePath);
+		if (existing instanceof TFile) {
+			tfile = existing;
+		} else {
 			const dir = this.filePath.includes("/")
 				? this.filePath.substring(0, this.filePath.lastIndexOf("/"))
 				: "";
@@ -2671,12 +2677,12 @@ class GuidanceEditorOverlay {
 			try {
 				tfile = await app.vault.create(this.filePath, this.template);
 			} catch (e) {
-				new Notice(`Could not create ${this.filePath}: ${String(e)}`);
+				new Notice(`Could not create ${this.filePath}: ${getErrorMessage(e)}`);
 				return;
 			}
 		}
 
-		const content = await app.vault.read(tfile as TFile);
+		const content = await app.vault.read(tfile);
 		const fileName = this.filePath.includes("/")
 			? this.filePath.substring(this.filePath.lastIndexOf("/") + 1)
 			: this.filePath;
@@ -2734,7 +2740,7 @@ class GuidanceEditorOverlay {
 }
 
 class ShellCommandWarningModal extends Modal {
-	constructor(app: App, private onConfirm: () => void) {
+	constructor(app: App, private onConfirm: () => void | Promise<void>) {
 		super(app);
 	}
 
@@ -2761,7 +2767,7 @@ class ShellCommandWarningModal extends Modal {
 			.setDestructive()
 			.onClick(() => {
 				this.close();
-				this.onConfirm();
+				void this.onConfirm();
 			});
 	}
 

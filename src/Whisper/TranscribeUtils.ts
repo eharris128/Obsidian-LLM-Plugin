@@ -32,12 +32,12 @@ export async function createFolderOrPrompt(
 
 class CreateFolderModal extends Modal {
 	private folderPath: string;
-	private onDecision: (confirmed: boolean) => void;
+	private onDecision: (confirmed: boolean) => void | Promise<void>;
 
 	constructor(
 		app:        App,
 		folderPath: string,
-		callback:   (confirmed: boolean) => void,
+		callback:   (confirmed: boolean) => void | Promise<void>,
 	) {
 		super(app);
 		this.folderPath   = folderPath;
@@ -55,7 +55,7 @@ class CreateFolderModal extends Modal {
 
 		const cancelBtn = btnRow.createEl("button", { text: "Cancel" });
 		cancelBtn.addEventListener("click", () => {
-			this.onDecision(false);
+			void this.onDecision(false);
 			this.close();
 		});
 
@@ -64,7 +64,7 @@ class CreateFolderModal extends Modal {
 			cls:  "mod-cta",
 		});
 		confirmBtn.addEventListener("click", () => {
-			this.onDecision(true);
+			void this.onDecision(true);
 			this.close();
 		});
 	}

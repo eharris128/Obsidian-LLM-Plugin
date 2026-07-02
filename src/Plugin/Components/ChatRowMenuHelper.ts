@@ -1,4 +1,5 @@
 import { App, ButtonComponent, Menu, Modal, Notice, TFile, setIcon } from "obsidian";
+import { MenuItemWithSubmenu } from "Types/obsidian-internals";
 import { logger } from "../../utils/logger";
 import LLMPlugin from "main";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
@@ -8,9 +9,9 @@ import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 /** Simple single-field modal for renaming a chat conversation. */
 export class RenameModal extends Modal {
 	private currentTitle: string;
-	private onRename: (newTitle: string) => void;
+	private onRename: (newTitle: string) => void | Promise<void>;
 
-	constructor(app: App, currentTitle: string, onRename: (newTitle: string) => void) {
+	constructor(app: App, currentTitle: string, onRename: (newTitle: string) => void | Promise<void>) {
 		super(app);
 		this.currentTitle = currentTitle;
 		this.onRename = onRename;
@@ -40,7 +41,7 @@ export class RenameModal extends Modal {
 				return;
 			}
 			this.close();
-			this.onRename(newTitle);
+			void this.onRename(newTitle);
 		};
 
 		new ButtonComponent(buttonRow)
@@ -142,7 +143,7 @@ export function attachChatRowMenu(
 		const projects = plugin.projectManager?.getProjects() ?? [];
 		menu.addItem((item) => {
 			item.setTitle("Move to project").setIcon("folder-input");
-			const submenu = (item as any).setSubmenu() as Menu;
+			const submenu = (item as unknown as MenuItemWithSubmenu).setSubmenu();
 
 			// "No project" — move back to the default chat folder
 			submenu.addItem((si) =>

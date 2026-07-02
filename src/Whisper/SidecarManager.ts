@@ -10,6 +10,7 @@
  */
 
 import { Platform, requestUrl } from "obsidian";
+import { AdapterWithBasePath } from "Types/obsidian-internals";
 import type LLMPlugin from "main";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -175,7 +176,7 @@ export class SidecarManager {
 		const path       = require("path")          as typeof import("path");
 
 		// whisper-server.py sits in the plugin root directory
-		const pluginDir   = (this.plugin.app.vault.adapter as any).basePath
+		const pluginDir   = ((this.plugin.app.vault.adapter as unknown as AdapterWithBasePath).basePath ?? "")
 			+ path.sep + this.plugin.manifest.dir;
 		const scriptPath  = path.join(pluginDir, "whisper-server.py");
 		const model       = this.plugin.settings.whisperSettings.whisperModel || "medium.en";

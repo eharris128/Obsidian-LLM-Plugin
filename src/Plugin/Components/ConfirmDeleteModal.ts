@@ -2,9 +2,9 @@ import { App, ButtonComponent, Modal } from "obsidian";
 
 /** Reusable yes/no confirmation modal using Obsidian's native Modal styles. */
 export class ConfirmDeleteModal extends Modal {
-	private onConfirm: () => void;
+	private onConfirm: () => void | Promise<void>;
 
-	constructor(app: App, onConfirm: () => void) {
+	constructor(app: App, onConfirm: () => void | Promise<void>) {
 		super(app);
 		this.onConfirm = onConfirm;
 	}
@@ -27,7 +27,7 @@ export class ConfirmDeleteModal extends Modal {
 			.setClass("mod-warning")
 			.onClick(() => {
 				this.close();
-				this.onConfirm();
+				void this.onConfirm();
 			});
 	}
 

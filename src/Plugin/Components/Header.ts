@@ -1,6 +1,7 @@
 import LLMPlugin from "main";
 import { logger } from "../../utils/logger";
 import { ButtonComponent, Menu } from "obsidian";
+import { MenuItemWithSubmenu } from "Types/obsidian-internals";
 import { ChatContainer } from "./ChatContainer";
 import { ConfirmDeleteModal } from "./ConfirmDeleteModal";
 import { HistoryContainer } from "./HistoryContainer";
@@ -90,7 +91,7 @@ export class Header {
 		const projects = this.plugin.projectManager?.getProjects() ?? [];
 		menu.addItem((item) => {
 			item.setTitle("Add to project").setIcon("box");
-			const submenu = (item as any).setSubmenu() as Menu;
+			const submenu = (item as unknown as MenuItemWithSubmenu).setSubmenu();
 			const activeId = this.plugin.settings.projectSettings?.activeProjectId;
 
 			submenu.addItem((si) => {

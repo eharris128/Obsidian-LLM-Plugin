@@ -1,6 +1,7 @@
 import { App, Platform, TFile } from "obsidian";
 import { RiskTier } from "Types/types";
 import { getErrorMessage } from "utils/errorUtils";
+import { AdapterWithBasePath, AppWithCommands } from "Types/obsidian-internals";
 import { VaultIndexer } from "RAG/VaultIndexer";
 import { ChatHistory } from "services/ChatHistory";
 import { SearxngService } from "WebSearch/SearxngService";
@@ -411,7 +412,7 @@ export class ObsidianToolRegistry {
 					const { path, updates_json } = input as { path: string; updates_json: string };
 					const file = this.app.vault.getAbstractFileByPath(path);
 					if (!(file instanceof TFile)) return { success: false, error: `File not found: ${path}` };
-					let updates: Record<string, any>;
+					let updates: Record<string, unknown>;
 					try {
 						updates = JSON.parse(updates_json);
 						if (typeof updates !== "object" || Array.isArray(updates) || updates === null) {
@@ -506,7 +507,7 @@ export class ObsidianToolRegistry {
 
 				case "obsidian_execute_command": {
 					const { command_id } = input as { command_id: string };
-					const success = (this.app as any).commands.executeCommandById(command_id);
+					const success = (this.app as unknown as AppWithCommands).commands.executeCommandById(command_id);
 					return success
 						? { success: true, result: `Executed command: ${command_id}` }
 						: { success: false, error: `Command not found or failed: ${command_id}` };
@@ -801,7 +802,7 @@ export class ObsidianToolRegistry {
 		const child_process = require("child_process") as typeof import("child_process");
 		const { command, cwd: cwdArg, timeout_ms: timeoutArg } = input as { command: string; cwd?: string; timeout_ms?: string };
 		const timeoutMs = Math.min(60000, Math.max(1000, parseInt(timeoutArg ?? "15000", 10) || 15000));
-		const cwd = cwdArg ?? (this.app.vault.adapter as any).basePath ?? process.cwd();
+		const cwd = cwdArg ?? (this.app.vault.adapter as unknown as AdapterWithBasePath).basePath ?? process.cwd();
 
 		return new Promise<ToolResult>((resolve) => {
 			child_process.exec(

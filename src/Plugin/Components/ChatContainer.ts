@@ -69,6 +69,11 @@ import {
 	setHistoryFilePath,
 } from "utils/utils";
 import { getErrorMessage, getErrorName } from "utils/errorUtils";
+import {
+	AdapterWithBasePath,
+	AppWithSetting,
+	MenuItemWithSubmenu,
+} from "Types/obsidian-internals";
 import { AgentLoop, AgentCallbacks } from "services/AgentLoop";
 import { getToolTier, effectivePermissionMode } from "Plugin/ObsidianAgent/ToolSupportTier";
 import OpenAI from "openai";
@@ -513,7 +518,7 @@ export class ChatContainer extends Component {
 			this.showThinkingAnimation();
 
 			if (!Platform.isDesktop) throw new Error("Claude Code is only available on desktop.");
-			const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
+			const vaultPath = (this.plugin.app.vault.adapter as unknown as AdapterWithBasePath).basePath ?? "";
 			const pluginDir = Platform.isDesktop
 				// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require inside the Platform.isDesktop ternary
 				? (require("path") as typeof import("path")).join(vaultPath, this.plugin.manifest.dir ?? "")
@@ -2570,8 +2575,9 @@ export class ChatContainer extends Component {
 				text: "Open Settings",
 			});
 			btn.addEventListener("click", () => {
-				(this.plugin.app as any).setting.open();
-				(this.plugin.app as any).setting.openTabById(this.plugin.manifest.id);
+				const { setting } = this.plugin.app as unknown as AppWithSetting;
+				setting.open();
+				setting.openTabById(this.plugin.manifest.id);
 			});
 		}
 	}
@@ -3466,7 +3472,7 @@ export class ChatContainer extends Component {
 				if (projects.length > 0) {
 					menu.addItem((item) => {
 						item.setTitle("Add to project").setIcon("box");
-						const submenu = (item as any).setSubmenu() as Menu;
+						const submenu = (item as unknown as MenuItemWithSubmenu).setSubmenu();
 						const activeId = this.plugin.settings.projectSettings?.activeProjectId;
 
 						submenu.addItem((si) => {
@@ -3495,8 +3501,8 @@ export class ChatContainer extends Component {
 					item.setTitle("Add a skill")
 						.setIcon("scroll-text");
 					// setSubmenu() is available at runtime in Obsidian 1.4+ but not
-					// reflected in the TypeScript types — cast to any to access it.
-					const submenu = (item as any).setSubmenu() as Menu;
+					// reflected in the TypeScript types (see Types/obsidian-internals).
+					const submenu = (item as unknown as MenuItemWithSubmenu).setSubmenu();
 					for (const skill of skills) {
 						submenu.addItem((si) => {
 							si.setTitle(skill.name)

@@ -89,6 +89,9 @@ export function attachChatRowMenu(
 	plugin: LLMPlugin,
 	onRefresh: () => void,
 ): void {
+	// Marker class replaces the :has(.llm-chats-row-menu-btn) selector —
+	// gives the flair outer its stacking context for the overlay button.
+	flairOuter.addClass("llm-has-row-menu");
 	const menuBtn = flairOuter.createDiv({
 		cls: "llm-chats-row-menu-btn clickable-icon",
 	});

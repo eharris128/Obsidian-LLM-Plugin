@@ -392,7 +392,10 @@ button.llm-send-button.llm-stop-mode:hover {
 	color: var(--text-normal);
 }
 
-/* When the mirror is active, hide the textarea's text (keep caret visible) */
+/* When the mirror is active, hide the textarea's text (keep caret visible).
+   !important retained deliberately: themes style textarea color directly and
+   any override here doubles the visible text on top of the mirror — the
+   feature only works if transparency always wins. */
 textarea.llm-input-with-mirror {
 	color: transparent !important;
 	caret-color: var(--text-normal) !important;
@@ -487,7 +490,10 @@ textarea.llm-input-with-mirror {
 	width: 100%;
 }
 
-/* Strip background/shadow from every element inside a completed LLM response */
+/* Strip background/shadow from every element inside a completed LLM response.
+   !important retained deliberately: the targets are Obsidian's own
+   markdown-preview elements, which core/theme CSS restyles with selectors we
+   cannot reliably out-specify across themes. */
 .llm-message-wrapper.llm-flex-end,
 .llm-message-wrapper.llm-flex-end .im-like-message-container,
 .llm-message-wrapper.llm-flex-end .im-like-message,
@@ -544,7 +550,9 @@ textarea.llm-input-with-mirror {
 	opacity: 1;
 }
 
-/* LLM streaming responses are plain — no background, no border (on container and all children) */
+/* LLM streaming responses are plain — no background, no border (on container
+   and all children). !important retained deliberately: the * child selector
+   must beat Obsidian/theme styling of arbitrary rendered-markdown elements. */
 .llm-assistant-logo + .im-like-message-container,
 .llm-assistant-logo + .im-like-message-container * {
 	background-color: transparent !important;
@@ -793,7 +801,7 @@ div.im-like-message.llm-widget-chat-message > p {
 	padding: var(--size-4-1);
 	margin-left: var(--size-2-1);
 	border-radius: var(--canvas-controls-radius);
-	font-size: initial !important;
+	font-size: initial;
 	background-color: var(--interactive-normal);
 	border: 1px solid var(--background-modifier-border);
 	box-shadow: none;
@@ -888,7 +896,9 @@ div.im-like-message.llm-widget-chat-message > p {
 	z-index: 10;
 }
 
-.fab-view-area:has(.fab-resize-handle:hover),
+/* Hover affordance is a JS class toggle on the view area (mouseenter/leave on
+   the handle in FAB.ts) — the community review flags CSS :has(). */
+.fab-view-area.llm-handle-hover,
 .fab-view-area.is-resizing {
 	border-top-color: var(--interactive-accent);
 }
@@ -1125,7 +1135,7 @@ div.im-like-message.llm-widget-chat-message > p {
 #llm-hero-credits {
 	font-weight: bold;
 	font-size: var(--font-ui-medium);
-	margin: var(--size-4-3) 0 0 0 !important;
+	margin: var(--size-4-3) 0 0 0;
 }
 
 .llm-hero-names {
@@ -1442,7 +1452,6 @@ button.llm-scan-button.is-active:hover {
 	align-items: center;
 	gap: var(--size-4-2);
 	font-weight: var(--font-semibold);
-	color: var(--text-normal);
 	--icon-size: var(--icon-s);
 	--icon-stroke: var(--icon-s-stroke-width);
 	color: var(--color-accent);
@@ -2820,8 +2829,10 @@ button.llm-mic-button.llm-mic-transcribing {
 	transition: opacity 120ms ease;
 }
 
-/* Give the flair outer a stacking context so the button can overlay the date */
-.tree-item-flair-outer:has(.llm-chats-row-menu-btn) {
+/* Give the flair outer a stacking context so the button can overlay the date.
+   The class is added by attachChatRowMenu() when it inserts the button —
+   avoids :has(), which the community review flags. */
+.tree-item-flair-outer.llm-has-row-menu {
 	position: relative;
 }
 

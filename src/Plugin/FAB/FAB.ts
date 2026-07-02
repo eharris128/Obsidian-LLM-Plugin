@@ -78,6 +78,10 @@ export class FAB {
 		// clipped.
 		const resizeHandle = viewArea.createDiv();
 		resizeHandle.addClass("fab-resize-handle");
+		// Hover affordance for the top border — a class toggle instead of the
+		// CSS :has() selector the community review flags.
+		resizeHandle.addEventListener("mouseenter", () => viewArea.addClass("llm-handle-hover"));
+		resizeHandle.addEventListener("mouseleave", () => viewArea.removeClass("llm-handle-hover"));
 
 		// All scrollable/clipped content goes in contentArea, which carries
 		// overflow:hidden so the resize handle is unaffected.

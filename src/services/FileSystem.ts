@@ -11,6 +11,7 @@ export class DesktopFileSystem implements FileSystem {
 
     constructor() {
         if (!Platform.isDesktop) throw new Error("DesktopFileSystem is not available on mobile.");
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the constructor-start Platform.isDesktop guard
         this.fs = require('fs');
     }
 

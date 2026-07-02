@@ -18,7 +18,9 @@ function getPlatformPackage(): string {
 }
 
 export function getNativeBinaryPath(pluginDir: string): string {
-	const path = require("path");
+	if (!Platform.isDesktop) throw new Error("Claude Code is only available on desktop.");
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
+	const path = require("path") as typeof import("path");
 	const platform = process.platform;
 	const arch = process.arch;
 	let suffix: string;
@@ -34,8 +36,10 @@ export function getNativeBinaryPath(pluginDir: string): string {
 
 function resolveNpmPath(): string {
 	if (!Platform.isDesktop) return "npm";
-	const fs = require("fs");
-	const homedir = require("os").homedir();
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
+	const fs = require("fs") as typeof import("fs");
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
+	const homedir = (require("os") as typeof import("os")).homedir();
 	const isWin = process.platform === "win32";
 	const bin = isWin ? "npm.cmd" : "npm";
 	const candidates: string[] = [];
@@ -88,7 +92,8 @@ function resolveNpmPath(): string {
 
 export function isSDKInstalled(pluginDir: string): boolean {
 	if (!Platform.isDesktop) return false;
-	const fs = require("fs");
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
+	const fs = require("fs") as typeof import("fs");
 	return fs.existsSync(getNativeBinaryPath(pluginDir));
 }
 
@@ -111,8 +116,10 @@ export async function ensureSDKInstalled(pluginDir: string): Promise<void> {
 
 function ensurePackageJson(pluginDir: string): void {
 	if (!Platform.isDesktop) return;
-	const path = require("path");
-	const fs = require("fs");
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
+	const path = require("path") as typeof import("path");
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
+	const fs = require("fs") as typeof import("fs");
 	const pkgPath = path.join(pluginDir, "package.json");
 	if (!fs.existsSync(pkgPath)) {
 		// Anchor npm to this directory so it doesn't walk up the tree
@@ -122,8 +129,10 @@ function ensurePackageJson(pluginDir: string): void {
 
 function resolveNodePath(): string {
 	if (!Platform.isDesktop) return "node";
-	const fs = require("fs");
-	const homedir = require("os").homedir();
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
+	const fs = require("fs") as typeof import("fs");
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
+	const homedir = (require("os") as typeof import("os")).homedir();
 	const isWin = process.platform === "win32";
 	const candidates: string[] = [];
 
@@ -173,8 +182,10 @@ function resolveNodePath(): string {
 
 function doInstall(pluginDir: string): Promise<void> {
 	if (!Platform.isDesktop) return Promise.resolve();
-	const path = require("path");
-	const { spawn } = require("child_process");
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
+	const path = require("path") as typeof import("path");
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
+	const { spawn } = require("child_process") as typeof import("child_process");
 	const npmPath = resolveNpmPath();
 
 	// Derive the node binary from the same bin/ directory as npm.
@@ -185,7 +196,8 @@ function doInstall(pluginDir: string): Promise<void> {
 	const nodeBin = isWin ? "node.exe" : "node";
 	const npmDir = path.dirname(npmPath);
 	const colocatedNode = path.join(npmDir, nodeBin);
-	const fs = require("fs");
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
+	const fs = require("fs") as typeof import("fs");
 	const nodePath = (npmDir !== "." && fs.existsSync(colocatedNode))
 		? colocatedNode
 		: resolveNodePath();

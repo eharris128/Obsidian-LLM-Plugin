@@ -88,7 +88,9 @@ export class WhisperService {
 	 */
 	async transcribeFilePath(absolutePath: string): Promise<TranscriptResult> {
 		if (!Platform.isDesktop) throw new Error("File transcription is only available on desktop.");
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const path = require("path") as typeof import("path");
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const fs   = require("fs")   as typeof import("fs");
 
 		const ext      = path.extname(absolutePath).replace(".", "").toLowerCase();

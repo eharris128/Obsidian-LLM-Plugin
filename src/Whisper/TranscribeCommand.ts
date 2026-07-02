@@ -15,14 +15,11 @@ import { WhisperService, SUPPORTED_AUDIO_EXTENSIONS } from "./WhisperService";
 let _transcribing = false;
 
 export async function transcribeAudioFile(plugin: LLMPlugin): Promise<void> {
+	if (!Platform.isDesktop) {
+		return void new Notice("Audio file transcription is only available on desktop.");
+	}
 	if (_transcribing) return;
 	_transcribing = true;
-
-	if (!Platform.isDesktop) {
-		_transcribing = false;
-		new Notice("Audio file transcription is only available on desktop.");
-		return;
-	}
 
 	try {
 		const ws = plugin.settings.whisperSettings;
@@ -39,7 +36,7 @@ export async function transcribeAudioFile(plugin: LLMPlugin): Promise<void> {
 		// ── Open system file picker ──────────────────────────────────────────
 		// electron is an external module in Obsidian's Electron environment;
 		// we use `any` to avoid requiring @types/electron in the project.
-		 
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Electron module; desktop-only lazy require behind the function-start Platform.isDesktop guard (no @types/electron by design)
 		const { remote } = require("electron");
 
 		const result = await remote.dialog.showOpenDialog({
@@ -58,6 +55,7 @@ export async function transcribeAudioFile(plugin: LLMPlugin): Promise<void> {
 		if (result.canceled || result.filePaths.length === 0) return;
 
 		const filePath = result.filePaths[0];
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const path     = require("path") as typeof import("path");
 
 		// Persist the last-used directory

@@ -19,6 +19,7 @@ export class DesktopOperatingSystem implements OperatingSystem {
     
     constructor() {
         if (!Platform.isDesktop) throw new Error("DesktopOperatingSystem is not available on mobile.");
+        // eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the constructor-start Platform.isDesktop guard
         this.os = require("os");
     }
     

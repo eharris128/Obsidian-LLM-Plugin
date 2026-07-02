@@ -2,7 +2,7 @@ import OpenAI from "openai";
 import { logger } from "../utils/logger";
 import { getErrorMessage } from "../utils/errorUtils";
 import { GoogleGenAI } from "@google/genai";
-import { requestUrl } from "obsidian";
+import { Platform, requestUrl } from "obsidian";
 
 export type EmbeddingProvider = "onnx" | "openai" | "gemini" | "ollama" | "lmStudio";
 
@@ -47,9 +47,13 @@ function downloadFile(
 	destPath: string,
 	onBytes?: (downloaded: number, total: number) => void,
 ): Promise<void> {
+	if (!Platform.isDesktop) return Promise.reject(new Error("Embedding model download requires Obsidian Desktop."));
 	return new Promise((resolve, reject) => {
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const https = require("https") as typeof import("https");
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const http  = require("http")  as typeof import("http");
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const fs    = require("fs")    as typeof import("fs");
 
 		const go = (reqUrl: string) => {
@@ -264,12 +268,15 @@ export class EmbeddingService {
 	}
 
 	static async loadOnnx(onProgress?: (pct: number) => void): Promise<void> {
+		if (!Platform.isDesktop) throw new Error("[RAG] Local ONNX embeddings require Obsidian Desktop.");
 		if (_session) return;
 		if (_loadPromise) return _loadPromise;
 
 		_loadPromise = (async () => {
 			if (!_pluginDir) throw new Error("[RAG] configure() not called");
+			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 			const path = require("path") as typeof import("path");
+			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 			const fs   = require("fs")   as typeof import("fs");
 
 			// ── 1. Download model files ───────────────────────────────────
@@ -293,6 +300,7 @@ export class EmbeddingService {
 				// Derive ORT path from the plugin's own location
 				// _pluginDir = .../large-language-models  → ../Obsidian-LLM-Plugin/node_modules/onnxruntime-node
 				// We embed the absolute path at build time via __ORT_ABS_PATH__ below.
+				// eslint-disable-next-line @typescript-eslint/no-require-imports -- build contract: esbuild patchBundle() rewrites this exact literal to the onnxruntime-node absolute path
 				_ort = require("__ORT_ABS_PATH__") as OrtLike;
 				logger.log("[RAG] Loaded onnxruntime-node directly");
 			}
@@ -315,7 +323,10 @@ export class EmbeddingService {
 		pluginDir: string,
 		onProgress?: (pct: number) => void,
 	): Promise<void> {
+		if (!Platform.isDesktop) throw new Error("[RAG] Embedding model download requires Obsidian Desktop.");
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const path = require("path") as typeof import("path");
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const fs   = require("fs")   as typeof import("fs");
 
 		const modelDir = path.join(pluginDir, "onnx-models", "Xenova", "all-mpnet-base-v2");

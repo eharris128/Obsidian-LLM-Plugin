@@ -1371,8 +1371,10 @@ export default class LLMPlugin extends Plugin {
 	 * Also checks expiry — returns null (and logs a warning) if the token is expired.
 	 */
 	async readClaudeCodeTokenFromKeychain(): Promise<string | null> {
-		if (typeof process === "undefined" || process.platform !== "darwin") return null;
+		if (!Platform.isDesktop) return null;
+		if (process.platform !== "darwin") return null;
 		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 			const { execSync } = require("child_process") as typeof import("child_process");
 			const raw = execSync(
 				`security find-generic-password -s "Claude Code-credentials" -w`,

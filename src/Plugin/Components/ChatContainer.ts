@@ -513,8 +513,10 @@ export class ChatContainer extends Component {
 
 			if (!Platform.isDesktop) throw new Error("Claude Code is only available on desktop.");
 			const vaultPath = (this.plugin.app.vault.adapter as any).basePath;
-			const path = require("path");
-			const pluginDir = path.join(vaultPath, this.plugin.manifest.dir);
+			const pluginDir = Platform.isDesktop
+				// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require inside the Platform.isDesktop ternary
+				? (require("path") as typeof import("path")).join(vaultPath, this.plugin.manifest.dir ?? "")
+				: "";
 			const stream = await claudeCodeMessage(
 				this.prompt,
 				this.plugin.settings.claudeCodeOAuthToken,
@@ -1028,10 +1030,13 @@ export class ChatContainer extends Component {
 			}
 		}
 
-		// Local filesystem context from /attach slash command
-		if (this.localContextPaths.length > 0 && modelEndpoint !== images) {
+		// Local filesystem context from /attach slash command (desktop-only:
+		// paths come from the Electron picker and are read via Node fs)
+		if (Platform.isDesktop && this.localContextPaths.length > 0 && modelEndpoint !== images) {
 			try {
+				// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require inside the Platform.isDesktop block
 				const nodeFs = require("fs") as typeof import("fs");
+				// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require inside the Platform.isDesktop block
 				const nodePath = require("path") as typeof import("path");
 				const MAX_FILE_BYTES = 200_000;
 				const MAX_DIR_ENTRIES = 200;
@@ -3048,6 +3053,9 @@ export class ChatContainer extends Component {
 		};
 
 		const selectLocalPathFromMenu = () => {
+			if (!Platform.isDesktop) {
+				return void new Notice("/attach is only available in Obsidian Desktop.");
+			}
 			hideSlashMenu();
 			// Clear the typed /attach prefix from the input so the user can keep typing
 			const raw = promptField.getValue();
@@ -3060,7 +3068,9 @@ export class ChatContainer extends Component {
 
 			// Open native OS file/folder picker via Electron
 			try {
+				// eslint-disable-next-line @typescript-eslint/no-require-imports -- Electron module; desktop-only lazy require behind the function-start Platform.isDesktop guard (no @types/electron by design)
 				const { remote } = require("electron");
+				// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 				const nodePath = require("path") as typeof import("path");
 				const lastDir = (this.plugin.settings as any).lastLocalPickerDirectory || undefined;
 				remote.dialog.showOpenDialog({
@@ -3073,6 +3083,7 @@ export class ChatContainer extends Component {
 					const absPath = result.filePaths[0];
 
 					// Persist last-used directory
+					// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 					const nodeFs = require("fs") as typeof import("fs");
 					const isDir = nodeFs.statSync(absPath).isDirectory();
 					(this.plugin.settings as any).lastLocalPickerDirectory = isDir ? absPath : nodePath.dirname(absPath);
@@ -4555,6 +4566,7 @@ export class ChatContainer extends Component {
 		// before getUserMedia will trigger the system dialog. Without this the call
 		// silently fails or never shows the OS permission prompt.
 		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Electron module; lazy require in a try/catch that no-ops where unavailable (no @types/electron by design)
 			const electron = require("electron");
 			const sp = electron?.remote?.systemPreferences ?? electron?.systemPreferences;
 			if (sp?.askForMediaAccess) {

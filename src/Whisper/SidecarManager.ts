@@ -127,6 +127,7 @@ export class SidecarManager {
 	 */
 	async installDependencies(onLine: (line: string) => void): Promise<void> {
 		if (!Platform.isDesktop) return;
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const { spawn } = require("child_process") as typeof import("child_process");
 
 		return new Promise((resolve, reject) => {
@@ -165,10 +166,12 @@ export class SidecarManager {
 	 * Returns immediately — poll getServerStatus() to confirm it's ready.
 	 */
 	startServer(onLine?: (line: string) => void): void {
-		if (this.serverProcess) return; // already running
 		if (!Platform.isDesktop) return;
+		if (this.serverProcess) return; // already running
 
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const { spawn } = require("child_process") as typeof import("child_process");
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const path       = require("path")          as typeof import("path");
 
 		// whisper-server.py sits in the plugin root directory
@@ -215,6 +218,8 @@ export class SidecarManager {
 
 	/** Open python.org download page in the system browser. */
 	openPythonDownloadPage(): void {
+		if (!Platform.isDesktop) return;
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Electron module; desktop-only lazy require behind the function-start Platform.isDesktop guard (no @types/electron by design)
 		const { shell } = require("electron");
 		shell.openExternal("https://www.python.org/downloads/");
 	}
@@ -222,6 +227,7 @@ export class SidecarManager {
 	/** Promisified exec (stdout on resolve, throws on non-zero exit). */
 	private exec(cmd: string): Promise<string> {
 		if (!Platform.isDesktop) return Promise.reject(new Error("exec is not available on mobile."));
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 		const { exec } = require("child_process") as typeof import("child_process");
 		return new Promise((resolve, reject) => {
 			exec(cmd, (err, stdout, stderr) => {

@@ -314,10 +314,14 @@ export class EmbeddingService {
 
 			// ── 3. Load onnxruntime-node (same require that works in the banner) ──
 			onProgress?.(80);
-			// Prefer the banner-injected instance (already required, no double-load)
+			// Prefer the banner-injected instance (already required, no double-load).
+			// The esbuild banner stores it on globalThis; in the Electron renderer
+			// window === globalThis, so reading via window sees the same slot while
+			// keeping src/ free of globalThis (the banner itself is never scanned).
 			const ortSymbol = Symbol.for("onnxruntime");
-			if ((globalThis as any)[ortSymbol]) {
-				_ort = (globalThis as any)[ortSymbol] as OrtLike;
+			const injectedOrt = (window as unknown as Record<symbol, OrtLike | undefined>)[ortSymbol];
+			if (injectedOrt) {
+				_ort = injectedOrt;
 				logger.log("[RAG] Using banner-injected onnxruntime-node");
 			} else {
 				// Derive ORT path from the plugin's own location

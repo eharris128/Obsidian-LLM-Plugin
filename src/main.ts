@@ -480,12 +480,12 @@ export default class LLMPlugin extends Plugin {
 		this.recentChatsButton = new RecentChatsButton(this, this.statusBarButton);
 		this.addSettingTab(new SettingsView(this.app, this, this.fab));
 		if (this.settings.showFAB) {
-			activeWindow.setTimeout(() => {
+			window.setTimeout(() => {
 				this.fab.regenerateFAB();
 			}, 500);
 		}
 		if (this.settings.showStatusBarButton) {
-			activeWindow.setTimeout(() => {
+			window.setTimeout(() => {
 				this.statusBarButton.generate();
 				this.recentChatsButton.generate();
 			}, 500);

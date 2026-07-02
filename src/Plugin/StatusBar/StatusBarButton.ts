@@ -84,7 +84,11 @@ export class StatusBarButton {
 	}
 
 	private buildPopover() {
-		this.popoverEl = document.body.createDiv();
+		// Mount in the status bar's own document (the status bar only exists in
+		// the main window) so open/close/remove all act on the same document
+		// even if a popout window is focused at the time.
+		const doc = this.statusBarEl?.ownerDocument ?? document;
+		this.popoverEl = doc.body.createDiv();
 		this.popoverEl.addClass("llm-status-bar-popover");
 		this.popoverEl.addClass("llm-hidden");
 
@@ -98,7 +102,7 @@ export class StatusBarButton {
 		window.addEventListener("resize", this.boundRepositionHandler);
 
 		const savedHeight = this.plugin.settings.fabViewHeight ?? 600;
-		this.popoverEl.style.height = `${savedHeight}px`;
+		this.popoverEl.setCssStyles({ height: `${savedHeight}px` });
 
 		this.header = new Header(this.plugin, "floating-action-button");
 		this.chatContainer = new ChatContainer(
@@ -188,7 +192,7 @@ export class StatusBarButton {
 					Math.max(minHeight, startHeight + delta)
 				);
 				if (this.popoverEl) {
-					this.popoverEl.style.height = `${newHeight}px`;
+					this.popoverEl.setCssStyles({ height: `${newHeight}px` });
 					this.repositionPopover();
 				}
 			};
@@ -231,8 +235,7 @@ export class StatusBarButton {
 		// Keep within viewport vertically (shouldn't normally be needed)
 		if (top < gap) top = gap;
 
-		this.popoverEl.style.left = `${left}px`;
-		this.popoverEl.style.top = `${top}px`;
+		this.popoverEl.setCssStyles({ left: `${left}px`, top: `${top}px` });
 	}
 
 	private togglePopover() {
@@ -257,14 +260,14 @@ export class StatusBarButton {
 			this.chatContainer?.refreshActiveFileChip();
 
 			// Clamp persisted height, then position.
-			requestAnimationFrame(() => {
+			window.requestAnimationFrame(() => {
 				if (!this.popoverEl) return;
 				const safeMax = Math.max(
 					360,
 					this.popoverEl.getBoundingClientRect().bottom - 36
 				);
 				if (this.popoverEl.offsetHeight > safeMax) {
-					this.popoverEl.style.height = `${safeMax}px`;
+					this.popoverEl.setCssStyles({ height: `${safeMax}px` });
 					this.plugin.settings.fabViewHeight = safeMax;
 					void this.plugin.saveSettings();
 				}
@@ -311,14 +314,14 @@ export class StatusBarButton {
 			this.popoverEl.removeClass("llm-hidden");
 			this.chatContainer.refreshActiveFileChip();
 
-			requestAnimationFrame(() => {
+			window.requestAnimationFrame(() => {
 				if (!this.popoverEl) return;
 				const safeMax = Math.max(
 					360,
 					this.popoverEl.getBoundingClientRect().bottom - 36
 				);
 				if (this.popoverEl.offsetHeight > safeMax) {
-					this.popoverEl.style.height = `${safeMax}px`;
+					this.popoverEl.setCssStyles({ height: `${safeMax}px` });
 					this.plugin.settings.fabViewHeight = safeMax;
 					void this.plugin.saveSettings();
 				}
@@ -357,14 +360,14 @@ export class StatusBarButton {
 			this.popoverEl.removeClass("llm-hidden");
 			this.chatContainer.refreshActiveFileChip();
 
-			requestAnimationFrame(() => {
+			window.requestAnimationFrame(() => {
 				if (!this.popoverEl) return;
 				const safeMax = Math.max(
 					360,
 					this.popoverEl.getBoundingClientRect().bottom - 36
 				);
 				if (this.popoverEl.offsetHeight > safeMax) {
-					this.popoverEl.style.height = `${safeMax}px`;
+					this.popoverEl.setCssStyles({ height: `${safeMax}px` });
 					this.plugin.settings.fabViewHeight = safeMax;
 					void this.plugin.saveSettings();
 				}

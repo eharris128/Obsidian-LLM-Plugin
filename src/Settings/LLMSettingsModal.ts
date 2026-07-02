@@ -6,6 +6,7 @@ import {
 	Modal,
 	Notice,
 	Platform,
+	requireApiVersion,
 	requestUrl,
 	Setting,
 	setIcon,
@@ -44,6 +45,21 @@ interface NavItem {
 	icon: string;
 	/** When set, this nav item is hidden unless the named feature is enabled. */
 	featureGate?: keyof FeatureSettings;
+}
+
+/**
+ * `ButtonComponent.setDestructive()` is @since Obsidian 1.13.0, which is
+ * Catalyst-only today; `minAppVersion` stays 1.7.2 so non-Catalyst users keep
+ * the plugin. Fall back to `setWarning()` on older builds. Drop this helper
+ * (and the gates) when 1.13 reaches public release and minAppVersion is bumped.
+ */
+function setDestructiveCompat(btn: ButtonComponent): ButtonComponent {
+	if (requireApiVersion("1.13.0")) {
+		btn.setDestructive();
+	} else {
+		btn.setWarning();
+	}
+	return btn;
 }
 
 export class LLMSettingsModal extends Modal {
@@ -1284,7 +1300,7 @@ export class LLMSettingsModal extends Modal {
 					.setDesc("Clears the old in-settings chat history only. Your saved markdown chat files in your vault are not affected.")
 					.addButton((button: ButtonComponent) => {
 						button.setButtonText("Reset history");
-						button.setDestructive();
+						setDestructiveCompat(button);
 						button.onClick(() => {
 							this.plugin.history.reset();
 						});
@@ -1877,9 +1893,7 @@ export class LLMSettingsModal extends Modal {
 
 			// Delete
 			setting.addButton((btn) => {
-				btn.setIcon("trash")
-					.setTooltip("Delete project")
-					.setDestructive()
+				setDestructiveCompat(btn.setIcon("trash").setTooltip("Delete project"))
 					.onClick(async () => {
 						await this.plugin.projectManager.deleteProject(project.id);
 						new Notice(`Project "${project.name}" deleted.`);
@@ -1987,9 +2001,7 @@ export class LLMSettingsModal extends Modal {
 
 			// Delete
 			setting.addButton((btn) => {
-				btn.setIcon("trash")
-					.setTooltip("Delete assistant")
-					.setDestructive()
+				setDestructiveCompat(btn.setIcon("trash").setTooltip("Delete assistant"))
 					.onClick(async () => {
 						await this.plugin.assistantManager.deleteAssistant(assistant.id);
 						new Notice(`Assistant "${assistant.name}" deleted.`);
@@ -2159,7 +2171,7 @@ export class LLMSettingsModal extends Modal {
 							await this.plugin.saveSettings();
 							this.plugin.initSearxngService();
 						});
-					text.inputEl.style.width = "260px";
+					text.inputEl.addClass("llm-settings-wide-input");
 				})
 				.addButton((btn) => {
 					btn.setButtonText("Test connection").onClick(async () => {
@@ -2335,11 +2347,11 @@ export class LLMSettingsModal extends Modal {
 			const btnRow      = setupGroup.createDiv({ cls: "llm-whisper-btn-row" });
 			let installBtn: ButtonComponent | null = null;
 			let serverBtn:  ButtonComponent | null = null;
-			let pollTimer:  ReturnType<typeof setInterval> | null = null;
+			let pollTimer:  number | null = null;
 
 			// Stop auto-polling whenever we leave the tab or rebuild
 			const stopPolling = () => {
-				if (pollTimer !== null) { clearInterval(pollTimer); pollTimer = null; }
+				if (pollTimer !== null) { window.clearInterval(pollTimer); pollTimer = null; }
 			};
 
 			const refreshStatus = async () => {
@@ -2380,7 +2392,7 @@ export class LLMSettingsModal extends Modal {
 					setRow(serverRow, "⏳", "Server starting… (model may be downloading)", "checking");
 					// Auto-poll every 5 s until the health endpoint responds
 					if (pollTimer === null) {
-						pollTimer = setInterval(() => {
+						pollTimer = window.setInterval(() => {
 							void (async () => {
 								const s = await this.plugin.sidecarManager.getServerStatus();
 								if (s.running) {
@@ -2701,7 +2713,7 @@ class GuidanceEditorOverlay {
 		const textarea = panel.createEl("textarea", { cls: "llm-guidance-editor-textarea" });
 		textarea.value = content;
 
-		requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => {
 			textarea.focus();
 			textarea.setSelectionRange(0, 0);
 			textarea.scrollTop = 0;
@@ -2762,13 +2774,12 @@ class ShellCommandWarningModal extends Modal {
 		new ButtonComponent(btnRow)
 			.setButtonText("Cancel")
 			.onClick(() => this.close());
-		new ButtonComponent(btnRow)
-			.setButtonText("Yes, enable shell commands")
-			.setDestructive()
-			.onClick(() => {
-				this.close();
-				void this.onConfirm();
-			});
+		setDestructiveCompat(
+			new ButtonComponent(btnRow).setButtonText("Yes, enable shell commands")
+		).onClick(() => {
+			this.close();
+			void this.onConfirm();
+		});
 	}
 
 	onClose() {

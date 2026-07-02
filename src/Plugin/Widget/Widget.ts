@@ -246,7 +246,7 @@ export class WidgetView extends ItemView {
 		// generateChatContainer is async; schedule an initial sidebar state push
 		// so the inline sidebar has content the first time the user opens it,
 		// even if no other action (chip sync, model change) has fired yet.
-		setTimeout(() => chatContainer.pushChatDetailsState(), 0);
+		window.setTimeout(() => chatContainer.pushChatDetailsState(), 0);
 		historyContainer.generateHistoryContainer(
 			chatHistoryContainer,
 			history,

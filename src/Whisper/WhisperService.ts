@@ -10,9 +10,46 @@
  */
 
 import OpenAI from "openai";
-import { Platform, requestUrl } from "obsidian";
+import { Platform, requestUrl, RequestUrlResponse } from "obsidian";
 import type LLMPlugin from "main";
-import { getErrorMessage, getErrorName } from "utils/errorUtils";
+import { getErrorMessage } from "utils/errorUtils";
+
+/**
+ * Hand-built multipart/form-data encoder for requestUrl, which accepts only
+ * string/ArrayBuffer bodies. The payload is fully buffered before calling, so
+ * the encoding is lossless. Isolated as a standalone helper for easy revert
+ * if requestUrl ever gains FormData support.
+ */
+async function encodeMultipartFormData(
+	fields: Record<string, string>,
+	file: { fieldName: string; filename: string; mimeType: string; blob: Blob },
+): Promise<{ body: ArrayBuffer; contentType: string }> {
+	const boundary = "----obsidian-llm-" + Math.random().toString(36).slice(2);
+	const encoder = new TextEncoder();
+	const parts: Uint8Array[] = [];
+	for (const [name, value] of Object.entries(fields)) {
+		parts.push(encoder.encode(
+			`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`
+		));
+	}
+	// The sidecar routes on filename and content type — keep both intact,
+	// but strip quotes that would break the Content-Disposition header.
+	const safeName = file.filename.replace(/"/g, "'");
+	parts.push(encoder.encode(
+		`--${boundary}\r\nContent-Disposition: form-data; name="${file.fieldName}"; filename="${safeName}"\r\nContent-Type: ${file.mimeType}\r\n\r\n`
+	));
+	parts.push(new Uint8Array(await file.blob.arrayBuffer()));
+	parts.push(encoder.encode(`\r\n--${boundary}--\r\n`));
+
+	const total = parts.reduce((n, p) => n + p.byteLength, 0);
+	const body = new Uint8Array(total);
+	let offset = 0;
+	for (const p of parts) {
+		body.set(p, offset);
+		offset += p.byteLength;
+	}
+	return { body: body.buffer, contentType: `multipart/form-data; boundary=${boundary}` };
+}
 
 // ── Shared result type ──────────────────────────────────────────────────────
 
@@ -189,28 +226,43 @@ export class WhisperService {
 		const { sidecarHost, whisperModel, language, includeTimestamps } =
 			this.plugin.settings.whisperSettings;
 
-		// Build multipart/form-data manually since requestUrl doesn't accept FormData.
-		// We use the browser's native fetch (available in Electron's renderer) instead.
-		const formData = new FormData();
-		formData.append("file", new File([audioBlob], filename, { type: mimeType }));
-		formData.append("model", whisperModel);
-		if (language) formData.append("language", language);
-		formData.append("timestamps", String(includeTimestamps));
+		// requestUrl accepts neither FormData nor streaming bodies, and the
+		// audio payload is already fully buffered — so encode the multipart
+		// body by hand and send it through requestUrl (CORS-exempt, and the
+		// community review flags raw fetch).
+		const { body, contentType } = await encodeMultipartFormData(
+			{
+				model: whisperModel,
+				...(language ? { language } : {}),
+				timestamps: String(includeTimestamps),
+			},
+			{ fieldName: "file", filename, mimeType, blob: audioBlob },
+		);
 
 		// 60-second timeout — large files on slow hardware can take a while,
 		// but we never want to hang indefinitely if the server is unresponsive.
-		const controller = new AbortController();
-		const timeout = window.setTimeout(() => controller.abort(), 60_000);
+		// requestUrl has no abort support, so race a timer: the UI stops
+		// waiting even though the underlying request cannot be cancelled.
+		const TIMEOUT_SENTINEL = "whisper-sidecar-timeout";
+		let timeout = 0;
+		const timeoutPromise = new Promise<never>((_, reject) => {
+			timeout = window.setTimeout(() => reject(new Error(TIMEOUT_SENTINEL)), 60_000);
+		});
 
-		let response: Response;
+		let response: RequestUrlResponse;
 		try {
-			response = await fetch(`${sidecarHost}/transcribe`, {
-				method: "POST",
-				body:   formData,
-				signal: controller.signal,
-			});
+			response = await Promise.race([
+				requestUrl({
+					url: `${sidecarHost}/transcribe`,
+					method: "POST",
+					body,
+					contentType,
+					throw: false,
+				}),
+				timeoutPromise,
+			]);
 		} catch (err) {
-			if (getErrorName(err) === "AbortError") {
+			if (getErrorMessage(err) === TIMEOUT_SENTINEL) {
 				throw new Error(
 					"Transcription timed out after 60 s. " +
 					"The server may still be loading the model — try again in a moment.",
@@ -225,12 +277,12 @@ export class WhisperService {
 			window.clearTimeout(timeout);
 		}
 
-		if (!response.ok) {
-			const errText = await response.text().catch(() => response.statusText);
+		if (response.status >= 400) {
+			const errText = response.text || String(response.status);
 			throw new Error(`Transcription failed: ${errText}`);
 		}
 
-		const json = (await response.json()) as {
+		const json = response.json as {
 			transcript?: string;
 			language?: string;
 			duration_seconds?: number;

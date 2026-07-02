@@ -24,7 +24,10 @@ export class RecentChatsButton {
 		iconEl.addClass("llm-status-bar-icon");
 		setIcon(iconEl, "clock");
 
-		this.popoverEl = document.body.createDiv();
+		// Mount in the status bar's own document (main window only) so open,
+		// close, and remove all act on the same document even when a popout
+		// window is focused.
+		this.popoverEl = this.statusBarEl.ownerDocument.body.createDiv();
 		this.popoverEl.addClass("llm-recent-chats-popover");
 		this.popoverEl.addClass("llm-hidden");
 
@@ -114,7 +117,7 @@ export class RecentChatsButton {
 		// Prevent popover from closing when typing in the search input
 		searchInput.addEventListener("click", (e) => e.stopPropagation());
 
-		requestAnimationFrame(() => searchInput.focus());
+		window.requestAnimationFrame(() => searchInput.focus());
 	}
 
 	/**
@@ -193,7 +196,7 @@ export class RecentChatsButton {
 		});
 
 		searchInput.addEventListener("click", (e) => e.stopPropagation());
-		requestAnimationFrame(() => searchInput.focus());
+		window.requestAnimationFrame(() => searchInput.focus());
 	}
 
 	private getItemText(item: HistoryItem): string {
@@ -227,9 +230,7 @@ export class RecentChatsButton {
 			left = window.innerWidth - popoverWidth - gap;
 		}
 
-		this.popoverEl.style.left = `${left}px`;
-		this.popoverEl.style.bottom = `${bottom}px`;
-		this.popoverEl.style.top = "";
+		this.popoverEl.setCssStyles({ left: `${left}px`, bottom: `${bottom}px`, top: "" });
 	}
 
 	private togglePopover() {
@@ -239,7 +240,7 @@ export class RecentChatsButton {
 			this.renderPopoverContents();
 			this.popoverEl.removeClass("llm-hidden");
 
-			requestAnimationFrame(() => this.repositionPopover());
+			window.requestAnimationFrame(() => this.repositionPopover());
 
 			this.clickOutsideHandler = (e: MouseEvent) => {
 				if (
@@ -256,9 +257,13 @@ export class RecentChatsButton {
 					this.hidePopover();
 				}
 			};
+			// Capture the owner document once — teardown must remove the
+			// listeners from the document they were added to, not whichever
+			// window happens to be active when the popover closes.
+			const doc = this.popoverEl.ownerDocument;
 			window.setTimeout(() => {
-				activeDocument.addEventListener("click", this.clickOutsideHandler!);
-				activeDocument.addEventListener("keydown", this.keydownHandler!);
+				doc.addEventListener("click", this.clickOutsideHandler!);
+				doc.addEventListener("keydown", this.keydownHandler!);
 			}, 0);
 		} else {
 			this.hidePopover();
@@ -267,12 +272,15 @@ export class RecentChatsButton {
 
 	private hidePopover() {
 		if (this.popoverEl) this.popoverEl.addClass("llm-hidden");
+		// Same-document teardown: derive the document from the popover element
+		// the listeners were registered on, never from activeDocument.
+		const doc = this.popoverEl?.ownerDocument;
 		if (this.clickOutsideHandler) {
-			activeDocument.removeEventListener("click", this.clickOutsideHandler);
+			doc?.removeEventListener("click", this.clickOutsideHandler);
 			this.clickOutsideHandler = null;
 		}
 		if (this.keydownHandler) {
-			activeDocument.removeEventListener("keydown", this.keydownHandler);
+			doc?.removeEventListener("keydown", this.keydownHandler);
 			this.keydownHandler = null;
 		}
 	}

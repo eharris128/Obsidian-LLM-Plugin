@@ -2517,18 +2517,16 @@ export class ChatContainer extends Component {
 		const MAX_HEIGHT = 140; // ~5 lines before scrolling
 		const ta = elem.inputEl;
 		// Collapse height to 0 so scrollHeight accurately reflects content.
-		// Set properties individually to avoid wiping other inline styles.
 		// overflow:hidden must be set before reading scrollHeight so the
 		// browser doesn't add a scrollbar gutter that inflates the measurement.
-		ta.style.overflowY = "hidden";
-		ta.style.height = "0px";
+		// Runtime-computed sizing — setCssStyles is the sanctioned API for
+		// dynamic values (styles.css owns everything static).
+		ta.setCssStyles({ overflowY: "hidden", height: "0px" });
 		const contentHeight = ta.scrollHeight;
 		if (contentHeight <= MAX_HEIGHT) {
-			ta.style.height = `${contentHeight}px`;
-			ta.style.overflowY = "hidden";
+			ta.setCssStyles({ height: `${contentHeight}px`, overflowY: "hidden" });
 		} else {
-			ta.style.height = `${MAX_HEIGHT}px`;
-			ta.style.overflowY = "auto";
+			ta.setCssStyles({ height: `${MAX_HEIGHT}px`, overflowY: "auto" });
 		}
 		parentElement.scrollTo(0, 9999);
 	}
@@ -2960,19 +2958,16 @@ export class ChatContainer extends Component {
 		// Use requestAnimationFrame so the browser has laid out the menu content
 		// and offsetHeight is accurate before we compute the top position.
 		const positionSlashMenu = () => {
-			requestAnimationFrame(() => {
+			window.requestAnimationFrame(() => {
 				const rect = (promptContainer as HTMLElement).getBoundingClientRect();
 				const menuH = slashMenu.offsetHeight;
 				const gap = 6;
 				const topAbove = rect.top - menuH - gap;
-				slashMenu.style.left = `${rect.left}px`;
 				if (topAbove >= 0) {
-					slashMenu.style.top = `${topAbove}px`;
-					slashMenu.style.bottom = "";
+					slashMenu.setCssStyles({ left: `${rect.left}px`, top: `${topAbove}px`, bottom: "" });
 				} else {
 					// Not enough room above — position below the prompt container instead
-					slashMenu.style.top = `${rect.bottom + gap}px`;
-					slashMenu.style.bottom = "";
+					slashMenu.setCssStyles({ left: `${rect.left}px`, top: `${rect.bottom + gap}px`, bottom: "" });
 				}
 			});
 		};
@@ -3755,17 +3750,19 @@ export class ChatContainer extends Component {
 
 		// Copy textarea metrics to the mirror once the browser has laid out the element,
 		// so the mirror text renders pixel-for-pixel on top of the textarea text.
-		requestAnimationFrame(() => {
+		window.requestAnimationFrame(() => {
 			const cs = getComputedStyle(promptField.inputEl);
-			mirrorDiv.style.paddingTop = cs.paddingTop;
-			mirrorDiv.style.paddingRight = cs.paddingRight;
-			mirrorDiv.style.paddingBottom = cs.paddingBottom;
-			mirrorDiv.style.paddingLeft = cs.paddingLeft;
-			mirrorDiv.style.fontSize = cs.fontSize;
-			mirrorDiv.style.fontFamily = cs.fontFamily;
-			mirrorDiv.style.lineHeight = cs.lineHeight;
-			mirrorDiv.style.letterSpacing = cs.letterSpacing;
-			mirrorDiv.style.wordSpacing = cs.wordSpacing;
+			mirrorDiv.setCssStyles({
+				paddingTop: cs.paddingTop,
+				paddingRight: cs.paddingRight,
+				paddingBottom: cs.paddingBottom,
+				paddingLeft: cs.paddingLeft,
+				fontSize: cs.fontSize,
+				fontFamily: cs.fontFamily,
+				lineHeight: cs.lineHeight,
+				letterSpacing: cs.letterSpacing,
+				wordSpacing: cs.wordSpacing,
+			});
 		});
 
 		// Clear any stale project association from a previous session when opening with no active chat.
@@ -3897,7 +3894,7 @@ export class ChatContainer extends Component {
 		}
 		if (this.plugin.settings.useSpecialAnimation) {
 			const svgWrap = this.streamingDiv.createDiv({ cls: "llm-special-animation" });
-			svgWrap.innerHTML = `<svg width="45" height="30" viewBox="0 0 30 20" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+			const svgMarkup1 = `<svg width="45" height="30" viewBox="0 0 30 20" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
   <g id="f1">
     <path d="M18 19H17V18H18V19ZM24 7H25V8H22V10H21V11H20V13H19V14H18V16H17V18H16V16H13V15H17V14H16V13H13V12H12V13H10V15H9V13H8V12H10V11H9V10H8V11H6V10H7V9H11V8H13V9H18V8H20V7H21V5H22V6H24V7ZM7 16H6V15H7V16ZM11 16H10V15H11V16ZM8 15H7V13H8V15ZM6 12H5V11H6V12ZM5 11H4V10H5V11Z" fill="var(--interactive-accent)"/>
     <animate attributeName="display" values="inline;none;none;none" keyTimes="0;0.25;0.5;0.75" calcMode="discrete" dur="0.5s" repeatCount="indefinite"/>
@@ -3915,6 +3912,9 @@ export class ChatContainer extends Component {
     <animate attributeName="display" values="none;none;none;inline" keyTimes="0;0.25;0.5;0.75" calcMode="discrete" dur="0.5s" repeatCount="indefinite"/>
   </g>
 </svg>`;
+			// DOM construction via DOMParser (no innerHTML writes) — same pattern as the inline-SVG asset pipeline.
+			const svgDoc1 = new DOMParser().parseFromString(svgMarkup1, "image/svg+xml");
+			svgWrap.appendChild(svgWrap.ownerDocument.importNode(svgDoc1.documentElement, true));
 		}
 		this.historyMessages.scroll(0, 9999);
 	}
@@ -4192,7 +4192,7 @@ export class ChatContainer extends Component {
 			const brandEl = messageWrapper.createDiv({ cls: "llm-obsidian-agent-brand" });
 			if (this.plugin.settings.useSpecialAnimation) {
 				const svgEl = brandEl.createDiv({ cls: "llm-special-standing" });
-				svgEl.innerHTML = `<svg width="45" height="30" viewBox="0 0 30 20" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
+				const svgMarkup2 = `<svg width="45" height="30" viewBox="0 0 30 20" fill="none" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">
 <rect x="22" y="5" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="23" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="24" y="6" width="1" height="1" fill="var(--interactive-accent)"/>
@@ -4291,6 +4291,9 @@ export class ChatContainer extends Component {
 <rect x="17" y="16" width="1" height="1" fill="var(--interactive-accent)"/>
 <rect x="18" y="17" width="1" height="1" fill="var(--interactive-accent)"/>
 </svg>`;
+				// DOM construction via DOMParser (no innerHTML writes) — same pattern as the inline-SVG asset pipeline.
+				const svgDoc2 = new DOMParser().parseFromString(svgMarkup2, "image/svg+xml");
+				svgEl.appendChild(svgEl.ownerDocument.importNode(svgDoc2.documentElement, true));
 			} else {
 				const iconEl = brandEl.createSpan({ cls: "llm-obsidian-agent-brand-icon" });
 				setIcon(iconEl, "stone");
@@ -4447,9 +4450,9 @@ export class ChatContainer extends Component {
 
 		// Measure the rendered text width using a temporary off-screen span.
 		const ruler = activeDocument.createElement("span");
-		ruler.style.cssText =
-			"visibility:hidden;position:absolute;white-space:nowrap;pointer-events:none;";
-		ruler.style.font = window.getComputedStyle(select).font;
+		ruler.addClass("llm-measure-ruler");
+		// The font must match the select's computed font — dynamic value.
+		ruler.setCssStyles({ font: window.getComputedStyle(select).font });
 		ruler.textContent = selected.text;
 		activeDocument.body.appendChild(ruler);
 		const textWidth = ruler.getBoundingClientRect().width;
@@ -4458,7 +4461,7 @@ export class ChatContainer extends Component {
 		// Left pad (~4px) + text + right pad + chevron room (~22px) = ~26px total.
 		// Add a small buffer so the text never clips.
 		const PADDING = 30;
-		select.style.width = `${Math.ceil(textWidth + PADDING)}px`;
+		select.setCssStyles({ width: `${Math.ceil(textWidth + PADDING)}px` });
 	}
 
 	/**

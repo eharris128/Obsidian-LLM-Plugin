@@ -18,6 +18,8 @@ export class FAB {
 	private fabChatContainerDiv: HTMLElement | null = null;
 	private fabChatHistoryContainer: HTMLElement | null = null;
 	private fabViewArea: HTMLElement | null = null;
+	/** The mounted FAB root — removal must target this exact element (popout safety). */
+	private fabContainerEl: HTMLElement | null = null;
 
 	constructor(plugin: LLMPlugin) {
 		this.plugin = plugin;
@@ -40,10 +42,10 @@ export class FAB {
 		viewArea.addClass("fab-view-area");
 
 		// Visibility is toggled via the .llm-hidden class so it can never clobber
-		// the inline height (the resize handle writes viewArea.style.height directly).
+		// the inline height (the resize handle writes the height via setCssStyles).
 		const savedHeight = this.plugin.settings.fabViewHeight ?? 600;
 		viewArea.addClass("llm-hidden");
-		viewArea.style.height = `${savedHeight}px`;
+		viewArea.setCssStyles({ height: `${savedHeight}px` });
 
 		this.fabViewArea = viewArea;
 
@@ -126,7 +128,7 @@ export class FAB {
 					maxHeight,
 					Math.max(minHeight, startHeight + delta)
 				);
-				viewArea.style.height = `${newHeight}px`;
+				viewArea.setCssStyles({ height: `${newHeight}px` });
 			};
 
 			const onPointerUp = () => {
@@ -176,13 +178,13 @@ export class FAB {
 					chatContainer.syncModelDropdown();
 					// Clamp any persisted oversized height after the element is
 					// visible and laid out so getBoundingClientRect() is accurate.
-					requestAnimationFrame(() => {
+					window.requestAnimationFrame(() => {
 						const safeMax = Math.max(
 							360,
 							viewArea.getBoundingClientRect().bottom - 36
 						);
 						if (viewArea.offsetHeight > safeMax) {
-							viewArea.style.height = `${safeMax}px`;
+							viewArea.setCssStyles({ height: `${safeMax}px` });
 							this.plugin.settings.fabViewHeight = safeMax;
 							void this.plugin.saveSettings();
 						}
@@ -195,6 +197,9 @@ export class FAB {
 		activeDocument.body
 			.querySelector(ROOT_WORKSPACE_CLASS)
 			?.insertAdjacentElement("afterbegin", fabContainer);
+		// Keep a direct reference so removeFab() can tear down the exact element
+		// we mounted, regardless of which window is active at removal time.
+		this.fabContainerEl = fabContainer;
 	}
 
 	/** Delegates to ChatContainer so the empty state re-renders with the latest settings. */
@@ -243,11 +248,11 @@ export class FAB {
 		if (this.fabViewArea?.hasClass("llm-hidden")) {
 			this.fabViewArea.removeClass("llm-hidden");
 			this.chatContainer.syncModelDropdown();
-			requestAnimationFrame(() => {
+			window.requestAnimationFrame(() => {
 				if (!this.fabViewArea) return;
 				const safeMax = Math.max(360, this.fabViewArea.getBoundingClientRect().bottom - 36);
 				if (this.fabViewArea.offsetHeight > safeMax) {
-					this.fabViewArea.style.height = `${safeMax}px`;
+					this.fabViewArea.setCssStyles({ height: `${safeMax}px` });
 					this.plugin.settings.fabViewHeight = safeMax;
 					void this.plugin.saveSettings();
 				}
@@ -311,6 +316,11 @@ export class FAB {
 		this.fabChatContainerDiv = null;
 		this.fabChatHistoryContainer = null;
 		this.fabViewArea = null;
+		// Remove the element we mounted (it may live in a different window than
+		// the currently active one); fall back to a lookup only for elements
+		// left over from a previous plugin load.
+		this.fabContainerEl?.remove();
+		this.fabContainerEl = null;
 		const FAB = activeDocument.getElementById("_floating-action-button");
 		if (FAB) {
 			FAB.remove();

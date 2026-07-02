@@ -26,7 +26,7 @@ export class RenameModal extends Modal {
 		(input).value = this.currentTitle;
 
 		// Pre-select the text so the user can start typing immediately.
-		requestAnimationFrame(() => (input).select());
+		window.requestAnimationFrame(() => (input).select());
 
 		const buttonRow = contentEl.createDiv({ cls: "modal-button-container" });
 

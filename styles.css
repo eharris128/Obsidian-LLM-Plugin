@@ -3029,3 +3029,19 @@ button.llm-mic-button.llm-mic-transcribing {
 	background-color: color-mix(in srgb, var(--interactive-accent) 12%, transparent);
 	border-color: transparent;
 }
+
+/* ── U8 compliance additions ─────────────────────────────────────────────── */
+
+/* Off-screen measurement span for the model-dropdown width ruler.
+   The font is applied at runtime (must match the select's computed font). */
+.llm-measure-ruler {
+	visibility: hidden;
+	position: absolute;
+	white-space: nowrap;
+	pointer-events: none;
+}
+
+/* Wide text inputs in the settings modal (e.g. SearXNG host). */
+.llm-settings-wide-input {
+	width: 260px;
+}

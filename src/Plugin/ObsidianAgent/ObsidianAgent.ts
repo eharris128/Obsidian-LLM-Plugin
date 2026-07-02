@@ -235,7 +235,8 @@ export class ObsidianAgent {
 				},
 				risk: "safe",
 			},
-			async (input: { skill_id: string; reason: string }) => {
+			async (rawInput) => {
+				const input = rawInput as { skill_id: string; reason: string };
 				const allSkills = this.plugin.skillRegistry?.getSkills() ?? [];
 				const skill = allSkills.find((s) => s.id === input.skill_id);
 				if (!skill) {
@@ -336,7 +337,8 @@ export class ObsidianAgent {
 				},
 				risk: "safe",
 			},
-			async (input: { assistant_id: string; task: string }) => {
+			async (rawInput) => {
+				const input = rawInput as { assistant_id: string; task: string };
 				const assistantObj = this.plugin.assistantManager?.getAssistant(input.assistant_id);
 				if (!assistantObj) {
 					return {

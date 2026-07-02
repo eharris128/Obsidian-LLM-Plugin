@@ -147,8 +147,14 @@ export class WhisperService {
 		});
 
 		// OpenAI returns the verbose_json shape when response_format is "verbose_json"
-		const raw = response as any;
-		const segments: TranscriptSegment[] = (raw.segments ?? []).map((s: any) => ({
+		type VerboseJson = {
+			text?: string;
+			language?: string;
+			duration?: number;
+			segments?: Array<{ start?: number; end?: number; text?: string }>;
+		};
+		const raw = response as VerboseJson;
+		const segments: TranscriptSegment[] = (raw.segments ?? []).map((s) => ({
 			start: s.start ?? 0,
 			end:   s.end   ?? 0,
 			text:  (s.text ?? "").trim(),
@@ -224,8 +230,13 @@ export class WhisperService {
 			throw new Error(`Transcription failed: ${errText}`);
 		}
 
-		const json = await response.json();
-		const segments: TranscriptSegment[] = (json.segments ?? []).map((s: any) => ({
+		const json = (await response.json()) as {
+			transcript?: string;
+			language?: string;
+			duration_seconds?: number;
+			segments?: Array<{ start?: number; end?: number; text?: string }>;
+		};
+		const segments: TranscriptSegment[] = (json.segments ?? []).map((s) => ({
 			start: s.start ?? 0,
 			end:   s.end   ?? 0,
 			text:  (s.text ?? "").trim(),

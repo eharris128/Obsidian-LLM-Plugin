@@ -321,7 +321,7 @@ export class ObsidianToolRegistry {
 
 	private tools: NeutralToolDefinition[] = ALL_TOOL_DEFINITIONS;
 	/** Dynamic tools registered at runtime (e.g. invoke_assistant in agent mode). */
-	private dynamicTools: Map<string, { def: NeutralToolDefinition; executor: (input: any) => Promise<ToolResult> }> = new Map();
+	private dynamicTools: Map<string, { def: NeutralToolDefinition; executor: (input: Record<string, unknown>) => Promise<ToolResult> }> = new Map();
 
 	constructor(
 		private app: App,
@@ -336,7 +336,7 @@ export class ObsidianToolRegistry {
 	 */
 	registerDynamicTool(
 		def: NeutralToolDefinition,
-		executor: (input: any) => Promise<ToolResult>
+		executor: (input: Record<string, unknown>) => Promise<ToolResult>
 	): void {
 		this.dynamicTools.set(def.name, { def, executor });
 	}
@@ -368,7 +368,7 @@ export class ObsidianToolRegistry {
 		return this.tools.find(t => t.name === toolName)?.description ?? toolName;
 	}
 
-	async executeTool(name: string, input: Record<string, any>): Promise<ToolResult> {
+	async executeTool(name: string, input: Record<string, unknown>): Promise<ToolResult> {
 		// Dynamic tools (registered at runtime) take priority
 		if (this.dynamicTools.has(name)) {
 			try {
@@ -653,7 +653,7 @@ export class ObsidianToolRegistry {
 									const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
 									if (!fmMatch) continue;
 									const { parseYaml } = await import("obsidian");
-									const meta = parseYaml(fmMatch[1]) as Record<string, any>;
+									const meta = parseYaml(fmMatch[1]) as Record<string, unknown>;
 									if (filter_project && meta.project !== filter_project) continue;
 									if (filter_agent === "true" && !meta.agent) continue;
 									if (filter_agent === "false" && meta.agent) continue;
@@ -703,7 +703,7 @@ export class ObsidianToolRegistry {
 	// so nothing Node-backed executes at plugin load (mobile-safe load graph).
 	// ---------------------------------------------------------------------------
 
-	private execReadLocalFile(input: Record<string, any>): ToolResult {
+	private execReadLocalFile(input: Record<string, unknown>): ToolResult {
 		if (!Platform.isDesktop) {
 			return { success: false, error: "read_local_file is only available in Obsidian Desktop." };
 		}
@@ -733,7 +733,7 @@ export class ObsidianToolRegistry {
 		return { success: true, result: header + content };
 	}
 
-	private execListLocalFolder(input: Record<string, any>): ToolResult {
+	private execListLocalFolder(input: Record<string, unknown>): ToolResult {
 		if (!Platform.isDesktop) {
 			return { success: false, error: "list_local_folder is only available in Obsidian Desktop." };
 		}
@@ -793,7 +793,7 @@ export class ObsidianToolRegistry {
 		return { success: true, result: header + entries.join("\n") };
 	}
 
-	private execRunShellCommand(input: Record<string, any>): Promise<ToolResult> | ToolResult {
+	private execRunShellCommand(input: Record<string, unknown>): Promise<ToolResult> | ToolResult {
 		if (!Platform.isDesktop) {
 			return { success: false, error: "run_shell_command is only available in Obsidian Desktop." };
 		}

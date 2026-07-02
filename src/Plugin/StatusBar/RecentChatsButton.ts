@@ -197,7 +197,8 @@ export class RecentChatsButton {
 	}
 
 	private getItemText(item: HistoryItem): string {
-		return (item as any).prompt || item.messages?.[0]?.content || "Untitled chat";
+		// Legacy history items carried a top-level prompt field.
+		return (item as { prompt?: string }).prompt || item.messages?.[0]?.content || "Untitled chat";
 	}
 
 	/** Simple fuzzy match: all query chars must appear in text in order. */

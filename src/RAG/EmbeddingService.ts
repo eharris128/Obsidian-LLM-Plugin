@@ -87,6 +87,18 @@ function downloadFile(
 
 // ── WordPiece tokenizer (inline — no transformers.js dependency) ──────────────
 
+/** Shape of the tokenizer.json fields this tokenizer actually reads. */
+type TokenizerJson = {
+	model: {
+		vocab: Record<string, number>;
+		unk_token: string;
+		continuing_subword_prefix?: string;
+		max_input_chars_per_word?: number;
+	};
+	post_processor?: { cls?: [string, number]; sep?: [string, number] };
+	normalizer?: { lowercase?: boolean; strip_accents?: boolean | null };
+};
+
 class WordPieceTokenizer {
 	private vocab:    Record<string, number>;
 	private unkId:    number;
@@ -97,7 +109,7 @@ class WordPieceTokenizer {
 	private lowercase:    boolean;
 	private stripAccents: boolean | null;
 
-	constructor(tokJson: any) {
+	constructor(tokJson: TokenizerJson) {
 		const m = tokJson.model;
 		this.vocab    = m.vocab;
 		this.unkId    = m.vocab[m.unk_token] ?? 3;
@@ -108,7 +120,7 @@ class WordPieceTokenizer {
 		this.sepId     = (pp.sep ?? ["</s>", 2])[1];
 		const norm     = tokJson.normalizer ?? {};
 		this.lowercase    = norm.lowercase !== false;
-		this.stripAccents = norm.strip_accents;  // null = follow lowercase
+		this.stripAccents = norm.strip_accents ?? null;  // null = follow lowercase
 	}
 
 	encode(text: string, maxLen = 512): { input_ids: number[]; attention_mask: number[] } {
@@ -179,16 +191,27 @@ class WordPieceTokenizer {
 
 // ── ONNX inference (runs directly in renderer via onnxruntime-node) ───────────
 
+/** Minimal structural view of onnxruntime-node — its types are deliberately
+ *  not imported (the package is loaded at runtime via the banner handshake). */
+interface OrtTensorLike {
+	dims: number[];
+	data: Float32Array;
+}
+interface OrtSessionLike {
+	inputNames: string[];
+	outputNames: string[];
+	run(feeds: Record<string, unknown>): Promise<Record<string, OrtTensorLike>>;
+}
 interface OrtLike {
 	InferenceSession: {
-		create(path: string, opts: any): Promise<any>;
+		create(path: string, opts: { executionProviders: string[] }): Promise<OrtSessionLike>;
 	};
-	Tensor: new (type: string, data: any, dims: number[]) => any;
+	Tensor: new (type: string, data: BigInt64Array | Float32Array, dims: number[]) => unknown;
 }
 
 async function runInference(
 	ort: OrtLike,
-	session: any,
+	session: OrtSessionLike,
 	tokenizer: WordPieceTokenizer,
 	texts: string[],
 ): Promise<number[][]> {
@@ -196,9 +219,9 @@ async function runInference(
 	for (const text of texts) {
 		const { input_ids, attention_mask } = tokenizer.encode(text, 512);
 		const seqLen = input_ids.length;
-		const feeds: Record<string, any> = {};
+		const feeds: Record<string, unknown> = {};
 
-		for (const name of session.inputNames as string[]) {
+		for (const name of session.inputNames) {
 			if (name === "input_ids") {
 				feeds.input_ids = new ort.Tensor("int64",
 					BigInt64Array.from(input_ids.map(BigInt)), [1, seqLen]);
@@ -214,11 +237,11 @@ async function runInference(
 		}
 
 		const out    = await session.run(feeds);
-		const outKey = (session.outputNames as string[]).find(n => n === "last_hidden_state")
+		const outKey = session.outputNames.find(n => n === "last_hidden_state")
 		               ?? session.outputNames[0];
 		const tensor = out[outKey];
-		const dims   = tensor.dims as number[];
-		const data   = tensor.data as Float32Array;
+		const dims   = tensor.dims;
+		const data   = tensor.data;
 
 		// Mean-pool over sequence (masked), then L2-normalize
 		const hiddenSize = dims[dims.length - 1];
@@ -251,7 +274,7 @@ async function runInference(
 
 let _pluginDir:   string | null = null;
 let _ort:         OrtLike | null = null;
-let _session:     any = null;
+let _session:     OrtSessionLike | null = null;
 let _tokenizer:   WordPieceTokenizer | null = null;
 let _loadPromise: Promise<void> | null = null;
 
@@ -285,7 +308,7 @@ export class EmbeddingService {
 			// ── 2. Load tokenizer ─────────────────────────────────────────
 			onProgress?.(76);
 			const modelDir = path.join(_pluginDir, "onnx-models", "Xenova", "all-mpnet-base-v2");
-			const tokJson  = JSON.parse(fs.readFileSync(path.join(modelDir, "tokenizer.json"), "utf8"));
+			const tokJson  = JSON.parse(fs.readFileSync(path.join(modelDir, "tokenizer.json"), "utf8")) as TokenizerJson;
 			_tokenizer = new WordPieceTokenizer(tokJson);
 			logger.log("[RAG] Tokenizer loaded");
 
@@ -396,8 +419,8 @@ export class EmbeddingService {
 		try {
 			const res = await requestUrl({ url: `${host}/api/tags`, throw: false });
 			if (res.status >= 400) return false;
-			const data = res.json;
-			const pulled    = (data.models ?? []).map((m: any) => m.name.split(":")[0]);
+			const data = res.json as { models?: Array<{ name: string }> };
+			const pulled    = (data.models ?? []).map((m) => m.name.split(":")[0]);
 			const modelBase = model.split(":")[0];
 			if (!pulled.includes(modelBase)) throw new OllamaModelNotFoundError(model, host);
 			return true;

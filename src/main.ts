@@ -101,6 +101,8 @@ export interface LLMPluginSettings {
 	lmStudioModels: string[];
 	emptyChatAvatar: string;
 	fabViewHeight?: number;
+	/** Last directory used by the /attach local file picker (desktop only). */
+	lastLocalPickerDirectory?: string;
 	showStatusBarButton: boolean;
 	useSpecialAnimation: boolean;
 	ragSettings: RAGSettings;

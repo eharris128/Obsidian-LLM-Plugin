@@ -81,9 +81,10 @@ export class SearxngService {
 			);
 		}
 
-		let data: { results?: any[] };
+		type RawSearxResult = { title?: unknown; url?: unknown; content?: unknown; engine?: unknown };
+		let data: { results?: RawSearxResult[] };
 		try {
-			data = response.json as { results?: any[] };
+			data = response.json as { results?: RawSearxResult[] };
 		} catch {
 			throw new Error(
 				"SearXNG returned a non-JSON response. " +
@@ -91,7 +92,7 @@ export class SearxngService {
 			);
 		}
 
-		return (data.results ?? []).slice(0, limit).map((r: any) => ({
+		return (data.results ?? []).slice(0, limit).map((r) => ({
 			title:   String(r.title   ?? ""),
 			url:     String(r.url     ?? ""),
 			content: String(r.content ?? ""),

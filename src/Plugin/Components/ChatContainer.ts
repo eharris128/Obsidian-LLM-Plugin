@@ -24,6 +24,7 @@ import {
 	ImageParams,
 	Message,
 	ToolCallRecord,
+	VaultContext,
 	ViewType,
 } from "Types/types";
 import { classNames } from "utils/classNames";
@@ -108,7 +109,7 @@ export class ChatContainer extends Component {
 	// Stable bound reference so we can cleanly unsubscribe when switching stores.
 	private boundUpdateMessages: (messages: Message[]) => void;
 	contextBuilder: ContextBuilder;
-	currentVaultContext: unknown = null; // Store context for current generation
+	currentVaultContext: VaultContext | null = null; // Store context for current generation
 	pendingContextString: string | null = null; // Context string to inject into API call (not shown in UI)
 	claudeCodeSessionId: string | null = null;
 	useActiveFileContext: boolean = false;
@@ -527,10 +528,21 @@ export class ChatContainer extends Component {
 				this.claudeCodeCanUseTool.bind(this)
 			);
 
+			// Structural view of the agent-SDK stream union — the shapes this
+			// loop reads are stable across SDK versions while the SDK's own
+			// types are not; normalize locally instead of importing them.
+			type ClaudeCodeStreamMessage = {
+				type?: string;
+				subtype?: string;
+				session_id?: string;
+				tool_name?: string;
+				usage?: { input_tokens?: number; output_tokens?: number };
+				message?: { content?: Array<{ type?: string; text?: string; name?: string }> };
+			};
 			let firstText = true;
 			for await (const message of stream) {
 				if (this._abortController?.signal.aborted) break;
-				const msg = message as any;
+				const msg = message as ClaudeCodeStreamMessage;
 				// Capture session ID from first message
 				if (!this.claudeCodeSessionId && msg.session_id) {
 					this.claudeCodeSessionId = msg.session_id ?? null;
@@ -547,7 +559,7 @@ export class ChatContainer extends Component {
 							this.historyMessages.scroll(0, 9999);
 						} else if (block.type === "tool_use") {
 							// Show which tool Claude Code is running
-							const toolLabel = (block.name as string).replace(/_/g, " ");
+							const toolLabel = (block.name ?? "").replace(/_/g, " ");
 							this.showThinkingAnimation(`Running: ${toolLabel}`);
 							firstText = true; // next text chunk clears the animation
 						}
@@ -558,7 +570,7 @@ export class ChatContainer extends Component {
 					firstText = true;
 				} else if (msg.type === "system" && msg.subtype === "permission_denied") {
 					// Auto-denied tool (e.g. classifier block, dontAsk mode) — surface inline
-					const toolLabel = (msg.tool_name as string).replace(/_/g, " ");
+					const toolLabel = (msg.tool_name ?? "").replace(/_/g, " ");
 					const notice = this.historyMessages.createDiv({ cls: "llm-permission-denied-notice" });
 					notice.createSpan({ cls: "llm-permission-denied-icon" });
 					setIcon(notice.querySelector(".llm-permission-denied-icon") as HTMLElement, "shield-x");
@@ -1650,11 +1662,21 @@ export class ChatContainer extends Component {
 	 *  - Everything else → passed through unchanged
 	 */
 	private sanitizeMessagesForNonAgentModel(messages: Message[]): Message[] {
+		// Structural view of fields the narrower Message type doesn't declare
+		// but that appear in practice (OpenAI tool messages, Anthropic blocks).
+		type BlockLike = {
+			type?: string;
+			text?: string;
+			content?: string | BlockLike[];
+		};
+		type RawMessageLike = {
+			role?: string;
+			content?: string | BlockLike[];
+			tool_calls?: unknown;
+		};
 		const out: Message[] = [];
 		for (const msg of messages) {
-			// Use `any` to inspect fields that the narrower Message type doesn't
-			// declare but that may appear in practice (e.g. OpenAI tool messages).
-			const raw = msg as any;
+			const raw = msg as RawMessageLike;
 
 			// Pure tool-result messages — drop them; their semantic content is
 			// already captured in the assistant's final text reply.
@@ -1667,7 +1689,7 @@ export class ChatContainer extends Component {
 					typeof raw.content === "string"
 						? raw.content
 						: Array.isArray(raw.content)
-						? (raw.content as any[])
+						? raw.content
 								.filter((b) => b.type === "text")
 								.map((b) => b.text ?? "")
 								.join("\n")
@@ -1680,7 +1702,7 @@ export class ChatContainer extends Component {
 			// User messages whose content is an array (Anthropic tool_result
 			// blocks mixed with optional text blocks).
 			if (raw.role === "user" && Array.isArray(raw.content)) {
-				const parts: string[] = (raw.content as any[])
+				const parts: string[] = raw.content
 					.map((b) => {
 						if (b.type === "text") return (b.text ?? "").trim();
 						if (b.type === "tool_result") {
@@ -1688,7 +1710,7 @@ export class ChatContainer extends Component {
 								typeof b.content === "string"
 									? b.content
 									: Array.isArray(b.content)
-									? (b.content as any[])
+									? b.content
 											.filter((x) => x.type === "text")
 											.map((x) => x.text ?? "")
 											.join(" ")
@@ -1749,7 +1771,7 @@ export class ChatContainer extends Component {
 	): Promise<import("@anthropic-ai/claude-agent-sdk").PermissionResult> {
 		const label = options.title ?? `Claude wants to use: ${toolName.replace(/_/g, " ")}`;
 		const desc = options.description ?? options.displayName ?? "";
-		const allowed = await this.showPermissionUI(toolName, label + (desc ? `\n${desc}` : ""), input as Record<string, any>);
+		const allowed = await this.showPermissionUI(toolName, label + (desc ? `\n${desc}` : ""), input as Record<string, unknown>);
 		if (allowed) {
 			return { behavior: "allow", updatedInput: input };
 		}
@@ -1759,7 +1781,7 @@ export class ChatContainer extends Component {
 	private showPermissionUI(
 		toolName: string,
 		toolDescription: string,
-		input: Record<string, any>
+		input: Record<string, unknown>
 	): Promise<boolean> {
 		return new Promise((resolve) => {
 			const card = this.historyMessages.createDiv({ cls: "llm-permission-card" });
@@ -1949,8 +1971,8 @@ export class ChatContainer extends Component {
 						},
 						risk: "write",
 					},
-					async (input: { content: string; type?: string }) => {
-						const { content, type = "fact" } = input;
+					async (input) => {
+						const { content, type = "fact" } = input as { content: string; type?: string };
 						// Build the list of available scopes at call time
 						const projId = this.plugin.settings.projectSettings?.activeProjectId;
 						const proj = projId ? this.plugin.projectManager?.getProject(projId) : null;
@@ -2123,7 +2145,7 @@ export class ChatContainer extends Component {
 		this.historyPush(messageContext, this.currentVaultContext);
 	}
 
-	historyPush(params: HistoryItem, vaultContext?: any) {
+	historyPush(params: HistoryItem, vaultContext?: VaultContext | null) {
 		const { modelName, historyIndex, historyFilePath, modelEndpoint } =
 			getViewInfo(this.plugin, this.viewType);
 
@@ -2134,7 +2156,7 @@ export class ChatContainer extends Component {
 		) {
 			this.historyPushToFile(
 				params as ChatHistoryItem,
-				vaultContext,
+				vaultContext ?? undefined,
 				historyFilePath
 			).catch((e) =>
 				logger.error("[ChatContainer] Failed to save chat file:", e)
@@ -2313,7 +2335,7 @@ export class ChatContainer extends Component {
 	/** File-based save path — called when chatHistoryEnabled is true. */
 	private async historyPushToFile(
 		params: ChatHistoryItem,
-		vaultContext: any,
+		vaultContext: VaultContext | null | undefined,
 		_historyFilePath: string | null  // kept for signature compatibility; instance var used instead
 	): Promise<void> {
 		const messages = this.getMessages();
@@ -2325,7 +2347,7 @@ export class ChatContainer extends Component {
 				"", // title unused on update
 				messages,
 				params,
-				vaultContext,
+				vaultContext ?? undefined,
 				this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined,
 				this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined,
 				undefined, // projectName — unchanged on update
@@ -2375,7 +2397,7 @@ export class ChatContainer extends Component {
 			title,
 			messages,
 			params,
-			vaultContext,
+			vaultContext ?? undefined,
 			this.allToolCallsByTurn.size > 0 ? this.allToolCallsByTurn : undefined,
 			this.allSkillsByTurn.size > 0 ? this.allSkillsByTurn : undefined,
 			activeProject?.name,
@@ -3072,7 +3094,7 @@ export class ChatContainer extends Component {
 				const { remote } = require("electron");
 				// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 				const nodePath = require("path") as typeof import("path");
-				const lastDir = (this.plugin.settings as any).lastLocalPickerDirectory || undefined;
+				const lastDir = this.plugin.settings.lastLocalPickerDirectory || undefined;
 				remote.dialog.showOpenDialog({
 					title: "Attach file or folder",
 					defaultPath: lastDir,
@@ -3086,7 +3108,7 @@ export class ChatContainer extends Component {
 					// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; desktop-only lazy require behind the function-start Platform.isDesktop guard
 					const nodeFs = require("fs") as typeof import("fs");
 					const isDir = nodeFs.statSync(absPath).isDirectory();
-					(this.plugin.settings as any).lastLocalPickerDirectory = isDir ? absPath : nodePath.dirname(absPath);
+					this.plugin.settings.lastLocalPickerDirectory = isDir ? absPath : nodePath.dirname(absPath);
 					void this.plugin.saveSettings();
 
 					const label = nodePath.basename(absPath);

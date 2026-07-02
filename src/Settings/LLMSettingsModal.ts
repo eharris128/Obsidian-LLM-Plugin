@@ -1476,8 +1476,8 @@ export class LLMSettingsModal extends Modal {
 				dropdown.addOption("gemini", "Gemini");
 				dropdown.addOption("lmStudio", "LM Studio");
 				dropdown.setValue(currentProvider);
-				dropdown.onChange(async (value: any) => {
-					this.plugin.settings.ragSettings.embeddingProvider = value;
+				dropdown.onChange(async (value) => {
+					this.plugin.settings.ragSettings.embeddingProvider = value as EmbeddingProvider;
 					this.plugin.settings.ragSettings.embeddingModel = DEFAULT_EMBEDDING_MODELS[value as EmbeddingProvider];
 					await this.plugin.saveSettings();
 					this.plugin.initVaultIndexer();
@@ -1491,7 +1491,7 @@ export class LLMSettingsModal extends Modal {
 								await this.plugin.saveSettings();
 								new Notice(`✓ Vault indexed — ${indexed} updated, ${skipped} unchanged.`);
 							})
-							.catch((e: any) => new Notice(`Indexing failed: ${e?.message ?? String(e)}`));
+							.catch((e: unknown) => new Notice(`Indexing failed: ${getErrorMessage(e)}`));
 					}
 					// Re-render so provider-specific UI appears
 					this.renderTab("embeddings");
@@ -1568,7 +1568,7 @@ export class LLMSettingsModal extends Modal {
 									await this.plugin.saveSettings();
 									new Notice(`✓ Vault indexed — ${indexed} updated, ${skipped} unchanged.`);
 								})
-								.catch((e: any) => new Notice(`Indexing failed: ${e?.message ?? String(e)}`));
+								.catch((e: unknown) => new Notice(`Indexing failed: ${getErrorMessage(e)}`));
 						}
 					});
 				});

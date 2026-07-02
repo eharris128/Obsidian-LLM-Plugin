@@ -21,7 +21,7 @@ import { SearxngService } from "WebSearch/SearxngService";
 export type ShowPermissionUI = (
 	toolName: string,
 	toolDescription: string,
-	input: Record<string, any>
+	input: Record<string, unknown>
 ) => Promise<boolean>;
 
 export interface AgentCallbacks {
@@ -32,9 +32,9 @@ export interface AgentCallbacks {
 	/** Called between tool execution and the next API request — re-show thinking. */
 	onThinking: () => void;
 	/** Optional — called just before a tool executes so the UI can show which tool is running. */
-	onToolStart?: (toolName: string, input: Record<string, any>) => void;
+	onToolStart?: (toolName: string, input: Record<string, unknown>) => void;
 	/** Optional — called after each successful tool execution with the tool name, input, and result text. */
-	onToolResult?: (toolName: string, input: Record<string, any>, result: string) => void;
+	onToolResult?: (toolName: string, input: Record<string, unknown>, result: string) => void;
 	/** Optional — called with cumulative token counts after each model turn. */
 	onUsage?: (inputTokens: number, outputTokens: number) => void;
 }
@@ -87,7 +87,7 @@ export class AgentLoop {
 
 	private async checkPermission(
 		toolName: string,
-		input: Record<string, any>
+		input: Record<string, unknown>
 	): Promise<boolean> {
 		const risk = this.registry.getRisk(toolName);
 		const description = this.registry.getDescription(toolName);
@@ -119,7 +119,7 @@ export class AgentLoop {
 		const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
 		const tools = toAnthropicTools(this.getFilteredTools());
 
-		type ClaudeMsg = { role: "user" | "assistant"; content: any };
+		type ClaudeMsg = { role: "user" | "assistant"; content: string | Anthropic.ContentBlockParam[] };
 		const messages: ClaudeMsg[] = params.messages
 			.filter((m) => m.role !== "system")
 			.map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
@@ -182,13 +182,13 @@ export class AgentLoop {
 					}
 				} else if (event.type === "message_delta") {
 					stopReason = event.delta.stop_reason ?? null;
-					if ((event as any).usage) {
-						totalOutputTokens += (event as any).usage.output_tokens ?? 0;
+					if (event.usage) {
+						totalOutputTokens += event.usage.output_tokens ?? 0;
 					}
 				} else if (event.type === "message_start") {
-					if ((event as any).message?.usage) {
-						totalInputTokens += (event as any).message.usage.input_tokens ?? 0;
-						totalOutputTokens += (event as any).message.usage.output_tokens ?? 0;
+					if (event.message?.usage) {
+						totalInputTokens += event.message.usage.input_tokens ?? 0;
+						totalOutputTokens += event.message.usage.output_tokens ?? 0;
 					}
 				}
 			}
@@ -201,7 +201,7 @@ export class AgentLoop {
 				if (block.type === "text") {
 					assistantContent.push({ type: "text", text: block.text });
 				} else {
-					let input: Record<string, any> = {};
+					let input: Record<string, unknown> = {};
 					try { input = JSON.parse(block.inputJson || "{}"); } catch { /* ignore */ }
 					assistantContent.push({
 						type: "tool_use",
@@ -226,7 +226,7 @@ export class AgentLoop {
 			const toolResults: Anthropic.ToolResultBlockParam[] = [];
 			for (const block of blocks.values()) {
 				if (block.type !== "tool_use") continue;
-				let input: Record<string, any> = {};
+				let input: Record<string, unknown> = {};
 				try { input = JSON.parse(block.inputJson || "{}"); } catch { /* ignore */ }
 
 				callbacks.onToolStart?.(block.name, input);
@@ -366,7 +366,7 @@ export class AgentLoop {
 			// Execute tool calls
 			const toolResults: OpenAI.Chat.Completions.ChatCompletionToolMessageParam[] = [];
 			for (const tc of toolCalls) {
-				let input: Record<string, any> = {};
+				let input: Record<string, unknown> = {};
 				try { input = JSON.parse(tc.arguments); } catch { /* ignore */ }
 
 				let resultText: string;

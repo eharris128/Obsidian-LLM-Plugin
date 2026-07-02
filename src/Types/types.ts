@@ -103,7 +103,7 @@ export type RiskTier = "safe" | "write" | "danger";
 /** A single tool call made by the agent during a conversation turn. */
 export type ToolCallRecord = {
 	name: string;
-	input: Record<string, any>;
+	input: Record<string, unknown>;
 	result?: string;
 };
 
@@ -162,7 +162,7 @@ type GeminiSettings = {
 	topP: number;
 }
 
-type GPT4AllSettings = {};
+type GPT4AllSettings = Record<string, never>;
 
 export type SkillsSettings = {
 	/**

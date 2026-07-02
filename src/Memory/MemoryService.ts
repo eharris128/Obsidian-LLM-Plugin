@@ -255,13 +255,14 @@ Keep each content item to one clear, standalone sentence.`;
 			.trim();
 
 		try {
-			const parsed = JSON.parse(cleaned);
+			const parsed: unknown = JSON.parse(cleaned);
 			if (!Array.isArray(parsed)) return [];
 			return parsed.filter(
-				(item: any) =>
-					item &&
-					typeof item.content === "string" &&
-					["fact", "preference", "context"].includes(item.type)
+				(item): item is ExtractedMemory =>
+					!!item &&
+					typeof (item as { content?: unknown }).content === "string" &&
+					typeof (item as { type?: unknown }).type === "string" &&
+					["fact", "preference", "context"].includes((item as { type: string }).type)
 			);
 		} catch (e) {
 			logger.error("[Memory] Failed to parse extraction JSON:", cleaned, e);

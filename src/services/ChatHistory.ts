@@ -499,7 +499,7 @@ export class ChatHistory {
 			if (nameMatch) {
 				currentName = nameMatch[1];
 			} else if (inputMatch && currentName) {
-				let input: Record<string, any> = {};
+				let input: Record<string, unknown> = {};
 				try {
 					// Strip truncation marker before parsing
 					input = JSON.parse(inputMatch[1].replace(/…$/, ""));

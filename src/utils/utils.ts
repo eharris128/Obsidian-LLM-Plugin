@@ -12,26 +12,13 @@ import {
 	gemini2FlashStableModel,
 	images,
 } from "utils/constants";
-import { query as claudeCodeQuery, CanUseTool } from "@anthropic-ai/claude-agent-sdk";
+// IMPORTANT (KTD8): the agent SDK must never be statically value-imported —
+// a single surviving static import silently re-inlines its ~30 module-scope
+// Node require()s into the plugin's load path, crashing mobile. Type-only
+// imports are safe (erased at compile time); the runtime import is the
+// desktop-gated dynamic import() inside claudeCodeMessage().
+import type { CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 import { ensureSDKInstalled, getNativeBinaryPath } from "services/ClaudeAgentSDKInstaller";
-
-// Patch events.setMaxListeners for Electron compatibility.
-// The Agent SDK calls setMaxListeners(n, abortSignal), but Electron's
-// renderer-process AbortSignal doesn't extend Node.js EventTarget,
-// causing a TypeError. This wrapper catches and ignores that case.
-if (Platform.isDesktop) {
-	const events = require("events");
-	const _origSetMaxListeners = events.setMaxListeners;
-	if (_origSetMaxListeners) {
-		events.setMaxListeners = function (n: number, ...eventTargets: unknown[]) {
-			try {
-				return _origSetMaxListeners(n, ...eventTargets);
-			} catch {
-				// Electron: browser AbortSignal is not a Node.js EventTarget
-			}
-		};
-	}
-}
 import { models, modelNames } from "utils/models";
 import {
 	ChatParams,
@@ -298,6 +285,33 @@ export async function geminiMessage(
 	return stream;
 }
 
+let eventsMaxListenersPatched = false;
+
+/**
+ * Patch events.setMaxListeners for Electron compatibility.
+ * The Agent SDK calls setMaxListeners(n, abortSignal), but Electron's
+ * renderer-process AbortSignal doesn't extend Node.js EventTarget,
+ * causing a TypeError. This wrapper catches and ignores that case.
+ * Runs lazily on the desktop-only agent-SDK path — never at plugin load.
+ */
+function patchEventsMaxListenersOnce() {
+	if (!Platform.isDesktop) return;
+	if (eventsMaxListenersPatched) return;
+	eventsMaxListenersPatched = true;
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required behind the Platform.isDesktop guard above
+	const events = require("events");
+	const _origSetMaxListeners = events.setMaxListeners;
+	if (_origSetMaxListeners) {
+		events.setMaxListeners = function (n: number, ...eventTargets: unknown[]) {
+			try {
+				return _origSetMaxListeners(n, ...eventTargets);
+			} catch {
+				// Electron: browser AbortSignal is not a Node.js EventTarget
+			}
+		};
+	}
+}
+
 export async function claudeCodeMessage(
 	prompt: string,
 	oauthToken: string,
@@ -309,6 +323,12 @@ export async function claudeCodeMessage(
 ) {
 	if (!Platform.isDesktop) throw new Error("Claude Code is only available on desktop.");
 	await ensureSDKInstalled(pluginDir);
+	patchEventsMaxListenersOnce();
+	// Desktop-gated lazy import: esbuild emits the bundled SDK as an __esm
+	// closure executed on first import(), keeping its module-scope Node
+	// require()s out of the plugin's load graph (KTD8).
+	const { query: claudeCodeQuery } = await import("@anthropic-ai/claude-agent-sdk");
+	// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required behind the Platform.isDesktop guard at function start
 	const { spawn } = require("child_process");
 	const cliPath = getNativeBinaryPath(pluginDir);
 

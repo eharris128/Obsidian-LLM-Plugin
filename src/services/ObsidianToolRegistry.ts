@@ -1,7 +1,4 @@
-import { App, TFile } from "obsidian";
-import * as fs from "fs";
-import * as path from "path";
-import * as child_process from "child_process";
+import { App, Platform, TFile } from "obsidian";
 import { RiskTier } from "Types/types";
 import { getErrorMessage } from "utils/errorUtils";
 import { VaultIndexer } from "RAG/VaultIndexer";
@@ -315,6 +312,13 @@ export const ALL_TOOL_DEFINITIONS: NeutralToolDefinition[] = [
 ];
 
 export class ObsidianToolRegistry {
+	/** Tools backed by Node APIs — advertised and executable on desktop only. */
+	private static readonly DESKTOP_ONLY_TOOLS = [
+		"read_local_file",
+		"list_local_folder",
+		"run_shell_command",
+	];
+
 	private tools: NeutralToolDefinition[] = ALL_TOOL_DEFINITIONS;
 	/** Dynamic tools registered at runtime (e.g. invoke_assistant in agent mode). */
 	private dynamicTools: Map<string, { def: NeutralToolDefinition; executor: (input: any) => Promise<ToolResult> }> = new Map();
@@ -339,7 +343,19 @@ export class ObsidianToolRegistry {
 
 	getTools(): NeutralToolDefinition[] {
 		const dynamic = Array.from(this.dynamicTools.values()).map((d) => d.def);
-		return [...this.tools, ...dynamic];
+		return [...this.tools, ...dynamic].filter((t) => this.isToolAvailable(t.name));
+	}
+
+	/**
+	 * False for Node-backed tools on mobile. Callers must check this before the
+	 * permission gate — a user must never see a permission card for a tool that
+	 * cannot succeed on their platform. `executeTool` enforces it regardless.
+	 */
+	isToolAvailable(toolName: string): boolean {
+		if (!Platform.isDesktop && ObsidianToolRegistry.DESKTOP_ONLY_TOOLS.includes(toolName)) {
+			return false;
+		}
+		return true;
 	}
 
 	getRisk(toolName: string): RiskTier {
@@ -665,109 +681,14 @@ export class ObsidianToolRegistry {
 					return { success: false, error: `Unknown action: ${action}. Use 'list' or 'load'.` };
 				}
 
-				case "read_local_file": {
-					const { file_path: filePath, max_bytes: maxBytesArg } = input as { file_path: string; max_bytes?: string };
-					const maxBytes = Math.min(500000, Math.max(1, parseInt(maxBytesArg ?? "200000", 10) || 200000));
-					if (!path.isAbsolute(filePath)) {
-						return { success: false, error: `file_path must be an absolute path. Got: ${filePath}` };
-					}
-					if (!fs.existsSync(filePath)) {
-						return { success: false, error: `File not found: ${filePath}` };
-					}
-					const stat = fs.statSync(filePath);
-					if (stat.isDirectory()) {
-						return { success: false, error: `Path is a directory. Use list_local_folder to list its contents.` };
-					}
-					const fd = fs.openSync(filePath, "r");
-					const buf = Buffer.alloc(maxBytes);
-					const bytesRead = fs.readSync(fd, buf, 0, maxBytes, 0);
-					fs.closeSync(fd);
-					const content = buf.subarray(0, bytesRead).toString("utf8");
-					const truncated = bytesRead === maxBytes && stat.size > maxBytes;
-					const header = `File: ${filePath} (${stat.size} bytes${truncated ? `, showing first ${maxBytes}` : ""}):\n\n`;
-					return { success: true, result: header + content };
-				}
+				case "read_local_file":
+					return this.execReadLocalFile(input);
 
-				case "list_local_folder": {
-					const {
-						folder_path: folderPath,
-						recursive: recursiveArg,
-						extension,
-						max_entries: maxEntriesArg,
-					} = input as { folder_path: string; recursive?: string; extension?: string; max_entries?: string };
+				case "list_local_folder":
+					return this.execListLocalFolder(input);
 
-					if (!path.isAbsolute(folderPath)) {
-						return { success: false, error: `folder_path must be an absolute path. Got: ${folderPath}` };
-					}
-					if (!fs.existsSync(folderPath)) {
-						return { success: false, error: `Folder not found: ${folderPath}` };
-					}
-					const stat = fs.statSync(folderPath);
-					if (!stat.isDirectory()) {
-						return { success: false, error: `Path is not a directory. Use read_local_file to read a file.` };
-					}
-
-					const recursive = recursiveArg === "true";
-					const maxEntries = Math.min(500, Math.max(1, parseInt(maxEntriesArg ?? "200", 10) || 200));
-					const extFilter = extension ? extension.replace(/^\./, "").toLowerCase() : null;
-
-					const entries: string[] = [];
-					const walk = (dir: string) => {
-						if (entries.length >= maxEntries) return;
-						let items: string[];
-						try { items = fs.readdirSync(dir); } catch { return; }
-						for (const item of items) {
-							if (entries.length >= maxEntries) break;
-							const full = path.join(dir, item);
-							let itemStat: fs.Stats;
-							try { itemStat = fs.statSync(full); } catch { continue; }
-							if (itemStat.isDirectory()) {
-								entries.push(full + "/");
-								if (recursive) walk(full);
-							} else {
-								if (!extFilter || path.extname(item).replace(/^\./, "").toLowerCase() === extFilter) {
-									entries.push(full);
-								}
-							}
-						}
-					};
-					walk(folderPath);
-
-					if (entries.length === 0) {
-						return { success: true, result: `No entries found in ${folderPath}${extFilter ? ` (filter: .${extFilter})` : ""}.` };
-					}
-					const truncated = entries.length >= maxEntries;
-					const header = `${entries.length} entr${entries.length === 1 ? "y" : "ies"} in ${folderPath}${truncated ? " (truncated)" : ""}:\n\n`;
-					return { success: true, result: header + entries.join("\n") };
-				}
-
-				case "run_shell_command": {
-					const { command, cwd: cwdArg, timeout_ms: timeoutArg } = input as { command: string; cwd?: string; timeout_ms?: string };
-					const timeoutMs = Math.min(60000, Math.max(1000, parseInt(timeoutArg ?? "15000", 10) || 15000));
-					const cwd = cwdArg ?? (this.app.vault.adapter as any).basePath ?? process.cwd();
-
-					return new Promise<ToolResult>((resolve) => {
-						child_process.exec(
-							command,
-							{ cwd, timeout: timeoutMs, maxBuffer: 2 * 1024 * 1024 },
-							(err, stdout, stderr) => {
-								const out = [
-									stdout ? `stdout:\n${stdout}` : "",
-									stderr ? `stderr:\n${stderr}` : "",
-								].filter(Boolean).join("\n\n");
-								if (err && !stdout && !stderr) {
-									resolve({ success: false, error: `Command failed (exit ${err.code ?? "?"}): ${err.message}` });
-								} else {
-									resolve({
-										success: !err || !!stdout,
-										result: out || "(no output)",
-										...(err ? { error: `Exited with code ${err.code ?? "?"}` } : {}),
-									});
-								}
-							}
-						);
-					});
-				}
+				case "run_shell_command":
+					return this.execRunShellCommand(input);
 
 				default:
 					return { success: false, error: `Unknown tool: ${name}` };
@@ -775,5 +696,133 @@ export class ObsidianToolRegistry {
 		} catch (e) {
 			return { success: false, error: getErrorMessage(e) };
 		}
+	}
+
+	// ---------------------------------------------------------------------------
+	// Desktop-only tools — Node APIs are lazily required behind Platform.isDesktop
+	// so nothing Node-backed executes at plugin load (mobile-safe load graph).
+	// ---------------------------------------------------------------------------
+
+	private execReadLocalFile(input: Record<string, any>): ToolResult {
+		if (!Platform.isDesktop) {
+			return { success: false, error: "read_local_file is only available in Obsidian Desktop." };
+		}
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required behind the Platform.isDesktop guard above
+		const fs = require("fs") as typeof import("fs");
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required behind the Platform.isDesktop guard above
+		const path = require("path") as typeof import("path");
+		const { file_path: filePath, max_bytes: maxBytesArg } = input as { file_path: string; max_bytes?: string };
+		const maxBytes = Math.min(500000, Math.max(1, parseInt(maxBytesArg ?? "200000", 10) || 200000));
+		if (!path.isAbsolute(filePath)) {
+			return { success: false, error: `file_path must be an absolute path. Got: ${filePath}` };
+		}
+		if (!fs.existsSync(filePath)) {
+			return { success: false, error: `File not found: ${filePath}` };
+		}
+		const stat = fs.statSync(filePath);
+		if (stat.isDirectory()) {
+			return { success: false, error: `Path is a directory. Use list_local_folder to list its contents.` };
+		}
+		const fd = fs.openSync(filePath, "r");
+		const buf = Buffer.alloc(maxBytes);
+		const bytesRead = fs.readSync(fd, buf, 0, maxBytes, 0);
+		fs.closeSync(fd);
+		const content = buf.subarray(0, bytesRead).toString("utf8");
+		const truncated = bytesRead === maxBytes && stat.size > maxBytes;
+		const header = `File: ${filePath} (${stat.size} bytes${truncated ? `, showing first ${maxBytes}` : ""}):\n\n`;
+		return { success: true, result: header + content };
+	}
+
+	private execListLocalFolder(input: Record<string, any>): ToolResult {
+		if (!Platform.isDesktop) {
+			return { success: false, error: "list_local_folder is only available in Obsidian Desktop." };
+		}
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required behind the Platform.isDesktop guard above
+		const fs = require("fs") as typeof import("fs");
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required behind the Platform.isDesktop guard above
+		const path = require("path") as typeof import("path");
+		const {
+			folder_path: folderPath,
+			recursive: recursiveArg,
+			extension,
+			max_entries: maxEntriesArg,
+		} = input as { folder_path: string; recursive?: string; extension?: string; max_entries?: string };
+
+		if (!path.isAbsolute(folderPath)) {
+			return { success: false, error: `folder_path must be an absolute path. Got: ${folderPath}` };
+		}
+		if (!fs.existsSync(folderPath)) {
+			return { success: false, error: `Folder not found: ${folderPath}` };
+		}
+		const stat = fs.statSync(folderPath);
+		if (!stat.isDirectory()) {
+			return { success: false, error: `Path is not a directory. Use read_local_file to read a file.` };
+		}
+
+		const recursive = recursiveArg === "true";
+		const maxEntries = Math.min(500, Math.max(1, parseInt(maxEntriesArg ?? "200", 10) || 200));
+		const extFilter = extension ? extension.replace(/^\./, "").toLowerCase() : null;
+
+		const entries: string[] = [];
+		const walk = (dir: string) => {
+			if (entries.length >= maxEntries) return;
+			let items: string[];
+			try { items = fs.readdirSync(dir); } catch { return; }
+			for (const item of items) {
+				if (entries.length >= maxEntries) break;
+				const full = path.join(dir, item);
+				let itemStat: import("fs").Stats;
+				try { itemStat = fs.statSync(full); } catch { continue; }
+				if (itemStat.isDirectory()) {
+					entries.push(full + "/");
+					if (recursive) walk(full);
+				} else {
+					if (!extFilter || path.extname(item).replace(/^\./, "").toLowerCase() === extFilter) {
+						entries.push(full);
+					}
+				}
+			}
+		};
+		walk(folderPath);
+
+		if (entries.length === 0) {
+			return { success: true, result: `No entries found in ${folderPath}${extFilter ? ` (filter: .${extFilter})` : ""}.` };
+		}
+		const truncated = entries.length >= maxEntries;
+		const header = `${entries.length} entr${entries.length === 1 ? "y" : "ies"} in ${folderPath}${truncated ? " (truncated)" : ""}:\n\n`;
+		return { success: true, result: header + entries.join("\n") };
+	}
+
+	private execRunShellCommand(input: Record<string, any>): Promise<ToolResult> | ToolResult {
+		if (!Platform.isDesktop) {
+			return { success: false, error: "run_shell_command is only available in Obsidian Desktop." };
+		}
+		// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required behind the Platform.isDesktop guard above
+		const child_process = require("child_process") as typeof import("child_process");
+		const { command, cwd: cwdArg, timeout_ms: timeoutArg } = input as { command: string; cwd?: string; timeout_ms?: string };
+		const timeoutMs = Math.min(60000, Math.max(1000, parseInt(timeoutArg ?? "15000", 10) || 15000));
+		const cwd = cwdArg ?? (this.app.vault.adapter as any).basePath ?? process.cwd();
+
+		return new Promise<ToolResult>((resolve) => {
+			child_process.exec(
+				command,
+				{ cwd, timeout: timeoutMs, maxBuffer: 2 * 1024 * 1024 },
+				(err, stdout, stderr) => {
+					const out = [
+						stdout ? `stdout:\n${stdout}` : "",
+						stderr ? `stderr:\n${stderr}` : "",
+					].filter(Boolean).join("\n\n");
+					if (err && !stdout && !stderr) {
+						resolve({ success: false, error: `Command failed (exit ${err.code ?? "?"}): ${err.message}` });
+					} else {
+						resolve({
+							success: !err || !!stdout,
+							result: out || "(no output)",
+							...(err ? { error: `Exited with code ${err.code ?? "?"}` } : {}),
+						});
+					}
+				}
+			);
+		});
 	}
 }

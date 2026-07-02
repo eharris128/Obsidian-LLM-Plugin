@@ -230,9 +230,13 @@ export class AgentLoop {
 				try { input = JSON.parse(block.inputJson || "{}"); } catch { /* ignore */ }
 
 				callbacks.onToolStart?.(block.name, input);
-				const allowed = await this.checkPermission(block.name, input);
 				let resultText: string;
-				if (allowed) {
+				if (!this.registry.isToolAvailable(block.name)) {
+					// Platform-unavailable tool (e.g. Node-backed on mobile): skip the
+					// permission card and surface the registry's error to the model.
+					const result = await this.registry.executeTool(block.name, input);
+					resultText = `Error: ${result.error}`;
+				} else if (await this.checkPermission(block.name, input)) {
 					const result = await this.registry.executeTool(block.name, input);
 					resultText = result.success ? (result.result ?? "Done.") : `Error: ${result.error}`;
 					if (result.success) callbacks.onToolResult?.(block.name, input, resultText);
@@ -365,9 +369,13 @@ export class AgentLoop {
 				let input: Record<string, any> = {};
 				try { input = JSON.parse(tc.arguments); } catch { /* ignore */ }
 
-				const allowed = await this.checkPermission(tc.name, input);
 				let resultText: string;
-				if (allowed) {
+				if (!this.registry.isToolAvailable(tc.name)) {
+					// Platform-unavailable tool (e.g. Node-backed on mobile): skip the
+					// permission card and surface the registry's error to the model.
+					const result = await this.registry.executeTool(tc.name, input);
+					resultText = `Error: ${result.error}`;
+				} else if (await this.checkPermission(tc.name, input)) {
 					const result = await this.registry.executeTool(tc.name, input);
 					resultText = result.success ? (result.result ?? "Done.") : `Error: ${result.error}`;
 					if (result.success) callbacks.onToolResult?.(tc.name, input, resultText);

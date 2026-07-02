@@ -408,20 +408,27 @@ export default class LLMPlugin extends Plugin {
 
 		// Configure ONNX env before any pipeline call — sets cache dir to the
 		// plugin's OS path so transformers.js uses Node.js https (not browser
-		// fetch), bypassing Obsidian's Content Security Policy.
-		const vaultBasePath = (this.app.vault.adapter as any).basePath;
-		const pluginOsDir = require("path").join(vaultBasePath, this.manifest.dir);
-		EmbeddingService.configure(pluginOsDir);
+		// fetch), bypassing Obsidian's Content Security Policy. Desktop-only:
+		// local ONNX embeddings need Node and the vault's OS base path, and a
+		// desktop-synced data.json must not arm embedding attempts on mobile.
+		if (Platform.isDesktop) {
+			const vaultBasePath = (this.app.vault.adapter as any).basePath;
+			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required inside the Platform.isDesktop block
+			const pluginOsDir = require("path").join(vaultBasePath, this.manifest.dir);
+			EmbeddingService.configure(pluginOsDir);
+		}
 
 		this.initVaultIndexer();
-		if (this.settings.ragSettings?.enabled && this.settings.ragSettings?.modelCached
+		if (Platform.isDesktop && this.settings.ragSettings?.enabled && this.settings.ragSettings?.modelCached
 				&& (this.settings.ragSettings?.embeddingProvider ?? "onnx") === "onnx") {
 			EmbeddingService.loadOnnx().catch(e => logger.error("[RAG] Failed to warm up ONNX model:", e));
 		}
 		this.initMemoryService();
 		this.initWhisperService();
 		this.initSearxngService();
-		this.registerRagVaultEvents();
+		if (Platform.isDesktop) {
+			this.registerRagVaultEvents();
+		}
 		this.skillRegistry = new SkillRegistry(this.app);
 		this.projectManager = new ProjectManager(this.app);
 		this.assistantManager = new AssistantManager(this.app);

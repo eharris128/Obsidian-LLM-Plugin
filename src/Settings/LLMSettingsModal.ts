@@ -5,6 +5,7 @@ import {
 	DropdownComponent,
 	Modal,
 	Notice,
+	Platform,
 	requestUrl,
 	Setting,
 	setIcon,
@@ -971,36 +972,44 @@ export class LLMSettingsModal extends Modal {
 			});
 		});
 
-		// Runtime SDK install
-		const vaultBasePath = (this.plugin.app.vault.adapter as any).getBasePath?.() ?? "";
-		const pluginDir = require("path").join(vaultBasePath, this.plugin.manifest.dir);
-		const sdkAlreadyInstalled = isSDKInstalled(pluginDir);
-		const sdkInstallSetting = new Setting(authItems)
-			.setName("Runtime SDK")
-			.setDesc(sdkAlreadyInstalled
-				? "Claude Code runtime SDK is installed."
-				: "The Claude Code runtime SDK (~69 MB) must be downloaded before use. Requires npm and an internet connection.");
-		let sdkStatusEl: HTMLElement | null = null;
-		if (!sdkAlreadyInstalled) {
-			sdkInstallSetting.addButton((btn) => {
-				btn.setButtonText("Download SDK");
-				btn.onClick(async () => {
-					if (sdkStatusEl) sdkStatusEl.remove();
-					sdkStatusEl = sdkInstallSetting.descEl.createDiv({ cls: "llm-api-test-status llm-api-test-running", text: "Downloading (~69 MB)…" });
-					btn.setDisabled(true);
-					try {
-						await ensureSDKInstalled(pluginDir);
-						sdkStatusEl.className = "llm-api-test-status llm-api-test-ok";
-						sdkStatusEl.setText("✓ Runtime SDK installed.");
-						sdkInstallSetting.setDesc("Claude Code runtime SDK is installed.");
-						btn.buttonEl.remove();
-					} catch (e) {
-						sdkStatusEl.className = "llm-api-test-status llm-api-test-fail";
-						sdkStatusEl.setText(`✗ ${getErrorMessage(e) || "Installation failed"}`);
-						btn.setDisabled(false);
-					}
+		// Runtime SDK install — desktop-only: the installer needs Node (fs/npm)
+		// and Claude Code itself never runs on mobile.
+		if (Platform.isDesktop) {
+			const vaultBasePath = (this.plugin.app.vault.adapter as any).getBasePath?.() ?? "";
+			// eslint-disable-next-line @typescript-eslint/no-require-imports -- Node builtin; lazily required inside the Platform.isDesktop block
+			const pluginDir = require("path").join(vaultBasePath, this.plugin.manifest.dir);
+			const sdkAlreadyInstalled = isSDKInstalled(pluginDir);
+			const sdkInstallSetting = new Setting(authItems)
+				.setName("Runtime SDK")
+				.setDesc(sdkAlreadyInstalled
+					? "Claude Code runtime SDK is installed."
+					: "The Claude Code runtime SDK (~69 MB) must be downloaded before use. Requires npm and an internet connection.");
+			let sdkStatusEl: HTMLElement | null = null;
+			if (!sdkAlreadyInstalled) {
+				sdkInstallSetting.addButton((btn) => {
+					btn.setButtonText("Download SDK");
+					btn.onClick(async () => {
+						if (sdkStatusEl) sdkStatusEl.remove();
+						sdkStatusEl = sdkInstallSetting.descEl.createDiv({ cls: "llm-api-test-status llm-api-test-running", text: "Downloading (~69 MB)…" });
+						btn.setDisabled(true);
+						try {
+							await ensureSDKInstalled(pluginDir);
+							sdkStatusEl.className = "llm-api-test-status llm-api-test-ok";
+							sdkStatusEl.setText("✓ Runtime SDK installed.");
+							sdkInstallSetting.setDesc("Claude Code runtime SDK is installed.");
+							btn.buttonEl.remove();
+						} catch (e) {
+							sdkStatusEl.className = "llm-api-test-status llm-api-test-fail";
+							sdkStatusEl.setText(`✗ ${getErrorMessage(e) || "Installation failed"}`);
+							btn.setDisabled(false);
+						}
+					});
 				});
-			});
+			}
+		} else {
+			new Setting(authItems)
+				.setName("Runtime SDK")
+				.setDesc("Claude Code is only available in Obsidian Desktop.");
 		}
 	}
 

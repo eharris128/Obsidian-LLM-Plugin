@@ -3211,6 +3211,9 @@ export class ChatContainer extends Component {
 			}
 			// Cloud providers: only show if an API key has been entered
 			if (type === openAI && !openAIAPIKey) continue;
+			// Claude Code needs the desktop-only runtime SDK — a desktop-selected
+			// model can still sync in via data.json, but never offer it on mobile.
+			if (type === claudeCode && !Platform.isDesktop) continue;
 			if ((type === claude || type === claudeCode) && !claudeAPIKey) continue;
 			if (type === gemini && !geminiAPIKey) continue;
 			if (type === mistral && !mistralAPIKey) continue;

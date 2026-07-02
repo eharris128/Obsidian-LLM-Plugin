@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "node scripts/check-manifest.mjs && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"lint": "eslint src",
+		"lint": "eslint src --max-warnings=0",
 		"lint:fix": "eslint src --fix",
 		"lint:manifest": "node scripts/check-manifest.mjs",
 		"version": "node version-bump.mjs && git add manifest.json versions.json",

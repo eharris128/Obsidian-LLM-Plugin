@@ -92,11 +92,12 @@ export class SearxngService {
 			);
 		}
 
+		const asString = (v: unknown): string => (typeof v === "string" ? v : "");
 		return (data.results ?? []).slice(0, limit).map((r) => ({
-			title:   String(r.title   ?? ""),
-			url:     String(r.url     ?? ""),
-			content: String(r.content ?? ""),
-			engine:  r.engine ? String(r.engine) : undefined,
+			title:   asString(r.title),
+			url:     asString(r.url),
+			content: asString(r.content),
+			engine:  typeof r.engine === "string" ? r.engine : undefined,
 		}));
 	}
 

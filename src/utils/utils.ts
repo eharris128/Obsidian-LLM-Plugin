@@ -49,10 +49,14 @@ async function retryWithBackoff<T>(
 				continue;
 			}
 			if (status === 429) {
-				const retryAfter =
+				const retryAfterRaw =
 					e?.headers?.get?.("retry-after") ??
 					e?.headers?.["retry-after"] ??
 					e?.errorDetails?.[0]?.metadata?.retry_delay;
+				const retryAfter =
+					typeof retryAfterRaw === "string" || typeof retryAfterRaw === "number"
+						? String(retryAfterRaw)
+						: null;
 				const retryMsg = retryAfter
 					? `Rate limit exceeded — retry after ${retryAfter} seconds.`
 					: "Rate limit exceeded — please wait a moment and try again.";

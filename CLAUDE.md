@@ -7,12 +7,22 @@ Guidance for Claude Code when working in this repository — an Obsidian plugin 
 ```bash
 npm run dev      # watch mode (esbuild)
 npm run build    # production build (tsc type-check + esbuild bundle)
-npm run lint     # eslint src  (lint:fix to autofix) — prefer-const/eqeqeq/no-console are warnings
+npm run lint     # eslint src --max-warnings=0 — obsidianmd preset + type-checked rules; must stay clean (scorecard parity)
 npm run version  # bump manifest.json and versions.json
 npm run test:e2e # E2E suite — real sandboxed Obsidian via wdio-obsidian-service (see test/README.md)
 ```
 
-Output bundles to `main.js` in the root. esbuild targets CommonJS/ES2018; `obsidian`, `electron`, `@codemirror/*`, and Node builtins are external; SVGs load inline. TypeScript uses strict null checks, baseUrl `src`. The esbuild banner defines an `import.meta.url` shim (`__import_meta_url`) — `@anthropic-ai/claude-agent-sdk` calls `createRequire(import.meta.url)` at module scope, which would otherwise throw on load in CJS output. Don't remove the `define`/banner pair.
+Output bundles to `main.js` in the root. esbuild targets CommonJS/ES2018; `obsidian`, `electron`, `@codemirror/*`, and Node builtins are external; SVGs load inline. TypeScript is `strict: true`, baseUrl `src`. The esbuild banner defines an `import.meta.url` shim (`__import_meta_url`) — `@anthropic-ai/claude-agent-sdk` calls `createRequire(import.meta.url)` at module scope, which would otherwise throw on load in CJS output. Don't remove the `define`/banner pair.
+
+### Node/Electron access pattern (mobile safety — scorecard-enforced)
+
+The plugin ships `isDesktopOnly: false`; **nothing in the load graph may touch Node or Electron.** Every access is lazy and guarded by the literal `Platform.isDesktop` in a shape `obsidianmd/no-nodejs-modules` recognizes: an `if (!Platform.isDesktop) throw/return` as the *first statement of the enclosing function*, an `if (Platform.isDesktop) { … }` block, `&&`, or a ternary. Pattern by module kind:
+
+- **Bundled dependency (`@anthropic-ai/claude-agent-sdk`)** — desktop-gated dynamic `import()` (esbuild wraps it in a lazy `__esm` closure). Never add a static value-import of the SDK anywhere — one surviving import silently re-inlines its module-scope Node requires into the load path with no build error (type-only imports are fine). After touching that area, verify the bundle: the only `init_sdk*()` call for the agent SDK must sit inside `Promise.resolve().then(...)`.
+- **External modules (Node builtins, `electron`)** — guarded `require()` typed `as typeof import("x")`, each with a described `eslint-disable-next-line @typescript-eslint/no-require-imports -- …`. **Never convert these to dynamic `import()`** — esbuild leaves external dynamic imports as native `import()` in CJS output, which rejects at runtime.
+- **`require("__ORT_ABS_PATH__")`** (`EmbeddingService`) — literal string is a build contract; `esbuild.config.mjs` `patchBundle()` rewrites it.
+
+Desktop-only agent tools (`read_local_file`, `list_local_folder`, `run_shell_command`) are hidden from `getTools()` on mobile *and* guarded in their executors; `ObsidianToolRegistry.isToolAvailable()` must be checked before the permission gate so mobile users never see a permission card for a tool that cannot run.
 
 E2E conventions live in `test/README.md` — notably: never point `wdio.conf.mts` `plugins:` at `"."` (the service copies `data.json` — real API keys — into test vaults; always stage via `scripts/stage-plugin.mjs`), and never hardcode the plugin id in specs (read `PLUGIN_ID` from `test/specs/helpers.ts`).
 

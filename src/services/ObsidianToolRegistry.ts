@@ -679,7 +679,7 @@ export class ObsidianToolRegistry {
 						return { success: true, result: lines.join("\n") };
 					}
 
-					return { success: false, error: `Unknown action: ${action}. Use 'list' or 'load'.` };
+					return { success: false, error: `Unknown action: ${String(action)}. Use 'list' or 'load'.` };
 				}
 
 				case "read_local_file":

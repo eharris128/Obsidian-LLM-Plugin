@@ -3,7 +3,22 @@ title: "fix: Remediate Obsidian community scorecard warnings"
 type: fix
 date: 2026-07-01
 deepened: 2026-07-01
+implemented: 2026-07-01
 ---
+
+> **Implementation status (2026-07-01):** U1–U10 landed, one commit per unit.
+> Every scorecard category is at zero locally; `npm run lint` enforces
+> `--max-warnings=0`. Confirmed residuals for the rescan (R11):
+> system-identity disclosure (SDK installer / sidecar), `.llm-hidden`
+> `!important`, caret-mirror and message-bubble-transparency `!important`
+> blocks (justified in styles.css), and bundled-dep findings outside `src/`.
+> Locally disabled non-scanner rules (deferred follow-up, documented in
+> `eslint.config.mjs`): `no-unsafe-*` family, `ui/sentence-case`,
+> `prefer-create-el`, `settings-tab/prefer-setting-definitions`.
+> Outstanding user actions: push + release tag, trigger the scorecard rescan
+> on community.obsidian.md, and the manual checklists (popout windows,
+> Whisper round-trip, SDK installer, /attach, mobile device with
+> desktop-synced data.json).
 
 # fix: Remediate Obsidian community scorecard warnings
 

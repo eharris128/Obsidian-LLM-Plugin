@@ -1112,7 +1112,7 @@ export class ChatContainer extends Component {
 							const truncNote = read === MAX_FILE_BYTES && st.size > MAX_FILE_BYTES ? ` (truncated to first ${MAX_FILE_BYTES} bytes)` : "";
 							blocks.push(`# Attached file: ${entry.label}\nPath: ${entry.absPath}${truncNote}\n\nThis file is pre-loaded below. Do NOT use file-reading tools to re-read it.\n\n\`\`\`${ext}\n${buf.subarray(0, read).toString("utf8")}\n\`\`\``);
 						} catch (e) {
-							blocks.push(`# Attached file: ${entry.label}\n\n(Error reading file: ${e})`);
+							blocks.push(`# Attached file: ${entry.label}\n\n(Error reading file: ${getErrorMessage(e)})`);
 						}
 					}
 				}
@@ -1776,7 +1776,7 @@ export class ChatContainer extends Component {
 	): Promise<import("@anthropic-ai/claude-agent-sdk").PermissionResult> {
 		const label = options.title ?? `Claude wants to use: ${toolName.replace(/_/g, " ")}`;
 		const desc = options.description ?? options.displayName ?? "";
-		const allowed = await this.showPermissionUI(toolName, label + (desc ? `\n${desc}` : ""), input as Record<string, unknown>);
+		const allowed = await this.showPermissionUI(toolName, label + (desc ? `\n${desc}` : ""), input);
 		if (allowed) {
 			return { behavior: "allow", updatedInput: input };
 		}

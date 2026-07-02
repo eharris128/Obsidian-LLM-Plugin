@@ -412,7 +412,7 @@ export class EmbeddingService {
 			case "gemini":   return this.embedBatchGemini(texts, m);
 			case "ollama":   return this.embedBatchOllama(texts, m);
 			case "lmStudio": return this.embedBatchLMStudio(texts, m);
-			default: throw new Error(`[RAG] Unknown provider: ${provider}`);
+			default: throw new Error(`[RAG] Unknown provider: ${String(provider)}`);
 		}
 	}
 

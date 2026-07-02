@@ -57,7 +57,11 @@ function setDestructiveCompat(btn: ButtonComponent): ButtonComponent {
 	if (requireApiVersion("1.13.0")) {
 		btn.setDestructive();
 	} else {
-		btn.setWarning();
+		// setWarning() is deprecated in 1.13+ in favour of setDestructive(),
+		// but this branch only runs on builds where setDestructive doesn't
+		// exist yet — call it structurally so the deprecation (correctly)
+		// doesn't apply to the pre-1.13 code path.
+		(btn as unknown as { setWarning(): ButtonComponent }).setWarning();
 	}
 	return btn;
 }

@@ -114,6 +114,7 @@ Each feature has a path-scoped rules file under `.claude/rules/` that loads auto
 | Chat Details Panel — live context sidebar | `src/Plugin/ChatDetailsView/` | `chat-details.md` |
 | Feature gates — `featureSettings` toggles in settings modal | `src/Settings/` | `feature-gates.md` |
 | DOM visibility & inline styles — `.llm-hidden`, native hide/show, dynamic-only `style.*` | `src/Plugin/`, `src/Settings/`, `styles.css` | `obsidian-styling.md` |
+| MCP Server — built-in Streamable HTTP server for external clients | `src/mcp/` | `mcp-server.md` |
 
 Shared conventions across features: Skills/Projects/Assistants/Memories folders all derive from `rootVaultFolder` (default `"AI"`); managers (`SkillRegistry`, `ProjectManager`, `AssistantManager`) follow the same discovery/parsing/hot-reload pattern and have `reinit*()` methods called on `rootVaultFolder` change; all settings sub-objects are deep-merged in `loadSettings()`.
 

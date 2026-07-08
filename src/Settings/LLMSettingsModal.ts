@@ -13,6 +13,7 @@ import {
 	TFile,
 } from "obsidian";
 import { FeatureSettings } from "Types/types";
+import { generateMcpToken } from "mcp/token";
 import { changeDefaultModel, fetchOllamaModels, fetchOllamaContextWindows, fetchLMStudioModels, getGpt4AllPath } from "utils/utils";
 import { getErrorMessage } from "utils/errorUtils";
 import { AdapterWithBasePath, AppWithSetting } from "Types/obsidian-internals";
@@ -116,6 +117,7 @@ export class LLMSettingsModal extends Modal {
 				{ id: "projects",       label: "Projects",        icon: "folder-open",     featureGate: "projects" },
 				{ id: "assistants",     label: "Assistants",      icon: "bot",             featureGate: "assistants" },
 				{ id: "transcription",  label: "Transcription",   icon: "mic",             featureGate: "transcription" },
+				{ id: "mcp-server",     label: "MCP Server",      icon: "server",          featureGate: "mcpServer" },
 			],
 		},
 		{
@@ -307,6 +309,7 @@ export class LLMSettingsModal extends Modal {
 			case "assistants":      this.renderAssistants();      break;
 			case "obsidian-agent":  this.renderObsidianAgent();   break;
 			case "transcription":   this.renderTranscription();   break;
+			case "mcp-server":      this.renderMcpServer();       break;
 		}
 	}
 
@@ -582,6 +585,25 @@ export class LLMSettingsModal extends Modal {
 					this.plugin.initVaultIndexer();
 				},
 			},
+			{
+				key: "mcpServer",
+				name: "MCP Server",
+				desc: "Runs a local MCP (Model Context Protocol) server so Claude Desktop or other MCP clients can read and write this vault directly, subject to the same permission confirmation as in-app agent actions.",
+				onEnable: async () => {
+					this.plugin.settings.mcpServerSettings.enabled = true;
+					await this.plugin.saveSettings();
+					await this.plugin.initMcpServer();
+				},
+				onDisable: async () => {
+					this.plugin.settings.mcpServerSettings.enabled = false;
+					if (this.activeTab === "mcp-server") {
+						this.activeTab = "general";
+						this.renderTab("general");
+					}
+					await this.plugin.saveSettings();
+					await this.plugin.initMcpServer();
+				},
+			},
 		];
 
 		for (const def of featureDefs) {
@@ -601,6 +623,7 @@ export class LLMSettingsModal extends Modal {
 									assistants: false,
 									memory: false,
 									vaultSearch: false,
+									mcpServer: false,
 								};
 							}
 							this.plugin.settings.featureSettings[def.key] = value;
@@ -2581,6 +2604,108 @@ export class LLMSettingsModal extends Modal {
 					await this.plugin.saveSettings();
 				});
 			});
+	}
+
+	private renderMcpServer() {
+		const el = this.mainContentEl;
+		const s = this.plugin.settings.mcpServerSettings;
+
+		if (!Platform.isDesktop) {
+			const notice = this.addSettingGroup(el);
+			new Setting(notice)
+				.setName("Desktop only")
+				.setDesc("The MCP server requires a local network listener and is not available on mobile.");
+			return;
+		}
+
+		// ── Enable ───────────────────────────────────────────────────────────
+		const enableGroup = this.addSettingGroup(el);
+		new Setting(enableGroup)
+			.setName("Enable MCP server")
+			.setDesc(
+				"Runs a local MCP (Model Context Protocol) server on 127.0.0.1 so Claude Desktop or another " +
+				"MCP client can read and write this vault. Writes (create, edit, move, delete) still require " +
+				"your confirmation in a popup, exactly like in-app agent actions."
+			)
+			.addToggle((toggle) => {
+				toggle.setValue(s.enabled).onChange(async (value) => {
+					this.plugin.settings.mcpServerSettings.enabled = value;
+					await this.plugin.saveSettings();
+					await this.plugin.initMcpServer();
+					this.renderTab("mcp-server");
+				});
+			});
+
+		if (!s.enabled) return;
+
+		// ── Connection ───────────────────────────────────────────────────────
+		const connGroup = this.addSettingGroup(el, "Connection");
+
+		new Setting(connGroup)
+			.setName("Port")
+			.setDesc("Port the server listens on (127.0.0.1 only). Restarts the server when changed.")
+			.addText((text) => {
+				text.setValue(String(s.port)).onChange(async (value) => {
+					const port = parseInt(value, 10);
+					if (!Number.isInteger(port) || port < 1 || port > 65535) return;
+					this.plugin.settings.mcpServerSettings.port = port;
+					await this.plugin.saveSettings();
+					await this.plugin.initMcpServer();
+				});
+			});
+
+		let tokenTextEl: HTMLInputElement | undefined;
+		new Setting(connGroup)
+			.setName("Bearer token")
+			.setDesc("Required on every request as \"Authorization: Bearer <token>\".")
+			.addText((text) => {
+				tokenTextEl = text.inputEl;
+				text.setValue(s.token).setDisabled(true);
+				text.inputEl.addClass("llm-mcp-token-field");
+			})
+			.addButton((btn) => {
+				btn.setButtonText("Copy").onClick(async () => {
+					await navigator.clipboard.writeText(this.plugin.settings.mcpServerSettings.token);
+					new Notice("Token copied to clipboard.");
+				});
+			})
+			.addButton((btn) => {
+				btn.setButtonText("Regenerate").onClick(async () => {
+					this.plugin.settings.mcpServerSettings.token = generateMcpToken();
+					await this.plugin.saveSettings();
+					if (tokenTextEl) tokenTextEl.value = this.plugin.settings.mcpServerSettings.token;
+					new Notice("Bearer token regenerated. Update any connected MCP clients.");
+				});
+			});
+
+		// ── Claude Desktop config snippet ───────────────────────────────────
+		const configGroup = this.addSettingGroup(el, "Claude Desktop setup");
+		new Setting(configGroup)
+			.setName("claude_desktop_config.json")
+			.setDesc("Add this entry to your Claude Desktop config's \"mcpServers\" object, then restart Claude Desktop.");
+
+		const snippet = JSON.stringify(
+			{
+				mcpServers: {
+					"obsidian-vault": {
+						url: `http://127.0.0.1:${s.port}/mcp`,
+						headers: { Authorization: `Bearer ${s.token}` },
+					},
+				},
+			},
+			null,
+			2
+		);
+
+		const pre = configGroup.createEl("pre", { cls: "llm-mcp-config-snippet" });
+		pre.createEl("code", { text: snippet });
+
+		new Setting(configGroup).addButton((btn) => {
+			btn.setButtonText("Copy snippet").onClick(async () => {
+				await navigator.clipboard.writeText(snippet);
+				new Notice("Config snippet copied to clipboard.");
+			});
+		});
 	}
 
 	// ── Helpers ────────────────────────────────────────────────────────────────

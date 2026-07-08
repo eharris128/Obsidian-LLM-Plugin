@@ -54,15 +54,24 @@ const context = await esbuild.context({
 	logLevel: "info",
 	sourcemap: prod ? false : "inline",
 	treeShaking: true,
-	outfile: "../large-language-models/main.js",
+	outfile: "main.js",
 });
+
+// Local dev convenience only: when this repo sits inside an Obsidian vault's
+// plugins/ folder alongside a sibling "large-language-models" folder (the one
+// Obsidian actually loads from), mirror build output there too. Absent in CI
+// (a plain checkout has no such sibling folder), so every step below is a
+// best-effort no-op there — the repo-root copies (main.js/manifest.json/
+// styles.css) are what release.yml's attest/upload steps actually use.
+const liveVaultFolder = "../large-language-models";
+const liveVaultFolderExists = existsSync(liveVaultFolder);
 
 /**
  * Patch the built bundle:
  * 1. Replace the "__ORT_ABS_PATH__" placeholder with the real absolute path.
  */
 function patchBundle() {
-	const bundlePath = "../large-language-models/main.js";
+	const bundlePath = "main.js";
 	let src = readFileSync(bundlePath, "utf8");
 	const placeholder = '"__ORT_ABS_PATH__"';
 	if (src.includes(placeholder)) {
@@ -75,15 +84,18 @@ function patchBundle() {
 }
 
 function copyPluginAssets() {
-	copyFileSync("manifest.json", "../large-language-models/manifest.json");
-	copyFileSync("styles.css", "../large-language-models/styles.css");
+	if (!liveVaultFolderExists) return;
+	copyFileSync("main.js", `${liveVaultFolder}/main.js`);
+	copyFileSync("manifest.json", `${liveVaultFolder}/manifest.json`);
+	copyFileSync("styles.css", `${liveVaultFolder}/styles.css`);
 }
 
 function cleanupDeadFiles() {
+	if (!liveVaultFolderExists) return;
 	// embed-worker.js was used by the abandoned child-process approach — remove it.
-	try { rmSync("../large-language-models/embed-worker.js"); } catch (_) {}
+	try { rmSync(`${liveVaultFolder}/embed-worker.js`); } catch (_) {}
 	// ort-wasm-simd-threaded.wasm was copied by the old WASM approach — remove it.
-	try { rmSync("../large-language-models/wasm", { recursive: true }); } catch (_) {}
+	try { rmSync(`${liveVaultFolder}/wasm`, { recursive: true }); } catch (_) {}
 }
 
 if (prod) {

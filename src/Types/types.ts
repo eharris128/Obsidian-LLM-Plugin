@@ -322,6 +322,15 @@ export type SearxngSettings = {
 	maxResults: number;
 };
 
+export type McpServerSettings = {
+	/** Whether the built-in MCP (Model Context Protocol) server is running. */
+	enabled: boolean;
+	/** Port the Streamable HTTP MCP server listens on (127.0.0.1 only). */
+	port: number;
+	/** Bearer token required on every request. Generated on first enable. */
+	token: string;
+};
+
 export type FeatureSettings = {
 	/** Master gate for the Obsidian Agent feature (FAB / status-bar agent mode). */
 	obsidianAgent: boolean;
@@ -335,6 +344,8 @@ export type FeatureSettings = {
 	memory: boolean;
 	/** Master gate for the Vault Search (RAG / embeddings) feature. */
 	vaultSearch: boolean;
+	/** Master gate for the built-in MCP server feature. */
+	mcpServer: boolean;
 };
 
 export type WhisperBackend = "openai" | "sidecar";

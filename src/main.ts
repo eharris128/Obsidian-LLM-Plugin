@@ -7,6 +7,7 @@ import {
 	HistoryItem,
 	ImageQuality,
 	ImageSize,
+	McpServerSettings,
 	MemorySettings,
 	ObsidianAgentSettings,
 	ProjectSettings,
@@ -29,6 +30,10 @@ import { SkillRegistry } from "Skills/SkillRegistry";
 import { VaultIndexer } from "RAG/VaultIndexer";
 import { VectorStore } from "RAG/VectorStore";
 import { EmbeddingService, DEFAULT_EMBEDDING_MODELS } from "RAG/EmbeddingService";
+// Type-only — erased at build time, so this does NOT pull in the MCP SDK's node:http
+// dependency chain at plugin load. The real module is loaded lazily in initMcpServer().
+import type { McpTransportServer } from "mcp/transport";
+import { generateMcpToken } from "mcp/token";
 
 import { History } from "History/HistoryHandler";
 import { ChatHistory } from "services/ChatHistory";
@@ -117,6 +122,8 @@ export interface LLMPluginSettings {
 	whisperSettings: WhisperSettings;
 	/** SearXNG web search settings. */
 	searxngSettings: SearxngSettings;
+	/** Built-in MCP (Model Context Protocol) server settings. */
+	mcpServerSettings: McpServerSettings;
 	/**
 	 * Root vault folder for all AI feature data (default "AI").
 	 * Skills live at <rootVaultFolder>/Skills/<skill-name>/SKILL.md.
@@ -273,6 +280,11 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		host: "http://localhost:8080",
 		maxResults: 5,
 	},
+	mcpServerSettings: {
+		enabled: false,
+		port: 27125,
+		token: "",
+	},
 	rootVaultFolder: "",
 	agentsFilePath: "AI/AGENTS.md",
 	hasOnboarded: false,
@@ -283,6 +295,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 		assistants: false,
 		memory: false,
 		vaultSearch: false,
+		mcpServer: false,
 	},
 };
 
@@ -353,6 +366,8 @@ export default class LLMPlugin extends Plugin {
 	sidecarManager: SidecarManager = new SidecarManager(this);
 	/** SearXNG web search service — null if searxngSettings.enabled is false. */
 	searxngService: SearxngService | null = null;
+	/** Built-in MCP server — null if mcpServerSettings.enabled is false or the platform isn't desktop. */
+	mcpServer: McpTransportServer | null = null;
 	/**
 	 * The most recently focused widget leaf. Updated by the active-leaf-change event.
 	 * Used to route "open chat file" and similar actions to the correct widget when
@@ -429,6 +444,7 @@ export default class LLMPlugin extends Plugin {
 		this.initMemoryService();
 		this.initWhisperService();
 		this.initSearxngService();
+		this.initMcpServer().catch((e) => logger.error("[MCP] Failed to initialise server:", e));
 		if (Platform.isDesktop) {
 			this.registerRagVaultEvents();
 		}
@@ -999,6 +1015,37 @@ export default class LLMPlugin extends Plugin {
 	}
 
 	/**
+	 * Start (or stop) the built-in MCP server based on current settings.
+	 * Safe to call after any settings change that affects it. The MCP SDK
+	 * module is imported dynamically — it pulls in a node:http dependency chain
+	 * that must never execute at plugin load on mobile (manifest isDesktopOnly: false).
+	 */
+	async initMcpServer(): Promise<void> {
+		if (this.mcpServer) {
+			await this.mcpServer.stop().catch(() => {});
+			this.mcpServer = null;
+		}
+
+		const s = this.settings.mcpServerSettings;
+		if (!Platform.isDesktop || !s?.enabled) return;
+
+		if (!s.token) {
+			s.token = generateMcpToken();
+			await this.saveSettings();
+		}
+
+		try {
+			const { McpTransportServer } = await import("mcp/transport");
+			const server = new McpTransportServer(this.app, () => this.settings.mcpServerSettings.token, this.manifest.version);
+			await server.start(s.port);
+			this.mcpServer = server;
+		} catch (e) {
+			logger.error("[MCP] Failed to start server:", e);
+			new Notice(`Failed to start MCP server on port ${s.port}: ${e instanceof Error ? e.message : String(e)}`, 6000);
+		}
+	}
+
+	/**
 	 * Re-initialise the SkillRegistry from current settings.
 	 * Call after the root vault folder setting changes.
 	 */
@@ -1059,6 +1106,8 @@ export default class LLMPlugin extends Plugin {
 
 		// Kill the ONNX worker child process if running.
 		EmbeddingService.unload();
+
+		this.mcpServer?.stop().catch(() => {});
 
 		this.fab.removeFab();
 		this.statusBarButton.remove();

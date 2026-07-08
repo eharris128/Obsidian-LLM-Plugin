@@ -3064,3 +3064,42 @@ button.llm-mic-button.llm-mic-transcribing {
 .llm-settings-wide-input {
 	width: 260px;
 }
+
+/* ── MCP Server settings ────────────────────────────────────────────────── */
+
+.llm-mcp-token-field {
+	width: 100%;
+	font-family: var(--font-monospace);
+}
+
+.llm-mcp-config-snippet {
+	user-select: text;
+	-webkit-user-select: text;
+	cursor: text;
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2) var(--size-4-3);
+	margin: var(--size-4-2) 0;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	color: var(--text-normal);
+	white-space: pre;
+	overflow-x: auto;
+}
+
+/* MCP write-tool permission modal */
+.llm-mcp-permission-input {
+	user-select: text;
+	-webkit-user-select: text;
+	cursor: text;
+	background: var(--background-secondary);
+	border-radius: var(--radius-s);
+	padding: var(--size-4-2) var(--size-4-3);
+	margin: var(--size-4-2) 0;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 240px;
+	overflow-y: auto;
+}

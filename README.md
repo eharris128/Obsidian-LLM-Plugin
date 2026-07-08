@@ -59,6 +59,34 @@ Download the plugin via the community plugin browser.
 | GPT4All  | Supported  |
 | Ollama | Supported |
 
+# MCP Server
+
+The plugin can run a built-in MCP ([Model Context Protocol](https://modelcontextprotocol.io)) server so Claude Desktop, or any other MCP-compatible client, can read and write this vault directly — no separate companion plugin required.
+
+**Setup:**
+1. In plugin settings, go to **General → Features** and enable **MCP Server**. A bearer token is generated automatically.
+2. Open the new **MCP Server** tab to see the port, bearer token, and a ready-to-copy `claude_desktop_config.json` snippet.
+3. Add that snippet to your Claude Desktop config file, then restart Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "obsidian-vault": {
+      "url": "http://127.0.0.1:27125/mcp",
+      "headers": {
+        "Authorization": "Bearer <your-token>"
+      }
+    }
+  }
+}
+```
+
+**Notes:**
+- The server binds to `127.0.0.1` only and requires the bearer token on every request — it is not reachable from other devices on your network.
+- Available tools: `list_files`, `read_file`, `search_vault` (read-only, run immediately) and `create_file`, `edit_file`, `move_file`, `delete_file` (each pops a confirmation dialog in Obsidian before running, the same as in-app agent actions).
+- Desktop only. Disabled by default — enabling it opens a local port only for as long as the toggle stays on.
+- Regenerating the bearer token immediately invalidates the old one; update any connected MCP clients afterward.
+
 # Credits
 - Johnny ✨
 - Ryan Mahoney

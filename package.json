@@ -45,6 +45,8 @@
 		"@anthropic-ai/sdk": "0.101.0",
 		"@google/genai": "2.8.0",
 		"@huggingface/transformers": "^4.2.0",
-		"openai": "6.42.0"
+		"@modelcontextprotocol/sdk": "^1.29.0",
+		"openai": "6.42.0",
+		"zod": "^4.4.3"
 	}
 }

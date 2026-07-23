@@ -175,6 +175,13 @@ export class LLMSettingsModal extends Modal {
 		const { modalEl } = this;
 		modalEl.addClass("llm-dedicated-settings-modal");
 
+		// Hide our own scrim in both layouts: on desktop so we look like part of the
+		// core settings panel we're pinned against, on mobile so nothing shows through
+		// the full-bleed modal's edges.
+		const modalBg = modalEl.closest(".modal-container")
+			?.querySelector<HTMLElement>(".modal-bg");
+		if (modalBg) modalBg.addClass("llm-hidden");
+
 		// On mobile, Obsidian's core Settings UI is a single full-screen pane (no
 		// floating ".modal-container.mod-settings .modal" to match position against),
 		// and its "mod-sidebar-layout" / "vertical-tab-header" classes carry mobile-only
@@ -193,11 +200,6 @@ export class LLMSettingsModal extends Modal {
 				Array.from(activeDocument.querySelectorAll<HTMLElement>(".modal-container .modal"))
 					.find((el) => el !== modalEl && !el.contains(modalEl)) ??
 				null;
-
-			// Hide our scrim so we look like part of the core settings panel.
-			const modalBg = modalEl.closest(".modal-container")
-				?.querySelector<HTMLElement>(".modal-bg");
-			if (modalBg) modalBg.addClass("llm-hidden");
 
 			// Apply sizing now and on every window resize.
 			this.matchCoreModal();
@@ -223,28 +225,34 @@ export class LLMSettingsModal extends Modal {
 		// vertical-tabs-container is the flex wrapper Obsidian uses in its own settings.
 		this.contentEl.addClass("vertical-tabs-container");
 
+		// Mobile: a persistent header bar sits above both the list and the content pane
+		// (not just the content pane) so there's always room reserved below Obsidian's
+		// own close button and the status bar/notch — without it, the tab list rendered
+		// flush against the top edge and visually collided with the close button.
+		if (Platform.isMobile) {
+			this.mobileHeaderEl = this.contentEl.createDiv("llm-mobile-settings-header");
+			const backBtn = this.mobileHeaderEl.createDiv({ cls: "llm-mobile-settings-back tappable" });
+			const backIconEl = backBtn.createDiv("llm-mobile-settings-back-icon");
+			setIcon(backIconEl, "chevron-left");
+			backBtn.createSpan({ text: "Back", cls: "llm-mobile-settings-back-label" });
+			backBtn.addEventListener("click", () => this.showMobileList());
+			this.mobileHeaderTitleEl = this.mobileHeaderEl.createDiv({ cls: "llm-mobile-settings-header-title" });
+			this.mobileHeaderTitleEl.setText(this.plugin.manifest.name);
+			// Start on the tab list — jumping straight into "General" content left users
+			// unable to discover the other tabs at all (the bug this whole layout fixes).
+			this.contentEl.addClass("llm-mobile-view-list");
+		}
+
 		// Sidebar — uses Obsidian's own vertical tab header classes. On mobile our CSS
 		// re-flows this into a full-width vertical list of cards (grouped, tappable rows)
 		// and JS drives single-pane navigation: tapping a row swaps to its content, with
-		// a back button to return to the list — there's no room for list + content side
-		// by side on a phone screen.
+		// the header's back button returning to the list — there's no room for list +
+		// content side by side on a phone screen.
 		this.sidebarEl = this.contentEl.createDiv("vertical-tab-header");
 		this.buildSidebar(this.sidebarEl);
 
 		// Content area — Obsidian's classes handle layout, scrolling, and padding.
 		const contentContainer = this.contentEl.createDiv("vertical-tab-content-container");
-		if (Platform.isMobile) {
-			this.mobileHeaderEl = contentContainer.createDiv("llm-mobile-settings-header");
-			const backBtn = this.mobileHeaderEl.createDiv({ cls: "llm-mobile-settings-back tappable" });
-			const backIconEl = backBtn.createDiv("llm-mobile-settings-back-icon");
-			setIcon(backIconEl, "chevron-left");
-			backBtn.createSpan({ text: "Settings", cls: "llm-mobile-settings-back-label" });
-			backBtn.addEventListener("click", () => this.showMobileList());
-			this.mobileHeaderTitleEl = this.mobileHeaderEl.createDiv({ cls: "llm-mobile-settings-header-title" });
-			// Start on the tab list — jumping straight into "General" content left users
-			// unable to discover the other tabs at all (the bug this whole layout fixes).
-			this.contentEl.addClass("llm-mobile-view-list");
-		}
 		this.mainContentEl = contentContainer.createDiv("vertical-tab-content");
 		this.renderTab(this.activeTab);
 	}
@@ -258,6 +266,7 @@ export class LLMSettingsModal extends Modal {
 
 	/** Mobile only: swap the single-pane view back to the tab list. */
 	private showMobileList() {
+		if (this.mobileHeaderTitleEl) this.mobileHeaderTitleEl.setText(this.plugin.manifest.name);
 		this.contentEl.removeClass("llm-mobile-view-detail");
 		this.contentEl.addClass("llm-mobile-view-list");
 	}

@@ -1822,8 +1822,11 @@ button.llm-permission-allow {
    Obsidian's core .mod-sidebar-layout / .vertical-tab-header classes carry
    mobile-only behavior (single-pane, JS-toggled) that this plugin's plain
    Modal doesn't implement, so we don't rely on it here — this is a fully
-   self-contained stacked layout: a horizontally scrollable tab strip above
-   a full-width content pane. */
+   self-contained single-pane layout: a full-width vertical list of grouped,
+   tappable rows (list state), and JS (showMobileDetail/showMobileList in
+   LLMSettingsModal.ts) swaps to the tab's content with a back button
+   (detail state). There's no room for list + content side by side on a
+   phone screen. */
 .llm-dedicated-settings-modal.llm-mobile-settings-modal {
 	width: 100vw;
 	height: 100vh;
@@ -1839,40 +1842,136 @@ button.llm-permission-allow {
 	overflow: hidden;
 }
 
+/* List state (default): show the tab list, hide the content pane. */
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tabs-container.llm-mobile-view-list .vertical-tab-content-container {
+	display: none;
+}
+
+/* Detail state: hide the tab list, show the content pane. */
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tabs-container.llm-mobile-view-detail .vertical-tab-header {
+	display: none;
+}
+
 .llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header {
-	flex: 0 0 auto;
+	flex: 1 1 auto;
 	width: 100%;
 	max-width: none;
 	min-width: 0;
-	display: flex;
-	flex-direction: row;
-	overflow-x: auto;
-	overflow-y: hidden;
+	overflow-x: hidden;
+	overflow-y: auto;
 	border-inline-end: none;
-	border-bottom: var(--border-width) solid var(--divider-color);
+	padding: var(--size-4-4);
 	-webkit-overflow-scrolling: touch;
 }
 
 .llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header-group {
-	flex: 0 0 auto;
-	display: flex;
-	flex-direction: row;
-	align-items: center;
+	margin-bottom: var(--size-4-6);
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header-group:last-child {
+	margin-bottom: 0;
 }
 
 .llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header-group-title {
-	white-space: nowrap;
-	padding-inline-start: var(--size-4-2);
+	font-size: var(--font-ui-small);
+	font-weight: var(--font-medium);
+	color: var(--text-muted);
+	padding: 0 var(--size-4-1) var(--size-4-2);
 }
 
+/* Card — rows grouped into a single rounded container per section. */
 .llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header-group-items {
 	display: flex;
-	flex-direction: row;
+	flex-direction: column;
+	background-color: var(--background-secondary);
+	border-radius: var(--radius-l);
+	overflow: hidden;
 }
 
 .llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	padding: var(--size-4-3) var(--size-4-4);
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item:not(:first-child) {
+	border-top: var(--border-width) solid var(--background-modifier-border);
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item-icon {
+	display: flex;
+	align-items: center;
+	color: var(--text-muted);
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item-icon svg {
+	width: var(--icon-m);
+	height: var(--icon-m);
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item-label {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item-chevron {
+	display: flex;
+	align-items: center;
 	flex: 0 0 auto;
+	color: var(--text-faint);
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item-chevron svg {
+	width: var(--icon-s);
+	height: var(--icon-s);
+}
+
+/* Detail-state header: sticky back button + current tab title above content. */
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-content-container {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-content {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.llm-mobile-settings-header {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-3);
+	padding: var(--size-4-3) var(--size-4-4);
+	border-bottom: var(--border-width) solid var(--background-modifier-border);
+	flex: 0 0 auto;
+}
+
+.llm-mobile-settings-back {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	color: var(--text-accent);
+	flex: 0 0 auto;
+}
+
+.llm-mobile-settings-back-icon svg {
+	width: var(--icon-m);
+	height: var(--icon-m);
+}
+
+.llm-mobile-settings-header-title {
+	font-weight: var(--font-semibold);
+	font-size: var(--font-ui-medium);
+	color: var(--text-normal);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 /* Tab section header — sits above the first setting-group card. */

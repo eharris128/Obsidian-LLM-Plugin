@@ -139,6 +139,8 @@ export class LLMSettingsModal extends Modal {
 	private resizeHandler: (() => void) | null = null;
 	private outsideClickHandler: ((e: MouseEvent) => void) | null = null;
 	private sidebarEl: HTMLElement | null = null;
+	private mobileHeaderEl: HTMLElement | null = null;
+	private mobileHeaderTitleEl: HTMLElement | null = null;
 
 	constructor(app: App, plugin: LLMPlugin, fab: FAB) {
 		super(app);
@@ -222,14 +224,42 @@ export class LLMSettingsModal extends Modal {
 		this.contentEl.addClass("vertical-tabs-container");
 
 		// Sidebar — uses Obsidian's own vertical tab header classes. On mobile our CSS
-		// re-flows this into a horizontally-scrollable strip instead of a side column.
+		// re-flows this into a full-width vertical list of cards (grouped, tappable rows)
+		// and JS drives single-pane navigation: tapping a row swaps to its content, with
+		// a back button to return to the list — there's no room for list + content side
+		// by side on a phone screen.
 		this.sidebarEl = this.contentEl.createDiv("vertical-tab-header");
 		this.buildSidebar(this.sidebarEl);
 
 		// Content area — Obsidian's classes handle layout, scrolling, and padding.
 		const contentContainer = this.contentEl.createDiv("vertical-tab-content-container");
+		if (Platform.isMobile) {
+			this.mobileHeaderEl = contentContainer.createDiv("llm-mobile-settings-header");
+			const backBtn = this.mobileHeaderEl.createDiv({ cls: "llm-mobile-settings-back tappable" });
+			const backIconEl = backBtn.createDiv("llm-mobile-settings-back-icon");
+			setIcon(backIconEl, "chevron-left");
+			backBtn.createSpan({ text: "Settings", cls: "llm-mobile-settings-back-label" });
+			backBtn.addEventListener("click", () => this.showMobileList());
+			this.mobileHeaderTitleEl = this.mobileHeaderEl.createDiv({ cls: "llm-mobile-settings-header-title" });
+			// Start on the tab list — jumping straight into "General" content left users
+			// unable to discover the other tabs at all (the bug this whole layout fixes).
+			this.contentEl.addClass("llm-mobile-view-list");
+		}
 		this.mainContentEl = contentContainer.createDiv("vertical-tab-content");
 		this.renderTab(this.activeTab);
+	}
+
+	/** Mobile only: swap the single-pane view from the tab list to the active tab's content. */
+	private showMobileDetail(label: string) {
+		if (this.mobileHeaderTitleEl) this.mobileHeaderTitleEl.setText(label);
+		this.contentEl.removeClass("llm-mobile-view-list");
+		this.contentEl.addClass("llm-mobile-view-detail");
+	}
+
+	/** Mobile only: swap the single-pane view back to the tab list. */
+	private showMobileList() {
+		this.contentEl.removeClass("llm-mobile-view-detail");
+		this.contentEl.addClass("llm-mobile-view-list");
 	}
 
 	onClose() {
@@ -275,7 +305,13 @@ export class LLMSettingsModal extends Modal {
 					setIcon(iconEl, item.icon);
 				}
 
-				itemEl.createSpan({ text: item.label });
+				itemEl.createSpan({ text: item.label, cls: "vertical-tab-nav-item-label" });
+
+				// Drill-down affordance — only meaningful on mobile's single-pane list.
+				if (Platform.isMobile) {
+					const chevronEl = itemEl.createDiv("vertical-tab-nav-item-chevron");
+					setIcon(chevronEl, "chevron-right");
+				}
 
 				itemEl.addEventListener("click", () => {
 					sidebar
@@ -284,6 +320,7 @@ export class LLMSettingsModal extends Modal {
 					itemEl.addClass("is-active");
 					this.activeTab = item.id;
 					this.renderTab(item.id);
+					if (Platform.isMobile) this.showMobileDetail(item.label);
 				});
 			}
 		}

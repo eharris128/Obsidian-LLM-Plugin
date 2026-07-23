@@ -139,8 +139,6 @@ export class LLMSettingsModal extends Modal {
 	private resizeHandler: (() => void) | null = null;
 	private outsideClickHandler: ((e: MouseEvent) => void) | null = null;
 	private sidebarEl: HTMLElement | null = null;
-	private mobileHeaderEl: HTMLElement | null = null;
-	private mobileHeaderTitleEl: HTMLElement | null = null;
 
 	constructor(app: App, plugin: LLMPlugin, fab: FAB) {
 		super(app);
@@ -182,14 +180,20 @@ export class LLMSettingsModal extends Modal {
 			?.querySelector<HTMLElement>(".modal-bg");
 		if (modalBg) modalBg.addClass("llm-hidden");
 
-		// On mobile, Obsidian's core Settings UI is a single full-screen pane (no
-		// floating ".modal-container.mod-settings .modal" to match position against),
-		// and its "mod-sidebar-layout" / "vertical-tab-header" classes carry mobile-only
-		// behavior (collapsing to a single pane) that our plain Modal never wires up —
-		// borrowing them here left the sidebar permanently hidden, so only the default
-		// "General" tab was ever reachable. Use our own explicit, self-contained mobile
-		// layout instead of relying on those classes' undocumented mobile behavior.
+		// On mobile, opt into Obsidian's own real Settings-modal chrome ("mod-settings")
+		// instead of hand-rolling it: this is what gives correct full-screen sizing,
+		// safe-area handling, a borderless edge-to-edge look, and clearance around
+		// Obsidian's own close button "for free" from core CSS — confirmed by checking
+		// how another plugin (Task Genius) does the exact same multi-tab-in-one-modal
+		// settings pattern. Hand-rolled attempts at this never quite matched core's
+		// actual behavior because we were guessing at values core already knows.
+		// Desktop keeps its existing matchCoreModal() pinning below untouched — adding
+		// "mod-settings" there too risks core's own sizing rules outranking ours.
 		if (Platform.isMobile) {
+			modalEl.addClass("mod-settings");
+			modalEl.addClass("mod-sidebar-layout");
+			// Scoping hook for the small amount of CSS that's still ours to own (the
+			// list/detail single-pane toggle) — mod-settings supplies everything else.
 			modalEl.addClass("llm-mobile-settings-modal");
 		} else {
 			// Resolve the core settings modal element once.
@@ -225,29 +229,11 @@ export class LLMSettingsModal extends Modal {
 		// vertical-tabs-container is the flex wrapper Obsidian uses in its own settings.
 		this.contentEl.addClass("vertical-tabs-container");
 
-		// Mobile: a persistent header bar sits above both the list and the content pane
-		// (not just the content pane) so there's always room reserved below Obsidian's
-		// own close button and the status bar/notch — without it, the tab list rendered
-		// flush against the top edge and visually collided with the close button.
-		if (Platform.isMobile) {
-			this.mobileHeaderEl = this.contentEl.createDiv("llm-mobile-settings-header");
-			const backBtn = this.mobileHeaderEl.createDiv({ cls: "llm-mobile-settings-back tappable" });
-			const backIconEl = backBtn.createDiv("llm-mobile-settings-back-icon");
-			setIcon(backIconEl, "chevron-left");
-			backBtn.createSpan({ text: "Back", cls: "llm-mobile-settings-back-label" });
-			backBtn.addEventListener("click", () => this.showMobileList());
-			this.mobileHeaderTitleEl = this.mobileHeaderEl.createDiv({ cls: "llm-mobile-settings-header-title" });
-			this.mobileHeaderTitleEl.setText(this.plugin.manifest.name);
-			// Start on the tab list — jumping straight into "General" content left users
-			// unable to discover the other tabs at all (the bug this whole layout fixes).
-			this.contentEl.addClass("llm-mobile-view-list");
-		}
-
-		// Sidebar — uses Obsidian's own vertical tab header classes. On mobile our CSS
-		// re-flows this into a full-width vertical list of cards (grouped, tappable rows)
-		// and JS drives single-pane navigation: tapping a row swaps to its content, with
-		// the header's back button returning to the list — there's no room for list +
-		// content side by side on a phone screen.
+		// Sidebar — uses Obsidian's own vertical tab header classes. On mobile, "mod-settings"
+		// (added above) re-flows this into the native full-width vertical list; JS drives
+		// single-pane navigation on top of that: tapping a row swaps to its content, with
+		// this.titleEl (the Modal's own title bar, already correctly positioned clear of
+		// the close button and safe areas) repurposed as a back-navigation header.
 		this.sidebarEl = this.contentEl.createDiv("vertical-tab-header");
 		this.buildSidebar(this.sidebarEl);
 
@@ -255,20 +241,44 @@ export class LLMSettingsModal extends Modal {
 		const contentContainer = this.contentEl.createDiv("vertical-tab-content-container");
 		this.mainContentEl = contentContainer.createDiv("vertical-tab-content");
 		this.renderTab(this.activeTab);
+
+		if (Platform.isMobile) {
+			// Start on the tab list — jumping straight into "General" content left users
+			// unable to discover the other tabs at all (the bug this whole layout fixes).
+			this.contentEl.addClass("llm-mobile-view-list");
+			this.renderMobileTitle(null);
+		}
+	}
+
+	/**
+	 * Mobile only: renders this.titleEl (the Modal's own title bar) either as the plugin
+	 * name (list state, nothing to go back to) or a back button + the active tab's label
+	 * (detail state) — reusing Obsidian's own back-button class so it matches core exactly.
+	 */
+	private renderMobileTitle(detailLabel: string | null) {
+		this.titleEl.empty();
+		if (detailLabel) {
+			const backBtn = this.titleEl.createDiv({ cls: "clickable-icon modal-setting-back-button" });
+			setIcon(backBtn, "arrow-left");
+			backBtn.addEventListener("click", () => this.showMobileList());
+			this.titleEl.createSpan({ text: detailLabel });
+		} else {
+			this.titleEl.createSpan({ text: this.plugin.manifest.name });
+		}
 	}
 
 	/** Mobile only: swap the single-pane view from the tab list to the active tab's content. */
 	private showMobileDetail(label: string) {
-		if (this.mobileHeaderTitleEl) this.mobileHeaderTitleEl.setText(label);
 		this.contentEl.removeClass("llm-mobile-view-list");
 		this.contentEl.addClass("llm-mobile-view-detail");
+		this.renderMobileTitle(label);
 	}
 
 	/** Mobile only: swap the single-pane view back to the tab list. */
 	private showMobileList() {
-		if (this.mobileHeaderTitleEl) this.mobileHeaderTitleEl.setText(this.plugin.manifest.name);
 		this.contentEl.removeClass("llm-mobile-view-detail");
 		this.contentEl.addClass("llm-mobile-view-list");
+		this.renderMobileTitle(null);
 	}
 
 	onClose() {
@@ -314,7 +324,10 @@ export class LLMSettingsModal extends Modal {
 					setIcon(iconEl, item.icon);
 				}
 
-				itemEl.createSpan({ text: item.label, cls: "vertical-tab-nav-item-label" });
+				// vertical-tab-nav-item-title matches core's own class for this element
+				// (confirmed against Task Genius's settings modal, which relies on core
+				// CSS for it entirely rather than styling it themselves).
+				itemEl.createSpan({ text: item.label, cls: "vertical-tab-nav-item-title" });
 
 				// Drill-down affordance — only meaningful on mobile's single-pane list.
 				if (Platform.isMobile) {

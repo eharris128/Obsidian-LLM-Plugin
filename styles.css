@@ -1819,179 +1819,24 @@ button.llm-permission-allow {
 }
 
 /* ── Mobile layout ─────────────────────────────────────────────────────────
-   Obsidian's core .mod-sidebar-layout / .vertical-tab-header classes carry
-   mobile-only behavior (single-pane, JS-toggled) that this plugin's plain
-   Modal doesn't implement, so we don't rely on it here — this is a fully
-   self-contained single-pane layout: a full-width vertical list of grouped,
-   tappable rows (list state), and JS (showMobileDetail/showMobileList in
-   LLMSettingsModal.ts) swaps to the tab's content with a back button
-   (detail state). There's no room for list + content side by side on a
-   phone screen. */
-.llm-dedicated-settings-modal.llm-mobile-settings-modal {
-	/* position:fixed + inset:0 covers the true viewport edge-to-edge regardless of
-	   the core .modal-container's own centering/padding — width/height:100vw/100vh
-	   alone left a gap where that centering showed through as a stray border. */
-	position: fixed;
-	inset: 0;
-	width: auto;
-	height: auto;
-	max-width: none;
-	max-height: none;
-	margin: 0;
-	border: none;
-	box-shadow: none;
-	border-radius: 0;
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tabs-container {
-	display: flex;
-	flex-direction: column;
-	height: 100%;
-	overflow: hidden;
-}
+   modalEl also gets Obsidian's own "mod-settings" class on mobile (see
+   LLMSettingsModal.ts onOpen) — that's what gives correct full-screen sizing,
+   safe-area handling, a borderless look, and close-button clearance, all from
+   core CSS. Hand-rolling those in this plugin's own CSS (earlier attempts)
+   never quite matched core's real behavior. The one thing "mod-settings"
+   doesn't provide — because it's specific to this plugin's own multi-tab
+   layout, not something core needs to solve — is swapping between the tab
+   list and a tab's content as a single pane on a phone-width screen. That's
+   the only mobile-specific CSS left here. */
 
 /* List state (default): show the tab list, hide the content pane. */
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tabs-container.llm-mobile-view-list .vertical-tab-content-container {
+.llm-mobile-settings-modal .vertical-tabs-container.llm-mobile-view-list .vertical-tab-content-container {
 	display: none;
 }
 
 /* Detail state: hide the tab list, show the content pane. */
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tabs-container.llm-mobile-view-detail .vertical-tab-header {
+.llm-mobile-settings-modal .vertical-tabs-container.llm-mobile-view-detail .vertical-tab-header {
 	display: none;
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header {
-	flex: 1 1 auto;
-	width: 100%;
-	max-width: none;
-	min-width: 0;
-	overflow-x: hidden;
-	overflow-y: auto;
-	border-inline-end: none;
-	padding: var(--size-4-4);
-	-webkit-overflow-scrolling: touch;
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header-group {
-	margin-bottom: var(--size-4-6);
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header-group:last-child {
-	margin-bottom: 0;
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header-group-title {
-	font-size: var(--font-ui-small);
-	font-weight: var(--font-medium);
-	color: var(--text-muted);
-	padding: 0 var(--size-4-1) var(--size-4-2);
-}
-
-/* Card — rows grouped into a single rounded container per section. */
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header-group-items {
-	display: flex;
-	flex-direction: column;
-	background-color: var(--background-secondary);
-	border-radius: var(--radius-l);
-	overflow: hidden;
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item {
-	display: flex;
-	align-items: center;
-	gap: var(--size-4-3);
-	padding: var(--size-4-3) var(--size-4-4);
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item:not(:first-child) {
-	border-top: var(--border-width) solid var(--background-modifier-border);
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item-icon {
-	display: flex;
-	align-items: center;
-	color: var(--text-muted);
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item-icon svg {
-	width: var(--icon-m);
-	height: var(--icon-m);
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item-label {
-	flex: 1;
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item-chevron {
-	display: flex;
-	align-items: center;
-	flex: 0 0 auto;
-	color: var(--text-faint);
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item-chevron svg {
-	width: var(--icon-s);
-	height: var(--icon-s);
-}
-
-/* Persistent header — sits above both the list and the content pane (a sibling of
-   both in .vertical-tabs-container, not nested in .vertical-tab-content-container),
-   so there's always room reserved below the status bar/notch and to the left of
-   Obsidian's own close (✕) button, in both list and detail states. */
-.llm-mobile-settings-header {
-	display: flex;
-	align-items: center;
-	gap: var(--size-4-3);
-	flex: 0 0 auto;
-	padding: var(--size-4-3) var(--size-4-4);
-	/* Obsidian's own modal close button floats top-right at a fixed size we don't
-	   control — reserve enough end padding that our title never runs under it. */
-	padding-inline-end: calc(var(--size-4-4) + 56px);
-	padding-top: calc(var(--size-4-3) + env(safe-area-inset-top));
-	padding-inline-start: calc(var(--size-4-4) + env(safe-area-inset-left));
-	border-bottom: var(--border-width) solid var(--background-modifier-border);
-}
-
-/* No parent to go back to while on the root list. */
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tabs-container.llm-mobile-view-list .llm-mobile-settings-back {
-	display: none;
-}
-
-.llm-mobile-settings-back {
-	display: flex;
-	align-items: center;
-	gap: var(--size-4-1);
-	color: var(--text-accent);
-	flex: 0 0 auto;
-}
-
-.llm-mobile-settings-back-icon svg {
-	width: var(--icon-m);
-	height: var(--icon-m);
-}
-
-.llm-mobile-settings-header-title {
-	flex: 1;
-	min-width: 0;
-	font-weight: var(--font-semibold);
-	font-size: var(--font-ui-medium);
-	color: var(--text-normal);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-/* Bottom safe-area clearance (home-indicator strip) for the two scrollable panes. */
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header {
-	padding-bottom: calc(var(--size-4-4) + env(safe-area-inset-bottom));
-}
-
-.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-content-container {
-	padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Tab section header — sits above the first setting-group card. */

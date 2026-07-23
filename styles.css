@@ -1839,6 +1839,21 @@ button.llm-permission-allow {
 	display: none;
 }
 
+/* Dropdowns whose options are long (e.g. Ollama/LM Studio model names pulled from
+   Hugging Face repo paths) can make an unconstrained <select> size itself to its
+   widest option on iOS instead of respecting the container width, dragging the
+   whole page into horizontal scroll. Clamp every dropdown to the content width and
+   back it up with overflow-x: hidden on the scroll containers as a general guard
+   against any other stray wide element doing the same thing. */
+.llm-mobile-settings-modal .vertical-tab-content-container,
+.llm-mobile-settings-modal .vertical-tab-content {
+	overflow-x: hidden;
+}
+
+.llm-mobile-settings-modal .vertical-tab-content select {
+	max-width: 100%;
+}
+
 /* Tab section header — sits above the first setting-group card. */
 .llm-dedicated-settings-tab-header {
 	margin-bottom: var(--size-4-4);

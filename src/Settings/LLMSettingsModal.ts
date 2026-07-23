@@ -173,44 +173,56 @@ export class LLMSettingsModal extends Modal {
 		const { modalEl } = this;
 		modalEl.addClass("llm-dedicated-settings-modal");
 
-		// Resolve the core settings modal element once.
-		const appSetting = (this.app as unknown as AppWithSetting).setting;
-		this.coreModalEl =
-			appSetting?.containerEl?.closest?.(".modal") ??
-			activeDocument.querySelector<HTMLElement>(".modal-container.mod-settings .modal") ??
-			Array.from(activeDocument.querySelectorAll<HTMLElement>(".modal-container .modal"))
-				.find((el) => el !== modalEl && !el.contains(modalEl)) ??
-			null;
+		// On mobile, Obsidian's core Settings UI is a single full-screen pane (no
+		// floating ".modal-container.mod-settings .modal" to match position against),
+		// and its "mod-sidebar-layout" / "vertical-tab-header" classes carry mobile-only
+		// behavior (collapsing to a single pane) that our plain Modal never wires up —
+		// borrowing them here left the sidebar permanently hidden, so only the default
+		// "General" tab was ever reachable. Use our own explicit, self-contained mobile
+		// layout instead of relying on those classes' undocumented mobile behavior.
+		if (Platform.isMobile) {
+			modalEl.addClass("llm-mobile-settings-modal");
+		} else {
+			// Resolve the core settings modal element once.
+			const appSetting = (this.app as unknown as AppWithSetting).setting;
+			this.coreModalEl =
+				appSetting?.containerEl?.closest?.(".modal") ??
+				activeDocument.querySelector<HTMLElement>(".modal-container.mod-settings .modal") ??
+				Array.from(activeDocument.querySelectorAll<HTMLElement>(".modal-container .modal"))
+					.find((el) => el !== modalEl && !el.contains(modalEl)) ??
+				null;
 
-		// Hide our scrim so we look like part of the core settings panel.
-		const modalBg = modalEl.closest(".modal-container")
-			?.querySelector<HTMLElement>(".modal-bg");
-		if (modalBg) modalBg.addClass("llm-hidden");
+			// Hide our scrim so we look like part of the core settings panel.
+			const modalBg = modalEl.closest(".modal-container")
+				?.querySelector<HTMLElement>(".modal-bg");
+			if (modalBg) modalBg.addClass("llm-hidden");
 
-		// Apply sizing now and on every window resize.
-		this.matchCoreModal();
-		this.resizeHandler = () => this.matchCoreModal();
-		window.addEventListener("resize", this.resizeHandler);
+			// Apply sizing now and on every window resize.
+			this.matchCoreModal();
+			this.resizeHandler = () => this.matchCoreModal();
+			window.addEventListener("resize", this.resizeHandler);
 
-		// Close when the user clicks outside the modal. We defer registration by
-		// one tick so the click that opened the modal doesn't immediately close it.
-		this.outsideClickHandler = (e: MouseEvent) => {
-			if (!this.modalEl.contains(e.target as Node)) {
-				this.close();
-			}
-		};
-		window.setTimeout(() => {
-			activeDocument.addEventListener("mousedown", this.outsideClickHandler!);
-		}, 0);
+			// Close when the user clicks outside the modal. We defer registration by
+			// one tick so the click that opened the modal doesn't immediately close it.
+			this.outsideClickHandler = (e: MouseEvent) => {
+				if (!this.modalEl.contains(e.target as Node)) {
+					this.close();
+				}
+			};
+			window.setTimeout(() => {
+				activeDocument.addEventListener("mousedown", this.outsideClickHandler!);
+			}, 0);
 
-		// mod-sidebar-layout tells Obsidian's CSS to apply the two-column layout.
-		modalEl.addClass("mod-sidebar-layout");
+			// mod-sidebar-layout tells Obsidian's CSS to apply the two-column layout.
+			modalEl.addClass("mod-sidebar-layout");
+		}
 
 		this.contentEl.empty();
 		// vertical-tabs-container is the flex wrapper Obsidian uses in its own settings.
 		this.contentEl.addClass("vertical-tabs-container");
 
-		// Sidebar — uses Obsidian's own vertical tab header classes.
+		// Sidebar — uses Obsidian's own vertical tab header classes. On mobile our CSS
+		// re-flows this into a horizontally-scrollable strip instead of a side column.
 		this.sidebarEl = this.contentEl.createDiv("vertical-tab-header");
 		this.buildSidebar(this.sidebarEl);
 

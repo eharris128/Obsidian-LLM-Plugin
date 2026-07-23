@@ -1818,6 +1818,63 @@ button.llm-permission-allow {
 	overflow-y: auto;
 }
 
+/* ── Mobile layout ─────────────────────────────────────────────────────────
+   Obsidian's core .mod-sidebar-layout / .vertical-tab-header classes carry
+   mobile-only behavior (single-pane, JS-toggled) that this plugin's plain
+   Modal doesn't implement, so we don't rely on it here — this is a fully
+   self-contained stacked layout: a horizontally scrollable tab strip above
+   a full-width content pane. */
+.llm-dedicated-settings-modal.llm-mobile-settings-modal {
+	width: 100vw;
+	height: 100vh;
+	max-width: 100vw;
+	max-height: 100vh;
+	border-radius: 0;
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tabs-container {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header {
+	flex: 0 0 auto;
+	width: 100%;
+	max-width: none;
+	min-width: 0;
+	display: flex;
+	flex-direction: row;
+	overflow-x: auto;
+	overflow-y: hidden;
+	border-inline-end: none;
+	border-bottom: var(--border-width) solid var(--divider-color);
+	-webkit-overflow-scrolling: touch;
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header-group {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header-group-title {
+	white-space: nowrap;
+	padding-inline-start: var(--size-4-2);
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-header-group-items {
+	display: flex;
+	flex-direction: row;
+}
+
+.llm-dedicated-settings-modal.llm-mobile-settings-modal .vertical-tab-nav-item {
+	white-space: nowrap;
+	flex: 0 0 auto;
+}
+
 /* Tab section header — sits above the first setting-group card. */
 .llm-dedicated-settings-tab-header {
 	margin-bottom: var(--size-4-4);

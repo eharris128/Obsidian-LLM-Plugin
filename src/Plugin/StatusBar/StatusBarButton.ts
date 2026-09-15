@@ -33,7 +33,7 @@ export class StatusBarButton {
 
 		const labelEl = this.statusBarEl.createSpan();
 		labelEl.addClass("llm-status-bar-label");
-		labelEl.setText("Ask AI");
+		labelEl.setText("Agent");
 
 		this.buildPopover();
 

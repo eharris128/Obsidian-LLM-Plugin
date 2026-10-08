@@ -1431,15 +1431,16 @@ button.llm-scan-button.is-active:hover {
 
 /* STATUS BAR BUTTON */
 
-.llm-status-bar-button {
-	display: flex;
-	align-items: center;
-	gap: var(--size-2-1);
-	cursor: pointer;
+/* Match core status bar icon items (Sync, editor mode): the default
+   .status-bar-item padding is 3px vertical, which makes the bar taller.
+   The icon is set directly on the item (no wrapper) so core's
+   `.status-bar-item .svg-icon` sizing applies. */
+.status-bar-item.llm-status-bar-button {
 	padding: 0 var(--size-2-2);
-	border-radius: var(--radius-s);
-	color: var(--status-bar-text-color);
-	transition: background-color 100ms ease;
+	/* Same height as a core text item ("0 backlinks"): core .status-bar-item is
+	   line-height: 1 with 3px top/bottom padding, i.e. font-size + 6px. Keeps the
+	   bar from shrinking when those items are hidden, without growing it. */
+	min-height: calc(var(--status-bar-font-size) + 6px);
 }
 
 /* AGENT PERMISSION CARD */
@@ -1598,22 +1599,9 @@ button.llm-permission-allow {
 	margin-left: var(--size-4-1);
 }
 
-.llm-status-bar-button:hover {
-	background-color: var(--background-modifier-hover);
-}
-
-.llm-status-bar-icon {
-	display: flex;
-	align-items: center;
-}
-
-.llm-status-bar-icon svg {
-	width: 12px;
-	height: 12px;
-}
-
 .llm-status-bar-label {
 	font-size: var(--font-ui-smaller);
+	margin-inline-start: var(--size-2-1);
 }
 
 /* Popover — floats above the status bar, fixed to viewport */

@@ -25,11 +25,9 @@ export class StatusBarButton {
 
 	generate() {
 		this.statusBarEl = this.plugin.addStatusBarItem();
-		this.statusBarEl.addClass("llm-status-bar-button");
+		this.statusBarEl.addClass("llm-status-bar-button", "mod-clickable");
 
-		const iconEl = this.statusBarEl.createSpan();
-		iconEl.addClass("llm-status-bar-icon");
-		setIcon(iconEl, "mouse-pointer-2");
+		setIcon(this.statusBarEl, "mouse-pointer-2");
 
 		const labelEl = this.statusBarEl.createSpan();
 		labelEl.addClass("llm-status-bar-label");

@@ -18,11 +18,9 @@ export class RecentChatsButton {
 
 	generate() {
 		this.statusBarEl = this.plugin.addStatusBarItem();
-		this.statusBarEl.addClass("llm-status-bar-button", "llm-recent-chats-button");
+		this.statusBarEl.addClass("llm-status-bar-button", "mod-clickable", "llm-recent-chats-button");
 
-		const iconEl = this.statusBarEl.createSpan();
-		iconEl.addClass("llm-status-bar-icon");
-		setIcon(iconEl, "clock");
+		setIcon(this.statusBarEl, "clock");
 
 		// Mount in the status bar's own document (main window only) so open,
 		// close, and remove all act on the same document even when a popout

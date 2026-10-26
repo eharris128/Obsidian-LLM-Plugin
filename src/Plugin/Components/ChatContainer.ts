@@ -3248,7 +3248,9 @@ export class ChatContainer extends Component {
 			// Claude Code needs the desktop-only runtime SDK — a desktop-selected
 			// model can still sync in via data.json, but never offer it on mobile.
 			if (type === claudeCode && !Platform.isDesktop) continue;
-			if ((type === claude || type === claudeCode) && !claudeAPIKey) continue;
+			if (type === claude && !claudeAPIKey) continue;
+			// Claude Code authenticates with its own OAuth token, not the Anthropic API key.
+			if (type === claudeCode && !this.plugin.settings.claudeCodeOAuthToken?.trim()) continue;
 			if (type === gemini && !geminiAPIKey) continue;
 			if (type === mistral && !mistralAPIKey) continue;
 			const opt = activeDocument.createElement("option");

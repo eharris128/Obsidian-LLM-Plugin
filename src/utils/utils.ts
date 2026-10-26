@@ -372,6 +372,11 @@ export async function claudeCodeMessage(
 			permissionMode: "default",
 			...(canUseTool ? { canUseTool } : {}),
 			cwd,
+			systemPrompt: {
+				type: "preset",
+				preset: "claude_code",
+				append: `You are running inside the user's Obsidian plugin. The current working directory (${cwd}) is the root of the user's Obsidian vault. When the user mentions notes, canvases, files or folders (e.g. "Main canvas"), look for them inside this vault first (use Glob/Grep/Read within the working directory) rather than searching the home directory. Obsidian notes are Markdown files; .canvas files are JSON Canvas (a "nodes" and "edges" array; a text note is a node of type "text" with id, x, y, width, height and text).`,
+			},
 			env: {
 				...process.env,
 				CLAUDE_CODE_OAUTH_TOKEN: oauthToken,

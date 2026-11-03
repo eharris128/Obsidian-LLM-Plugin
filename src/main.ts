@@ -212,7 +212,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 	GPT4AllStreaming: false,
 	//this setting determines whether or not fab is shown by default
 	showFAB: false,
-	showRibbonIcon: true,
+	showRibbonIcon: false,
 	showAssistantLogo: true,
 	showAgentBrandIcon: true,
 	enableFileContext: false,
